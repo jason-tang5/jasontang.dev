@@ -22,8 +22,8 @@ function shuffle() {
   board.value = board.value.map(() => (Math.random() < 0.45 ? 0 : 1 + Math.floor(Math.random() * 11)));
 }
 const focusRange = computed(() => `[${focus.value * 4 + 3}:${focus.value * 4}]`);
-// the 16 nibbles left to right from the top, cell 15 first, like writing out the register
-const nibbles = computed(() => bits.value.map((b, i) => ({ i, b })).reverse());
+// the 16 nibbles laid out like the board, so each one sits where its tile does
+const nibbles = computed(() => bits.value.map((b, i) => ({ i, b })));
 
 // ---- datapath: the block diagram from the slides, redrawn. pick a block to light
 // up the buses into and out of it ----
@@ -154,7 +154,7 @@ const lit = name => edge.value === name;
 
 <template>
   <figure v-if="figure === 'register'" class="fx-figure">
-    <figcaption><strong>Fig. 1</strong> The whole board is one 64-bit register, 4 bits a tile. Click a tile to double it.</figcaption>
+    <figcaption><strong>Fig. 1</strong> The whole board is one 64-bit register, with 4 bits per tile. Click a tile to double it.</figcaption>
     <div class="fx-panel fx-register">
       <div class="fx-board" role="group" aria-label="Board">
         <button v-for="(p, i) in board" :key="i" class="fx-tile" :class="{ picked: focus === i }"
@@ -206,7 +206,7 @@ const lit = name => edge.value === name;
   </figure>
 
   <figure v-else-if="figure === 'slide'" class="fx-figure">
-    <figcaption><strong>Fig. 3</strong> The two-step slide: combine equal tiles, then compact</figcaption>
+    <figcaption><strong>Fig. 3</strong> The two-step slide: combine equal tiles, then compact.</figcaption>
     <div class="fx-panel">
       <div class="fx-row" :class="{ done: frame.done }">
         <span v-for="(p, i) in frame.cells" :key="i" class="fx-tile" :class="{ look: frame.look.includes(i), hit: frame.hit && frame.look.includes(i) }"
@@ -226,7 +226,7 @@ const lit = name => edge.value === name;
   </figure>
 
   <figure v-else-if="figure === 'fsm'" class="fx-figure">
-    <figcaption><strong>Fig. 4</strong> The keyboard FSM. One-hot states per key, and a gap state for the extra break code. Press a key.</figcaption>
+    <figcaption><strong>Fig. 4</strong> The keyboard FSM, with one one-hot state per key and a gap state for the extra break code. Press W, A, S or D.</figcaption>
     <div class="fx-panel" tabindex="0" aria-label="Keyboard FSM. Press W, A, S or D." @keydown="fsmKey">
       <svg class="fx-fsm" viewBox="0 0 320 166" shape-rendering="crispEdges" aria-hidden="true">
         <g class="fx-edges">
@@ -269,31 +269,24 @@ const lit = name => edge.value === name;
 .fx-tile:focus-visible { outline: 2px dotted #fff; outline-offset: -4px; }
 
 /* fig 1 */
-/* the board beside its register, the readout under the register. in a narrow figure
-   the register folds into 4 nibbles a row so it still fits beside the board, and the
-   readout drops under both */
-.fx-register { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); grid-template-areas: 'board nibbles' 'board reg'; gap: 10px 16px; align-items: start; }
+/* the board beside its register, the readout under both. the register is a square
+   the size of the board, a nibble for each of its tiles, and the two grow with the
+   figure up to 300px each so a big preview pane isn't left mostly empty */
+.fx-register { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); grid-template-areas: 'board nibbles' 'reg reg'; gap: 12px 16px; align-items: start; }
 .fx-register .fx-board { grid-area: board; }
 .fx-register .fx-nibbles { grid-area: nibbles; }
 .fx-register .fx-reg { grid-area: reg; }
 .fx-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 2px; background: #e6eeff; border: 2px solid #000; }
+.fx-board .fx-tile { font-size: clamp(8px, 4cqi, 20px); }
 .fx-board .fx-tile.picked { box-shadow: inset 0 0 0 2px #000, inset 0 0 0 4px #fff; }
-.fx-nibbles { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
-.fx-nibbles span { display: flex; flex-direction: column; align-items: center; padding: 2px 0; background: var(--d-page-alt, #fffdf2); border: 1px solid var(--d-line, #999); }
+.fx-nibbles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 3px; aspect-ratio: 1; }
+.fx-nibbles span { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px 0; background: var(--d-page-alt, #fffdf2); border: 1px solid var(--d-line, #999); }
 .fx-nibbles span.picked { background: var(--navy, #000080); color: #fff; border-color: var(--navy, #000080); }
-.fx-nibbles b { font: 11px 'Courier New', monospace; letter-spacing: -.5px; }
-.fx-nibbles small { font: 8px 'Courier New', monospace; opacity: .7; }
+.fx-nibbles b { font: clamp(10px, 2.8cqi, 16px) 'Courier New', monospace; letter-spacing: -.5px; }
+.fx-nibbles small { font: clamp(8px, 1.8cqi, 11px) 'Courier New', monospace; opacity: .7; }
 .fx-readout { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 4px; font-size: 13px; }
 .fx-readout code, .fx-hex code { font: bold 12px 'Courier New', monospace; color: var(--d-link, #000080); }
 .fx-hex { margin: 0 0 10px; overflow-wrap: anywhere; }
-@container (max-width: 480px) {
-  .fx-register { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'board nibbles' 'reg reg'; gap: 12px; }
-  /* a square the size of the board, a nibble for each of its tiles */
-  .fx-nibbles { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); aspect-ratio: 1; }
-  .fx-nibbles span { justify-content: center; }
-  .fx-nibbles b { font-size: 10px; }
-  .fx-board .fx-tile { font-size: clamp(8px, 4cqi, 12px); }
-}
 @container (max-width: 220px) { .fx-register { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'board' 'nibbles' 'reg'; } }
 .fx-figure { container-type: inline-size; }
 

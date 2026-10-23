@@ -43,7 +43,25 @@ const Minesweeper = defineAsyncComponent(() => import('./Minesweeper.vue'));
 const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
-const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures };
+const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures };
+// a project's what i built and implementation sections as one list of items: a string is
+// a paragraph, an array a paragraph mixing text with { open, text } links to other
+// windows, then { heading }, { subheading }, { figure } and { list } (numbered, or
+// bulleted with bullets: true). paragraphs and list points can use **bold** and the rest
+// of InlineText. contribution and implementation can each be one string or a list of
+// items. the lead figure goes at the top of what i built unless contribution places it
+// itself
+const figureItems = f => [f ?? []].flat().map(figure => ({ figure }));
+function writeup(p) {
+  const built = [p.contribution ?? []].flat();
+  const lead = built.some(item => item.figure === p.figures?.lead) ? [] : figureItems(p.figures?.lead);
+  return [
+    ...(built.length ? [{ heading: 'What I built' }, ...lead, ...built, ...figureItems(p.figures?.built)] : []),
+    { heading: p.implementationTitle ?? 'Implementation' },
+    ...[p.implementation].flat(),
+    ...figureItems(p.figures?.implementation),
+  ];
+}
 
 defineProps({
   win: Object,
@@ -574,19 +592,17 @@ function balloonDone(event, id) {
       <h1>{{ win.project.name }}</h1>
       <p class="intro">{{ win.project.summary }}</p>
       <p class="tech-line"><TechList :items="win.project.tech" chips/></p>
-      <template v-if="win.project.contribution">
-        <h2>What I built</h2>
-        <component :is="figureFor[f]" v-for="f in [win.project.figures?.lead ?? []].flat()" :key="f" :figure="f" @open="id => emit('open', id)"/>
-        <p>{{ win.project.contribution }}</p>
-        <component :is="figureFor[f]" v-for="f in [win.project.figures?.built ?? []].flat()" :key="f" :figure="f" @open="id => emit('open', id)"/>
+      <!-- see writeup() for what each item can be -->
+      <template v-for="(item, i) in writeup(win.project)" :key="i">
+        <h2 v-if="item.heading">{{ item.heading }}</h2>
+        <h3 v-else-if="item.subheading">{{ item.subheading }}</h3>
+        <component :is="figureFor[item.figure]" v-else-if="item.figure" :figure="item.figure" @open="id => emit('open', id)"/>
+        <component :is="item.bullets ? 'ul' : 'ol'" v-else-if="item.list"><li v-for="point in item.list" :key="point"><InlineText :text="point"/></li></component>
+        <p v-else-if="Array.isArray(item)"><template v-for="(part, j) in item" :key="j">
+          <button v-if="part.open" class="crumb-back" @click="emit('open', part.open)">{{ part.text }}</button><InlineText v-else :text="part"/>
+        </template></p>
+        <p v-else><InlineText :text="item"/></p>
       </template>
-      <h2>Implementation</h2>
-      <!-- paragraphs, with { figure } entries dropping a figure in between them -->
-      <template v-for="(item, i) in [win.project.implementation].flat()" :key="i">
-        <component :is="figureFor[item.figure]" v-if="item.figure" :figure="item.figure" @open="id => emit('open', id)"/>
-        <p v-else>{{ item }}</p>
-      </template>
-      <component :is="figureFor[f]" v-for="f in [win.project.figures?.implementation ?? []].flat()" :key="f" :figure="f" @open="id => emit('open', id)"/>
       <template v-if="win.project.outcomes">
         <h2>Results</h2>
         <ul>
@@ -595,7 +611,7 @@ function balloonDone(event, id) {
         <component :is="figureFor[f]" v-for="f in [win.project.figures?.results ?? []].flat()" :key="f" :figure="f" @open="id => emit('open', id)"/>
       </template>
       <template v-if="win.project.lessons">
-        <h2>Lessons learned</h2>
+        <h2>{{ win.project.lessonsTitle ?? 'Lessons learned' }}</h2>
         <p v-for="paragraph in [win.project.lessons].flat()" :key="paragraph">{{ paragraph }}</p>
       </template>
       <aside v-if="win.project.funFact" class="fun-fact"><strong>Fun fact</strong><p>{{ win.project.funFact }}</p></aside>

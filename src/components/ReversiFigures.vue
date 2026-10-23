@@ -239,7 +239,7 @@ function newTree() {
 
 <template>
   <figure v-if="figure === 'board'" class="rx-figure">
-    <figcaption><strong>Fig. 1</strong> The board is a grid of chars, U, B or W, printed to the terminal with a letter for each row and column. Point at a square to check it in all 8 directions, and click to play it.</figcaption>
+    <figcaption><strong>Fig. 1</strong> The board is a grid of characters (U for unoccupied, B for black, W for white) printed to the terminal, with each row and column labelled by a letter. Hover over a square to see it checked in all 8 directions, and click to play it.</figcaption>
     <div class="rx-panel rx-split rx-c">
       <div class="rx-board" role="group" aria-label="Board">
         <button v-for="(cell, i) in cBoard" :key="i"
@@ -274,7 +274,7 @@ function newTree() {
   </figure>
 
   <figure v-else-if="figure === 'weights'" class="rx-figure">
-    <figcaption><strong>Fig. 2</strong> The weight of every square. Point at one to see why, and click a corner to take it.</figcaption>
+    <figcaption><strong>Fig. 2</strong> The weight of every square. Hover over one to see why, and click a corner to take it.</figcaption>
     <div class="rx-panel rx-split">
       <div class="rx-board rx-weights" role="group" aria-label="Square weights">
         <button v-for="(w, i) in weights" :key="i" :class="['rx-cell', `w-${tint(i)}`, { picked: pickedSquare === i, corner: corners.includes(i) }]"
@@ -297,7 +297,7 @@ function newTree() {
   </figure>
 
   <figure v-else-if="figure === 'eval'" class="rx-figure">
-    <figcaption><strong>Fig. 3</strong> Clippy (white) scoring its moves. Each number is a legal move and its score. Pick one to see what goes into it.</figcaption>
+    <figcaption><strong>Fig. 3</strong> Clippy (white) scoring its moves. Each number is a legal move and its score. Pick one to see the breakdown.</figcaption>
     <div class="rx-panel rx-split rx-eval">
       <div class="rx-board" role="group" aria-label="Clippy's legal moves">
         <button v-for="(cell, i) in evalBoard" :key="i" :disabled="scoreAt[i] === undefined"

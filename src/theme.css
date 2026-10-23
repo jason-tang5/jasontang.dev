@@ -1978,11 +1978,11 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 
 /* ---- projects ---- */
 
-/* the preview grows with the window (40% of it) between 205px and 460px, so a big or
-   maximized window doesn't leave the list with a huge empty right side */
+/* the preview takes most of the window (65% of it) between 205px and 760px, so a big
+   or maximized window doesn't stretch it past what the figures need */
 .project-explorer {
   display: grid;
-  grid-template-columns: clamp(205px, 40%, 460px) minmax(0, 1fr);
+  grid-template-columns: clamp(205px, 65%, 760px) minmax(0, 1fr);
   background: var(--paper);
 }
 
@@ -2147,8 +2147,9 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 
 /* project and experience windows use the blog's headings: the pixel font, the title
-   like a post title and each section like a # heading with a rule under it */
-.pixel-headings :is(h1, h2) {
+   like a post title, each section like a # heading with a rule under it and a part
+   of a section like a ## heading */
+.pixel-headings :is(h1, h2, h3) {
   font-family: 'Pixel MS Sans Serif', Tahoma, sans-serif;
   font-weight: bold;
   letter-spacing: normal;
@@ -2167,6 +2168,11 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   margin: 1.7em 0 .4em;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--surface);
+}
+
+.pixel-headings h3 {
+  font-size: 17px;
+  margin: 1.7em 0 .4em;
 }
 
 .document p {

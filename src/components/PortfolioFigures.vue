@@ -171,7 +171,7 @@ const tiles = computed(() => {
   </figure>
 
   <figure v-else-if="figure === 'apps'" class="pf-figure">
-    <figcaption><strong>Fig. 1</strong> What’s on the desktop. Pick one to open it.</figcaption>
+    <figcaption><strong>Fig. 1</strong> What’s on the desktop. Pick an app to open it.</figcaption>
     <div class="pf-table-wrap pf-frame">
       <table class="pf-table">
         <thead><tr><th scope="col">App</th><th scope="col">What it does</th><th scope="col">Under the hood</th></tr></thead>
@@ -191,7 +191,7 @@ const tiles = computed(() => {
   </figure>
 
   <figure v-else-if="figure === 'stack'" class="pf-figure">
-    <figcaption><strong>Fig. 2</strong> How a click travels. Pick a box to see what it handles.</figcaption>
+    <figcaption><strong>Fig. 2</strong> How a click travels through the site. Pick a box to see what it handles.</figcaption>
     <div class="pf-stack pf-frame">
       <button class="pf-node raised" :class="{ pressed: picked === 'browser' }" :aria-pressed="picked === 'browser'" @click="picked = 'browser'">
         <RetroIcon :name="nodes.browser.icon"/><span>{{ nodes.browser.name }}</span>

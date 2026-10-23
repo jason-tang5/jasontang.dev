@@ -112,23 +112,41 @@ export const projects = [
     date: 'September 2026',
     icon: 'computer',
     tech: ['Vue', 'JavaScript', 'Cloudflare Workers', 'Durable Objects', 'Workers KV', 'Vite', 'Playwright'],
-    // interactive figures under these sections, see PortfolioFigures.vue
-    // lead sits under the heading before the text, the rest after it. the projects
-    // folder shows the lead figure in its preview too
-    figures: { lead: 'desktop', built: 'apps', implementation: 'stack', results: 'live' },
+    // interactive figures, see PortfolioFigures.vue. lead sits under the what i built
+    // heading before the text and shows in the projects folder's preview too. the
+    // others are placed in contribution and implementation, see writeup() in AppContent.vue
+    figures: { lead: 'desktop' },
     summary: 'This site!',
-    contribution: 'Designed and built a Windows 95 style desktop in Vue and Vite, with draggable, resizable windows, a taskbar and start menu, folders, a light and dark theme, and a separate touch layout for phones. Inside it are apps that go past a typical portfolio: Breakout in an arcade cabinet that reveals my email when you clear it, Snake on a handheld with a world leaderboard, Minesweeper, Reversi against a trash-talking Clippy, a Spotify CD player with a music visualizer, sticky notes and a blog.',
-    implementation: [
-      'The window manager keeps every window inside the screen at its minimum size, remembers where windows were left, and links to any window through the URL. The window geometry is plain JavaScript with no Vue in it, so it is unit tested in Node.',
-      'A Cloudflare Worker serves the static build and runs the API. The contact form sends email through Cloudflare Email Routing, blog posts are saved to Workers KV and written from the site itself behind Cloudflare Access, and videos go through the worker so Safari gets the range requests it needs to play them.',
-      'A SQLite Durable Object keeps the live scoreboard: total visits, who is online now, game wins, and the Snake leaderboard over the last 7 and 30 days and all time. Leaderboard names are checked in the browser and again in the worker with a profanity filter that sees through letter swaps.',
-      'Anonymous, cookie-free visit analytics are recorded in Workers Analytics Engine and read back with its SQL API into an Analytics window with 7, 30 and 90 day views. Nothing is sent until the first click or key press, which keeps bots and link previews out of the numbers.',
-      'The retro details are generated rather than loaded: UI sounds come from Web Audio with no sound files, the game backdrops are animated ASCII, and phones get haptic feedback, even on iPhones through a hidden switch that triggers Safari’s haptic tick.',
+    contribution: [
+      'Most portfolios are a scrolling page with a list of projects and experiences. To stand out, I wanted mine to feel like something you’d want to poke around in, so I spent a decent chunk of time thinking about what would be cool to make. I first got inspired by desktop-style sites like sharyap.com and expensive.toys. Then I saw this really cool video-to-ASCII npm package by Lucas, react-video-ascii, and that got me thinking: what if I made a desktop too?',
+      'Then I filled it with things I’d want to find. My email is locked inside a Breakout arcade cabinet, and you have to clear the bricks to get it. Snake has a worldwide leaderboard. Clippy is back, and he’ll trash-talk you over Reversi. There’s also Minesweeper, a CD player that plays my music on Spotify, sticky notes, and this blog.',
+      { figure: 'apps' },
     ],
-    outcomes: [
-      'Deployed on Cloudflare Workers, with every push to main going live automatically.',
-      'Unit tests for the worker, window geometry and games, plus Playwright browser checks that click through every app at desktop and phone sizes.',
-      'Respects reduced motion and works with a keyboard and screen reader, with labelled controls and status announcements in the games.',
+    implementationTitle: 'Cool things hiding in here',
+    implementation: [
+      'There isn’t a single sound file. Every click, beep and chime is generated on the fly with Web Audio. The game backgrounds are animated ASCII art. It felt more in the spirit of the era to make the retro stuff instead of downloading it.',
+      'Your iPhone vibrates, too. Safari doesn’t let websites trigger haptics, but toggle switches get a little haptic tick. So there’s a hidden switch on the page, and the site flips it whenever it wants your phone to buzz.',
+      'People are creative with leaderboard names, so the Snake leaderboard had a profanity filter from day one. It sees through letter swaps, and names are checked in your browser and again on the server.',
+      'The analytics ignore bots and link previews. Nothing is counted until you actually click or press a key, so every visit in Fig. 3 is a real person.',
+      { heading: 'What I learned' },
+      'Safari is its own boss fight. Videos played everywhere except Safari, which turned out to need the server to send them in chunks. The haptics trick exists only because Safari says no to the normal way.',
+      'Tests are what let me keep adding things. With more than a dozen apps sharing one desktop, every new feature risked breaking an old one. Playwright now clicks through every app at desktop and phone sizes, so I can add things without breaking what’s already there.',
+      'Building for everyone makes it better for everyone. I added keyboard controls and screen reader announcements for accessibility, and they made the games nicer to play for everyone.',
+      { figure: 'stack' },
+      { heading: 'Under the hood' },
+      'For anyone curious how it all fits together:',
+      { bullets: true, list: [
+        '**Frontend:** Vue and Vite. The window manager’s geometry is plain JavaScript with no Vue, so it can be unit tested in Node.',
+        '**Server:** One Cloudflare Worker serves the site and handles every /api request.',
+        '**Live data:** A SQLite Durable Object tracks visits, who’s online, game wins and the Snake leaderboard.',
+        '**Blog:** Posts are stored in Workers KV and edited from the site itself, behind Cloudflare Access.',
+        '**Contact form:** Messages are sent through Cloudflare Email Routing.',
+        '**Analytics:** Anonymous and cookie-free. Visits go to Workers Analytics Engine, and the Analytics window reads them back with its SQL API.',
+        '**Testing:** Unit tests cover the worker, window geometry and games. Playwright clicks through every app at desktop and phone sizes.',
+        '**Deploys:** Every push to main goes live automatically.',
+        '**Accessibility:** It respects reduced motion and works with a keyboard and screen reader.',
+      ] },
+      { figure: 'live' },
     ],
   },
   {
@@ -139,11 +157,12 @@ export const projects = [
     icon: 'chip',
     tech: ['Rust', 'CUDA', 'TypeScript', 'PyTorch', 'TensorFlow'],
     // interactive figures, see MlFigures.vue. the implementation list places the rest
-    figures: { lead: 'graph' },
+    figures: { lead: 'train' },
     summary: 'A small ML framework in Rust, from tensors to GPU training.',
     contribution: 'Built a deep learning library in Rust with tensors, reverse-mode automatic differentiation, a CPU backend, a CUDA backend with hand-written kernels, and TypeScript bindings for Node.js, then trained an MNIST classifier with it.',
     implementation: [
       'Every operation on a tensor that needs gradients records its inputs and a backward rule. Calling backward on the loss walks that graph in reverse and adds up every contribution. The adding matters: in x·x + x, x gets gradient from three places, so at x = 3 it’s 3 + 3 + 1 = 7.',
+      { figure: 'graph' },
       'The CUDA kernels are written by hand: elementwise ops with grid-stride loops, sums and maxes with warp shuffles and shared memory, and a 16 × 16 tiled matrix multiply with transpose flags, so the backward pass never has to transpose anything. Softmax and cross-entropy are fused into one kernel, and Adam updates each parameter in place in one kernel too.',
       { figure: 'tiles' },
       'The backward kernels read their starting gradient from GPU memory, so a training step never has to wait on the CPU.',
@@ -171,19 +190,23 @@ export const projects = [
     // the implementation list can drop them in between its paragraphs too
     figures: { lead: 'register' },
     summary: 'The tile-merging game, implemented in hardware on a DE1-SoC.',
-    contribution: 'Built an FPGA implementation of 2048 in Verilog, rendered to a 160 × 120 VGA display at 60 Hz through a custom VGA adapter.',
+    contribution: 'For ECE241 (Digital Systems), my partner and I built 2048 on an FPGA in Verilog. It runs on a 160 × 120 VGA display at 60 Hz through a custom VGA adapter, and you play it with a real PS/2 keyboard.',
+    implementationTitle: 'How it works',
     implementation: [
-      'Implemented tile movement, merging, and scoring using a modular datapath and FSM controller. Verified the design through ModelSim testbenches, Tcl simulations, and physical I/O.',
-      'Drawing starts in memory. Each tile, 2 up to 2048, is a sprite in on-chip ROM. Multiplexers pick which sprite to draw and which cell it goes in, registers hold that cell’s corner, and row and column counters sweep across the tile one pixel at a time into the VGA adapter, in 8 colours.',
+      'The game is split into a datapath and an FSM controller, which handle moving, merging and scoring the tiles. We tested it with ModelSim testbenches, Tcl simulations and, finally, the actual board.',
+      { subheading: 'Drawing tiles' },
+      'Each tile, from 2 up to 2048, is a sprite stored in on-chip ROM. Multiplexers pick which sprite to draw and which cell it goes in, and registers hold that cell’s corner. Row and column counters then sweep across the tile one pixel at a time and send each pixel to the VGA adapter in one of 8 colours.',
       { figure: 'datapath' },
-      'Moving the tiles works on the board register directly. A slide happens in two steps: equal tiles combine, skipping any gaps between them, then everything compacts to the side it was pushed toward.',
+      { subheading: 'Sliding tiles' },
+      'Moves work directly on the board register, in two steps. First, equal tiles combine, even if there are gaps between them. Then everything compacts toward the side you pushed.',
       { figure: 'slide' },
-      'Moves come from a PS/2 keyboard. Each key sends a make code when it goes down, then a break code (F0) and the key again when it comes up. A one-hot FSM turns W, A, S and D into 0001, 0010, 0100 and 1000, and a gap state swallows the extra break code so one press is one move.',
+      { subheading: 'Reading the keyboard' },
+      'A PS/2 keyboard sends a make code when a key goes down. When the key comes up, it sends a break code (F0) followed by the key’s code again. A one-hot FSM turns W, A, S and D into 0001, 0010, 0100 and 1000. A gap state swallows the extra code, so one press is always exactly one move.',
       { figure: 'fsm' },
-      'The hardest part was integration. Modules built on their own disagreed on wire widths, and even on bit order: [0:63] in one, [63:0] in another.',
-      'The Games folder has a version rebuilt for the browser from the same design, with the game over check and sliding animation we listed as next steps.',
+      ['The ', { open: 'games', text: 'Games' }, ' folder has a browser version rebuilt from the same design. It includes the game-over check and sliding animation we had listed as next steps but never got to on the FPGA.'],
     ],
-    lessons: 'Integrate early. Every module passed its own testbench, but the bugs lived in the wires between them: widths that didn’t match and buses numbered in opposite directions. Next time I’d agree on the interfaces first and wire the modules together while they’re still small.',
+    lessonsTitle: 'What I learned',
+    lessons: 'Integrate early. Every module passed its own testbench, but the bugs lived in the wires between them. Wire widths didn’t match, and one module numbered the board bus [0:63] while another used [63:0]. Next time, I’d agree on the interfaces first and wire the modules together while they’re still small.',
     funFact: 'The presentation for this project was due the same day as my interview with AMD, so I presented it to my interviewer as well! It went well enough, I spent the next 16 months interning there.',
   },
   {
@@ -195,24 +218,43 @@ export const projects = [
     tech: ['C'],
     // opens the playable version in the games folder
     game: 'reversi',
-    // the figure under the what i built heading, see ReversiFigures.vue
+    // the board is the preview's figure too, see ReversiFigures.vue. contribution places
+    // it itself, between its two paragraphs
     figures: { lead: 'board' },
-    summary: 'A reversi clone in the terminal built in C with an AI opponent for my computer fundamentals (aps105) course.',
-    contribution: 'Created a reversi clone in C with core game logic and responsive user input handling, then developed an opponent using heuristic-based algorithms to evaluate potential game states each move.',
-    // a list is shown as separate paragraphs, with { figure } entries from ReversiFigures.vue between them
+    summary: 'A terminal Reversi clone written in C, with an AI opponent, built for my Computer Fundamentals course (APS105).',
+    // these are lists of paragraphs, { figure }, { list } and { heading } items, and
+    // paragraphs given as arrays can hold { open, text } links to other windows. see
+    // writeup() in AppContent.vue
+    contribution: [
+      'Over three weeks, I rebuilt Reversi (aka Othello) from scratch in C. When I realized I had no one to play it with, I built my own opponent, Clippy. Give it a try!',
+      { figure: 'board' },
+      ['Unfortunately, the original source code is lost to the depths of Quercus. The version in the ', { open: 'games', text: 'Games' }, ' folder is a faithful recreation.'],
+    ],
+    implementationTitle: 'How Clippy thinks',
     implementation: [
-      'The bot scores candidate moves by board position, mobility, and corner control, looking ahead at how the opponent can respond.',
-      'The original source code is unfortunately lost, so the version in the Games folder recreates it from scratch, with Clippy talking smack in the background while you play. The figures below run that version’s bot.',
-      'Board position starts from a table of weights. Corners are worth the most, since a disc there can never be flipped back. The squares touching an empty corner are the worst, since playing one usually hands the corner over.',
+      'Clippy scores each possible move by looking at board position, mobility and corner control.',
+      'Board position starts from a table of weights. Corners are worth the most because a disc there can never be flipped. The squares next to an empty corner are the worst, because playing one usually hands the corner to your opponent.',
       { figure: 'weights' },
-      'To score a move, the bot plays it on a copy of the board and adds up the weights of the squares each side holds, its mobility (how many moves it keeps against how many it leaves you), and the corners it owns. With 13 or fewer empty squares left, it counts discs too.',
+      'To score a move, Clippy plays it on a copy of the board and adds up three things:',
+      { list: ['The weights of the squares each side holds', 'Mobility: how many moves it keeps compared with how many it leaves you', 'The corners it owns'] },
+      'When there are 13 or fewer empty squares left, it also starts counting discs.',
       { figure: 'eval' },
-      'The move that scores best right now can still be a mistake. The bot looks ahead with minimax: for each of its moves it assumes you answer with the reply that hurts it most, then plays the move whose worst case is best.',
+      { heading: 'Looking ahead with minimax' },
+      'This greedy approach has a flaw: the move that scores best right now can still turn out to be a mistake a few turns later. The solution is minimax.',
+      'Minimax lets Clippy look two moves ahead. For each of its own moves, it assumes you’ll reply with the move that hurts it most. It then picks the move whose worst case is best.',
       { figure: 'lookahead' },
     ],
     outcomes: [
-      'Achieved a 100% win rate over basic random-move bots.',
-      'Maintained an 80% win rate against algorithms developed by other students in the course.',
+      '100% win rate against basic random-move bots',
+      '80% win rate against bots built by other students in the course',
+      'A reality check of how bad I was at Reversi',
     ],
+    lessonsTitle: 'What I learned',
+    lessons: [
+      'Games that humans play by intuition are surprisingly hard to program well.',
+      'Reversi is about as simple as it gets: there are only ever a handful of legal moves, and with enough compute the game is even solved. Getting a bot to play it well still showed me how much we weigh without noticing, like which squares matter, what the opponent might do next, and when to give something up now to win later.',
+      'That makes me wonder about harder games, like ones with randomness (Slay the Spire) or ones where you play against several opponents at once (Teamfight Tactics). Maybe one of those will be my next project?',
+    ],
+    funFact: 'My record against Clippy is 2–48.',
   },
 ];

@@ -1,12 +1,109 @@
 <script setup>
-// the figures in the mini ml framework writeup (content.mjs, figures): the backward
+// the figures in the mini ml framework writeup (content.mjs, figures): the mnist mlp
+// training on real test digits while the cuda and cpu backends race, the backward
 // pass through x·x + x one gradient at a time, the tiled matmul kernel loading its
 // tiles phase by phase, and where pytorch and keras put adam's epsilon. the rules
 // follow ml-framework/crates/minitorch (autograd.rs, cuda.rs, optim.rs)
-import { computed, ref } from 'vue';
-defineProps({ figure: { type: String, required: true } });
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+const props = defineProps({ figure: { type: String, required: true } });
 
 const fmt = v => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+
+// ---- train: the 784-256-128-10 mlp learning mnist ----
+// one real test digit per class, thresholded. each row of 28 pixels is 7 hex digits
+const digits = [
+  { label: 7, bits: '000000000000000000000000000000000000000000000000001c000003fff80017ffc0000018000001800000300000070000006000000e000000c000001c000001800000380000070000006000000e000001c000001c000003c00000380000000000' },
+  { label: 2, bits: '000000000000000000000003f000007f80000ffc0000e1c0000c3800000380000078000007000000f000001e000001c000003c0000038000007800000f000000e000000e003c00ffffe00ffffc007ff0000000000000000000000000000000000000' },
+  { label: 1, bits: '0000000000000000000000000000000040000004000000c000000c00000080000018000001800000180000030000003000000700000060000006000000e000000e000000c000000c000001c000001c00000180000000000000000000000000000000' },
+  { label: 0, bits: '000000000000000000000000000000070000007000000f000001f800003fe00007ff00007e70000fc3c000f01c000e01c000c01e001c01c001c03c001c0f8001c1f8001cff0001fff0000ffc00007f000001c0000000000000000000000000000000' },
+  { label: 4, bits: '000000000000000000000000000000000000010000003018000300800030180006018000c018000c0380018030001807000180700018060001c3e0000ffe000000e000000e000000e000000e000000e000000e000000800000000000000000000000' },
+  { label: 9, bits: '000000000000000000000000000000000000000000000c000001c000003e000007f800007f8000063c000043c0000e3c000067c00007ee00003ce00001870000003000000380000018000001c000000c000000600000060000002000000000000000' },
+  { label: 5, bits: '000000000000000000000000000000000200000ff80007ff80007ff80047c0000c000001c0000038000003000000700000078000007e800007ffe0001fff00001ff00001ef00000ff00000fe000007c0000010000000000000000000000000000000' },
+  { label: 6, bits: '000000000000000000000001c000003c000007000000700000060000006000000e000000c0fe000c1fe000c7c6001cf06001ce06001dc06001dc06001ce0c001c71c001c078000e3e00007fc00001f00000000000000000000000000000000000000' },
+  { label: 3, bits: '000000000000000000000000000000c000003f000007f8000039e000070f000060780006038000623c00027fc00007ff00003ffc000003e000000f0006007000700380070038003c1f8001fff00007fe00000a000000000000000000000000000000' },
+  { label: 8, bits: '0000000000000000000000000000000000000000000007f80001ffe0003f0f00078070007007000300f000383e0001c7c0000ff00000f800007f80003fb8000fc38000fbf80007ff00001fe000000000000000000000000000000000000000000000' },
+];
+// one 3 × 3 square per lit pixel, all in one path
+const digitPath = d => {
+  let path = '';
+  for (let r = 0; r < 28; r++) {
+    const row = parseInt(d.bits.slice(r * 7, r * 7 + 7), 16);
+    for (let c = 0; c < 28; c++) if (row & (1 << (27 - c))) path += `M${8 + c * 3} ${22 + r * 3}h3v3h-3z`;
+  }
+  return path;
+};
+// a few sample neurons stand in for each layer
+const layers = [{ x: 124, n: 9, size: 784 }, { x: 182, n: 8, size: 256 }, { x: 240, n: 6, size: 128 }];
+const dotY = (n, i) => 68 + (i - (n - 1) / 2) * 10.5;
+const outY = d => 18 + d * 10;
+// the wires between each pair of columns, one path each: digit to 784, 784 to 256,
+// 256 to 128, 128 to the 10 outputs
+const wires = (() => {
+  const column = l => Array.from({ length: l.n }, (_, i) => [l.x, dotY(l.n, i)]);
+  const from = [Array.from({ length: 5 }, (_, i) => [93, 36 + i * 14]), ...layers.map(column)];
+  const to = [...layers.map(column), Array.from({ length: 10 }, (_, d) => [300, outY(d) + 4.5])];
+  return from.map((a, k) => a.flatMap(([x1, y1]) => to[k].map(([x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`)).join(''));
+})();
+// a made up but steady activation for each sample neuron, so every digit lights its own pattern
+const activation = (d, l, i) => 0.3 + 0.7 * (((Math.sin(d * 12.9898 + l * 78.233 + i * 37.719) * 43758.5453) % 1) + 1) % 1;
+
+// from a real run: examples/mnist.rs --device cuda --epochs 10, seed 0, batch 128, adam 1e-3
+const losses = [0.2670, 0.0996, 0.0671, 0.0504, 0.0429, 0.0300, 0.0237, 0.0223, 0.0191, 0.0171];
+const accs = [96.34, 96.78, 97.57, 97.35, 97.61, 97.79, 97.89, 97.89, 97.79, 97.79];
+// seconds per epoch on the rtx 4080 laptop, from the readme
+const GPU = 0.18, CPU = 2.83, EPOCHS = 10;
+// training plays back slowed down: the gpu's 1.8 s takes 14 s here, then it holds
+// on the result for a few seconds and starts over
+const SPEED = (GPU * EPOCHS) / 14;
+const CYCLE = 1600, HOLD = 3500, END = (GPU * EPOCHS / SPEED) * 1000;
+const clock = ref(0);
+const playing = ref(false);
+const sim = computed(() => Math.min(GPU * EPOCHS, clock.value / 1000 * SPEED));
+const gpuEpochs = computed(() => Math.min(EPOCHS, sim.value / GPU + 1e-9));
+const cpuEpochs = computed(() => Math.min(EPOCHS, sim.value / CPU));
+const trained = computed(() => Math.floor(gpuEpochs.value));
+const finished = computed(() => trained.value >= EPOCHS);
+const sample = computed(() => digits[Math.floor(clock.value / CYCLE) % digits.length]);
+// how far this batch is through forward, loss, backward and adam. -1 once training's done
+const batchPhase = computed(() => (finished.value ? -1 : (clock.value % CYCLE) / CYCLE));
+const stage = computed(() => {
+  const f = batchPhase.value;
+  if (f < 0) return 'Done.';
+  return f < 0.45 ? 'Forward pass.' : f < 0.55 ? 'Cross-entropy loss.' : f < 0.9 ? 'Backward pass.' : 'Adam step.';
+});
+// column j lights as the forward pass reaches it: 1 to 3 are the hidden layers, 4 the outputs
+const layerOn = j => batchPhase.value < 0 || batchPhase.value >= j * 0.1;
+const wireClass = k => {
+  const f = batchPhase.value;
+  return { fwd: f >= k * 0.1 + 0.05 && f < 0.5, back: f >= 0.5 + (3 - k) * 0.1 && f < 0.9, step: f >= 0.9 };
+};
+// the label's bar is e^-loss, the geometric mean of the probability the model gave the
+// right answer that epoch. untrained, it's a guess out of 10
+const pLabel = computed(() => (trained.value ? Math.exp(-losses[trained.value - 1]) : 0.1));
+const lossLine = computed(() => losses.slice(0, trained.value).map((l, e) => `${e * 100 / 9},${28 - l / 0.3 * 26}`).join(' '));
+
+let raf, last;
+function frame(now) {
+  if (last !== undefined) clock.value += now - last;
+  last = now;
+  if (clock.value > END + HOLD) clock.value = 0;
+  raf = requestAnimationFrame(frame);
+}
+function play() {
+  playing.value = true;
+  last = undefined;
+  if (clock.value >= END) clock.value = 0;
+  raf = requestAnimationFrame(frame);
+}
+function stop() { playing.value = false; cancelAnimationFrame(raf); }
+function restart() { clock.value = 0; if (!playing.value) play(); }
+onMounted(() => {
+  if (props.figure !== 'train') return;
+  // with reduced motion it opens on the finished run and only moves if you press play
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) clock.value = END;
+  else play();
+});
+onBeforeUnmount(() => cancelAnimationFrame(raf));
 
 // ---- graph: y = x·x + x ----
 const x = ref(3);
@@ -104,8 +201,51 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 </script>
 
 <template>
-  <figure v-if="figure === 'graph'" class="mm-figure">
-    <figcaption><strong>Fig. 1</strong> The backward pass through y = x·x + x. Three gradients reach x, and they have to be added up.</figcaption>
+  <figure v-if="figure === 'train'" class="mm-figure">
+    <figcaption><strong>Fig. 1</strong> Training the 784-256-128-10 MLP on MNIST. Real test digits go forward, gradients come back, Adam steps, and the GPU races the CPU through 10 epochs.</figcaption>
+    <div class="mm-panel">
+      <svg class="mm-net" viewBox="0 0 360 132" aria-hidden="true">
+        <rect class="mm-digit-bg" x="7" y="21" width="86" height="86"/>
+        <path class="mm-digit" :d="digitPath(sample)"/>
+        <text class="mm-layer" x="50" y="121">28 × 28</text>
+        <path v-for="(d, k) in wires" :key="k" class="mm-wires" :class="wireClass(k)" :d="d"/>
+        <g v-for="(l, j) in layers" :key="j">
+          <circle v-for="i in l.n" :key="i" class="mm-neuron" :class="{ on: layerOn(j + 1) }" :cx="l.x" :cy="dotY(l.n, i - 1)" r="3.5"
+            :style="{ opacity: layerOn(j + 1) ? activation(sample.label, j, i) : 1 }"/>
+          <text class="mm-layer" :x="l.x" y="121">{{ l.size }}</text>
+        </g>
+        <g v-for="d in 10" :key="d" class="mm-out" :class="{ target: d - 1 === sample.label && layerOn(4.5) }">
+          <rect x="300" :y="outY(d - 1)" width="10" height="9"/>
+          <text x="305" :y="outY(d - 1) + 7">{{ d - 1 }}</text>
+          <rect class="mm-prob" x="313" :y="outY(d - 1) + 2" :width="layerOn(4) ? 40 * (d - 1 === sample.label ? pLabel : (1 - pLabel) / 9) : 0" height="5"/>
+        </g>
+        <text class="mm-layer" x="305" y="128">10</text>
+      </svg>
+      <p class="mm-note mm-stage"><b>{{ stage }}</b>
+        <template v-if="finished">Trained to {{ accs[EPOCHS - 1] }}% on the 10,000 test digits.</template>
+        <template v-else>One digit, a {{ sample.label }}, out of a batch of 128.</template>
+      </p>
+      <div class="mm-race">
+        <span>CUDA</span><span class="mm-bar"><i :style="{ width: `${gpuEpochs * 10}%` }"/></span><code>{{ Math.floor(gpuEpochs) }}/10 · {{ GPU }} s</code>
+        <span>CPU</span><span class="mm-bar cpu"><i :style="{ width: `${cpuEpochs * 10}%` }"/></span><code>{{ Math.floor(cpuEpochs) }}/10 · {{ CPU }} s</code>
+      </div>
+      <div class="mm-curve">
+        <svg viewBox="-2 0 104 30" preserveAspectRatio="none" aria-hidden="true"><polyline :points="lossLine"/></svg>
+        <p>
+          <template v-if="trained">Epoch {{ trained }} · loss <code>{{ losses[trained - 1].toFixed(4) }}</code> · test acc <code>{{ accs[trained - 1] }}%</code></template>
+          <template v-else>Epoch 0 · untrained, a guess out of 10</template>
+          <br><small>{{ sim.toFixed(2) }} s of GPU time. The CPU takes {{ (CPU * EPOCHS).toFixed(1) }} s for the same 10 epochs, about 16× longer.</small>
+        </p>
+      </div>
+      <div class="mm-buttons">
+        <button class="raised mm-button" @click="playing ? stop() : play()">{{ playing ? 'Pause' : 'Play' }}</button>
+        <button class="raised mm-button" @click="restart">Restart</button>
+      </div>
+    </div>
+  </figure>
+
+  <figure v-else-if="figure === 'graph'" class="mm-figure">
+    <figcaption><strong>Fig. 2</strong> The backward pass through y = x·x + x. Three gradients reach x, and they have to be added up.</figcaption>
     <div class="mm-panel">
       <svg class="mm-graph" viewBox="0 0 340 128" aria-hidden="true">
         <defs><marker id="mm-arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L6 3L0 6z"/></marker></defs>
@@ -144,7 +284,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
   </figure>
 
   <figure v-else-if="figure === 'tiles'" class="mm-figure">
-    <figcaption><strong>Fig. 2</strong> The tiled matmul. Each block of C loads one tile of A and one of B into shared memory per phase. Click a block of C.</figcaption>
+    <figcaption><strong>Fig. 3</strong> The tiled matmul. Each block of C loads one tile of A and one of B into shared memory per phase. Click a block of C.</figcaption>
     <div class="mm-panel">
       <div class="mm-scroll">
         <svg class="mm-tiles" viewBox="0 0 334 112" role="group" aria-label="Matrices">
@@ -175,7 +315,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
   </figure>
 
   <figure v-else-if="figure === 'epsilon'" class="mm-figure">
-    <figcaption><strong>Fig. 3</strong> One Adam step on a weight with a steady gradient, the way PyTorch and Keras each add epsilon (1e-8).</figcaption>
+    <figcaption><strong>Fig. 4</strong> One Adam step on a weight with a steady gradient, the way PyTorch and Keras each add epsilon (1e-8).</figcaption>
     <div class="mm-panel">
       <div class="mm-sliders">
         <label>Gradient <code>{{ sci(g) }}</code><input v-model.number="gExp" type="range" min="-10" max="-2" step="0.5" aria-label="Gradient size"></label>
@@ -208,7 +348,41 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-note > b:first-child { margin-right: 6px; font: bold 11px 'Courier New', monospace; color: var(--muted); }
 .mm-note code, .mm-sum code, .mm-sliders code, .mm-bars code { font: bold 12px 'Courier New', monospace; color: var(--d-link, #000080); }
 
-/* fig 1 */
+/* fig 1: the network, the race, and the loss curve */
+.mm-net { display: block; width: 100%; max-width: 560px; margin: 0 auto; }
+.mm-digit-bg { fill: #000; }
+.mm-digit { fill: #fff; }
+.mm-layer { font: 9px 'Courier New', monospace; fill: var(--muted); text-anchor: middle; }
+.mm-wires { fill: none; stroke: var(--d-line, #bbb); stroke-width: .4; opacity: .5; transition: stroke .15s, opacity .15s; }
+.mm-wires.fwd { stroke: var(--navy, #000080); opacity: .8; }
+.mm-wires.back { stroke: #1baf7a; stroke-width: .7; opacity: 1; }
+.mm-wires.step { stroke: #e8a33d; opacity: 1; }
+.mm-neuron { fill: var(--d-page-alt, #fffdf2); stroke: var(--muted); stroke-width: 1; transition: fill .15s; }
+.mm-neuron.on { fill: var(--navy, #000080); stroke: var(--navy, #000080); }
+.mm-out rect:first-child { fill: var(--d-page-alt, #fffdf2); stroke: var(--muted); stroke-width: 1; }
+.mm-out text { font: bold 7px 'Courier New', monospace; fill: var(--ink); text-anchor: middle; }
+.mm-out.target rect:first-child { fill: #1baf7a; stroke: #1baf7a; }
+.mm-out.target text { fill: #fff; }
+.mm-prob { fill: var(--navy, #000080); transition: width .3s; }
+.mm-out.target .mm-prob { fill: #1baf7a; }
+:root[data-theme="dark"] .mm-wires.fwd { stroke: #8ca0ff; }
+:root[data-theme="dark"] .mm-neuron.on { fill: #8ca0ff; stroke: #8ca0ff; }
+:root[data-theme="dark"] .mm-out:not(.target) .mm-prob { fill: #8ca0ff; }
+.mm-stage { min-height: 0; margin: 6px 0 8px; }
+.mm-stage > b:first-child { margin-right: 4px; font: bold 12px 'Pixel MS Sans Serif', Tahoma, sans-serif; color: var(--ink); }
+.mm-race { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; font-size: 12px; }
+.mm-race code { font: bold 12px 'Courier New', monospace; color: var(--d-link, #000080); }
+.mm-race .mm-bar.cpu i { background: #e8a33d; }
+.mm-curve { display: grid; grid-template-columns: minmax(70px, 140px) minmax(0, 1fr); gap: 10px; align-items: center; margin: 10px 0; font-size: 12px; }
+.mm-curve svg { width: 100%; height: 40px; background: var(--d-page-alt, #fffdf2); border: 1px solid var(--d-line, #999); }
+.mm-curve polyline { fill: none; stroke: #1baf7a; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.mm-curve p { margin: 0; line-height: 1.45; }
+.mm-curve code { font: bold 12px 'Courier New', monospace; color: var(--d-link, #000080); }
+.mm-curve small { color: var(--muted); }
+@container (max-width: 380px) { .mm-curve { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .mm-wires, .mm-neuron, .mm-prob { transition: none; } }
+
+/* fig 2 */
 .mm-graph { display: block; width: 100%; max-width: 480px; margin: 0 auto; }
 .mm-edges path { fill: none; stroke: var(--d-line, #888); stroke-width: 2; stroke-dasharray: 4 3; }
 .mm-edges path.lit { stroke: var(--ink); stroke-dasharray: none; }
@@ -226,7 +400,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-check { font-weight: bold; color: #1baf7a; }
 .mm-check.bad { color: #c0392b; }
 
-/* fig 2: scrolls sideways on a phone rather than shrinking to dots */
+/* fig 3: scrolls sideways on a phone rather than shrinking to dots */
 .mm-scroll { overflow-x: auto; }
 .mm-tiles { display: block; width: 100%; min-width: 320px; max-width: 560px; margin: 0 auto; }
 .mm-label { font: bold 9px 'Pixel MS Sans Serif', Tahoma, sans-serif; fill: var(--ink); text-anchor: middle; }
@@ -238,7 +412,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-cell.pickable.now { fill: var(--navy, #000080); }
 :root[data-theme="dark"] .mm-cell.seen { fill: #245c48; }
 
-/* fig 3 */
+/* fig 4 */
 .mm-sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; margin-bottom: 10px; font-size: 12px; }
 .mm-sliders label { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: center; }
 .mm-sliders input { grid-column: 1 / -1; width: 100%; }
