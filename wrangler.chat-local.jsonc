@@ -1,0 +1,14 @@
+// Isolated local development: no remote KV, analytics or email bindings.
+// Never deploy this file. Production uses wrangler.jsonc.
+{
+  "name": "portfolio-chat-local",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-25",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "durable_objects": { "bindings": [
+    { "name": "CHAT_ROOM", "class_name": "ChatRoom" },
+    { "name": "LIVE_STATS", "class_name": "LiveStats" }
+  ] },
+  "migrations": [{ "tag": "local-v1", "new_sqlite_classes": ["ChatRoom", "LiveStats"] }],
+  "vars": { "CHAT_LOCAL": "1" }
+}

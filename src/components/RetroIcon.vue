@@ -11,7 +11,13 @@ const [balloonBody, balloonEdge] = balloonColors[0];
     <g stroke="#111" stroke-width="1" stroke-linejoin="miter">
       <!-- three bars stepping up side by side, sharing their thick outlines, on a base,
            each lit from the top left -->
-      <g v-if="name === 'chart'" stroke="none">
+      <g v-if="name === 'messenger'" stroke="#355b72">
+        <path fill="#80bbec" d="M18 4h7v2h2v7h-2v2h-7v-2h-2V6h2zM17 16h9l4 5v7H14v-7z"/>
+        <path fill="#76c752" d="M7 3h7v2h2v8h-2v2H7v-2H5V5h2zM5 16h11l4 6v8H1v-8z"/>
+        <path fill="#b9ef95" stroke="none" d="M7 5h5v2H7zM3 23h2v5H3zM6 18h6v2H6z"/>
+        <path fill="#d5edff" stroke="none" d="M19 6h4v2h-4zM22 18h3v2h-3z"/>
+      </g>
+      <g v-else-if="name === 'chart'" stroke="none">
         <path fill="#111" d="M4 14h9v12H4zM11 8h9v18h-9zM18 2h9v24h-9zM2 26h28v2H2z"/>
         <path fill="#c8c8c8" d="M2 28h28v2H2z"/>
         <path fill="#1f6fc4" d="M6 16h5v10H6z"/>

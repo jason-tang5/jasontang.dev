@@ -38,6 +38,7 @@ const folderItems = type => folders[type].filter(id => !registry[id].locked || i
 
 // the games only load when someone actually opens them
 const Game = defineAsyncComponent(() => import('./Game.vue'));
+const Chat = defineAsyncComponent(() => import('./Chat.vue'));
 const Snake = defineAsyncComponent(() => import('./Snake.vue'));
 const Minesweeper = defineAsyncComponent(() => import('./Minesweeper.vue'));
 const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
@@ -666,6 +667,7 @@ function balloonDone(event, id) {
   <Pictures v-else-if="win.type === 'pictures'" :visible="visible"/>
   <Analytics v-else-if="win.type === 'analytics'"/>
   <Blog v-else-if="win.type === 'blog'"/>
+  <Chat v-else-if="win.type === 'chat'"/>
   <!-- the games, fun stuff and all apps folders: a big icon for each app inside -->
   <div v-else-if="folders[win.type]" class="app-layout">
     <div class="address-bar"><span>Address</span><div class="inset">{{ win.type === 'computer' ? 'All Apps' : `Portfolio:\\${win.label}` }}</div></div>

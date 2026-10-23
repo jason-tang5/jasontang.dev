@@ -11,6 +11,9 @@ npm run build   # builds into dist/
 
 pushing to `main` deploys it. most of the text lives in `src/content.mjs`.
 
+MSN Messenger adds a public visitor chat room. Run `npm run dev:chat` for the local
+chat server; see [CHAT.md](CHAT.md) for production setup, moderation and tests.
+
 ## credits
 
 - window chrome and palette adapted from don chia's [vuejs-os-template](https://github.com/DonChiaQE/vuejs-os-template) (mit, `licenses/vuejs-os-template-MIT.txt`)

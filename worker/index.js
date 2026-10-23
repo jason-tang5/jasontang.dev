@@ -1,4 +1,6 @@
 export { LiveStats } from './live-stats.mjs';
+export { ChatRoom } from './chat-room.mjs';
+import { chat } from './chat.mjs';
 import { liveStats } from './live-stats.mjs';
 // cloudflare worker for jasontang.dev. everything is the static site in dist/,
 // except /api/*: /api/contact emails the mail window's messages to me through
@@ -52,6 +54,7 @@ async function contact(request, env) {
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    if (pathname.startsWith('/api/chat/') || pathname.startsWith('/api/admin/chat/')) return chat(request, env);
     if (pathname === '/api/stats') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
       if (!env.LIVE_STATS) return json({ error: 'Stats unavailable.' }, 503);

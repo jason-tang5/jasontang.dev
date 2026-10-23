@@ -6,8 +6,14 @@
 	"name": "jasontang-dev",
 	"main": "worker/index.js",
 	"compatibility_date": "2026-09-25",
-	"durable_objects": { "bindings": [{ "name": "LIVE_STATS", "class_name": "LiveStats" }] },
-	"migrations": [{ "tag": "v1-live-stats", "new_sqlite_classes": ["LiveStats"] }],
+	"durable_objects": { "bindings": [
+		{ "name": "LIVE_STATS", "class_name": "LiveStats" },
+		{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }
+	] },
+	"migrations": [
+		{ "tag": "v1-live-stats", "new_sqlite_classes": ["LiveStats"] },
+		{ "tag": "v2-chat-room", "new_sqlite_classes": ["ChatRoom"] }
+	],
 	"observability": {
 		"logs": {
 			"enabled": true,
@@ -42,6 +48,8 @@
 	// only this email can write posts. ACCESS_TEAM_DOMAIN and ACCESS_AUD come from the
 	// cloudflare access application protecting /api/admin/* (see the readme)
 	"vars": {
+		"TURNSTILE_SITE_KEY": "0x4AAAAAAFi-ujUTULWwwy_V",
+		"TURNSTILE_HOSTNAMES": "jasontang.dev",
 		"ADMIN_EMAIL": "jasontcanada@gmail.com",
 		"ACCESS_TEAM_DOMAIN": "quiet-butterfly-8b30.cloudflareaccess.com",
 		"ACCESS_AUD": "f86b7c00ec8b87b8ee86249e4a3a9524dedc9ff6f7c36a5585d61de0d71c904c",
