@@ -96,6 +96,9 @@ async function send() {
   <!-- novalidate turns off the browser's own "please fill out this field" bubbles -->
   <form class="app-layout mail-app" novalidate @submit.prevent="send">
     <div class="mail-fields">
+      <label class="raised mail-label" for="mail-email">From:</label>
+      <input id="mail-email" :ref="fields.email" v-model="email" class="inset" type="email" placeholder="Your email…" autocomplete="email" maxlength="200" required>
+
       <label class="raised mail-label" for="mail-to">To:</label>
       <input id="mail-to" class="inset" :value="contact.email" aria-label="To" readonly>
       <button class="raised tinted mail-send" type="submit" :disabled="sending">
@@ -106,9 +109,6 @@ async function send() {
 
       <label class="raised mail-label" for="mail-name">Name:</label>
       <input id="mail-name" :ref="fields.name" v-model="name" class="inset" placeholder="Your name…" autocomplete="name" maxlength="100" required>
-
-      <label class="raised mail-label" for="mail-email">From:</label>
-      <input id="mail-email" :ref="fields.email" v-model="email" class="inset" type="email" placeholder="Your email…" autocomplete="email" maxlength="200" required>
     </div>
 
     <textarea
