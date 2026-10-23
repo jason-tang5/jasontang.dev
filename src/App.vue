@@ -1217,6 +1217,7 @@ onBeforeUnmount(() => {
         <ul class="tip-paths">
           <li>In a hurry? <button class="tip-link" @click="open('resume')">Resume</button> · <button class="tip-link" @click="open('projects')">Projects</button></li>
           <li>Want to poke around? <button class="tip-link" @click="open('contact')">Play Breakout</button> to reveal my email</li>
+          <li>Too quiet? <button class="tip-link" @click="open('music')">Play some music</button></li>
           <li>Just looking? Take your time!</li>
         </ul>
       </aside>

@@ -132,9 +132,9 @@ const places = [
     title: 'Other places',
     items: [
       { id: 'games', path: 'Portfolio:\\Games' },
-      { id: 'funstuff', path: 'Portfolio:\\Fun Stuff' },
-      { id: 'pictures', path: 'Portfolio:\\My Pictures' },
-      { id: 'stickies', path: 'Portfolio:\\Sticky Notes' },
+      { id: 'music', path: 'Portfolio:\\Fun Stuff\\CD Player' },
+      { id: 'pictures', path: 'Portfolio:\\Fun Stuff\\My Pictures' },
+      { id: 'analytics', path: 'Portfolio:\\Analytics' },
     ],
   },
 ];

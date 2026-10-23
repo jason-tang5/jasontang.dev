@@ -3,8 +3,7 @@
 // loads the first time you press play. while it plays, little pixel notes float
 // up off the disc.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { tracks as originalTracks } from '../music.mjs';
-import { musicDiscs } from '../music.mjs';
+import { defaultDisc, musicDiscs } from '../music.mjs';
 import { loadSpotifyApi } from '../spotify.js';
 import { createPlaybackEndTracker } from '../playback-end.mjs';
 import { noteGlyphs, noteColors } from '../notes.mjs';
@@ -55,11 +54,11 @@ function pickDisc(index, event) {
   spin(discOffset(index));
 }
 const discs = musicDiscs;
-const inserted = ref(0);
-const browsing = ref(0);
+const inserted = ref(defaultDisc);
+const browsing = ref(defaultDisc);
 // how far the carousel has turned in total, so a disc always travels the short way
 // round the ring instead of jumping across the front when the count wraps
-const turn = ref(0);
+const turn = ref(defaultDisc);
 // where a disc sits on the ring, counting whole turns so it keeps travelling the same way
 function discAngle(index) { return (index - turn.value) * 360 / discs.length; }
 // how far to turn it back toward you. it depends only on its spot on the ring, so a disc
@@ -71,7 +70,9 @@ function spin(steps) {
 }
 const activeDisc = computed(() => discs[inserted.value]);
 const albumUrl = computed(() => activeDisc.value.url);
-const tracks = computed(() => inserted.value === 0 ? originalTracks : [{ uri: activeDisc.value.uri, title: activeDisc.value.title, duration: 0 }]);
+// discs with a track list get track controls, the rest just play straight through
+const hasTracks = computed(() => Boolean(activeDisc.value.tracks));
+const tracks = computed(() => activeDisc.value.tracks ?? [{ uri: activeDisc.value.uri, title: activeDisc.value.title, duration: 0 }]);
 let insertTimer;
 let insertPending = false;
 function rotateDisc(direction) {
@@ -136,7 +137,7 @@ function time(ms) {
 function update({ data }) {
   // ignore stale updates from the track we just switched away from
   if (disposed || discEjected.value) return;
-  if (inserted.value === 0 && data.playingURI && data.playingURI !== current.value.uri) return;
+  if (hasTracks.value && data.playingURI && data.playingURI !== current.value.uri) return;
 
   const ended = playbackEnd.update(data);
   paused.value = data.isPaused;
@@ -150,7 +151,7 @@ function update({ data }) {
     clearTimeout(startupTimer);
     message.value = '';
   }
-  if (ended && inserted.value === 0) choose(repeatTrack.value ? selected.value : selected.value + 1);
+  if (ended && hasTracks.value) choose(repeatTrack.value ? selected.value : selected.value + 1);
 }
 
 // spotify's play() always restarts from 0:00, so after a pause we have to use resume().
@@ -237,7 +238,7 @@ function siteSound({ detail }) {
 
 // wraps around in both directions
 function choose(index) {
-  if (discEjected.value || inserted.value !== 0) return;
+  if (discEjected.value || !hasTracks.value) return;
   playbackEnd.reset();
   selected.value = (index + tracks.value.length) % tracks.value.length;
   position.value = 0;
@@ -327,7 +328,7 @@ onBeforeUnmount(() => {
       </button>
 
       <div class="cd-controls">
-        <RetroSelect class="cd-track" label="Track" :disabled="discEjected || inserted !== 0" :model-value="selected"
+        <RetroSelect class="cd-track" label="Track" :disabled="discEjected || !hasTracks" :model-value="selected"
           :options="tracks.map((track, i) => `${i + 1} of ${tracks.length}: ${track.title}`)" @update:model-value="choose"/>
 
         <div class="cd-timeline">
@@ -348,10 +349,10 @@ onBeforeUnmount(() => {
         <div class="cd-transport">
           <button class="raised cd-repeat" :class="{ pressed: repeatTrack }" :aria-pressed="repeatTrack"
             :aria-label="repeatTrack ? 'Disable repeat' : 'Enable repeat'" title="Repeat current track"
-            :disabled="inserted !== 0" @click="toggleRepeat">
+            :disabled="!hasTracks" @click="toggleRepeat">
             <svg viewBox="0 0 20 14" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 2h10V0h2v1h1v1h1v2h-1v1h-1v1h-2V4H4v3H2V4h1V3h1zM16 12H6v2H4v-1H3v-1H2v-2h1V9h1V8h2v2h10V7h2v3h-1v1h-1z"/></svg>
           </button>
-          <button class="raised" aria-label="Previous track" :disabled="discEjected || inserted !== 0" @click="choose(selected - 1)">
+          <button class="raised" aria-label="Previous track" :disabled="discEjected || !hasTracks" @click="choose(selected - 1)">
             <svg viewBox="0 0 20 14" aria-hidden="true"><path d="M9 2 2 7l7 5V2zm8 0-7 5 7 5V2z"/></svg>
           </button>
           <button
@@ -365,7 +366,7 @@ onBeforeUnmount(() => {
               <path v-else d="M5 2h4v10H5zm7 0h4v10h-4z"/>
             </svg>
           </button>
-          <button class="raised" aria-label="Next track" :disabled="discEjected || inserted !== 0" @click="choose(selected + 1)">
+          <button class="raised" aria-label="Next track" :disabled="discEjected || !hasTracks" @click="choose(selected + 1)">
             <svg viewBox="0 0 20 14" aria-hidden="true"><path d="m3 2 7 5-7 5V2zm8 0 7 5-7 5V2z"/></svg>
           </button>
           <button
