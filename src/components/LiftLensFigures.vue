@@ -162,7 +162,7 @@ const heights = computed(() => {
 const methods = {
   raw: { label: 'Frame to frame', note: 'Every pixel of noise becomes a spike, since it’s divided by a 60th of a second.' },
   average: { label: 'Moving average', note: 'Averaging the last 9 frames calms it down, but the peak comes out lower and late.' },
-  fit: { label: 'Quadratic fit', note: 'A curve fit to the 50 ms either side of each point keeps the peak where it was, with little noise.' },
+  fit: { label: 'Curve fit', note: 'A curve fit to the 50 ms either side of each point keeps the peak where it was, with little noise.' },
 };
 const method = ref('fit');
 const estimate = computed(() => {
@@ -196,7 +196,7 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 
 <template>
   <figure v-if="figure === 'angles'" class="ll-figure">
-    <figcaption><strong>Fig. 1</strong> A power clean, filmed from the side and run through LiftLens. Each angle comes from three keypoints, and the graphs follow the video.</figcaption>
+    <figcaption><strong>Fig. 1</strong> A power clean, filmed from the side. Each angle comes from three keypoints, and the graphs follow the video.</figcaption>
     <div class="ll-panel ll-angles">
       <div class="ll-cam">
         <video ref="video" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
@@ -237,7 +237,7 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
   </figure>
 
   <figure v-else-if="figure === 'plate'" class="ll-figure">
-    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle. Green ticks are rim angles with a strong edge across them.</figcaption>
+    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle. Green ticks mark parts of the outline that line up with a real edge.</figcaption>
     <div class="ll-panel">
       <svg ref="plateSvg" class="ll-scene" viewBox="0 0 320 200" @pointermove="drag" @pointerup="release" @pointercancel="release">
         <rect class="ll-ground" x="0" :y="floor + 2" width="320" :height="200 - floor - 2"/>
@@ -273,7 +273,7 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
   </figure>
 
   <figure v-else-if="figure === 'smooth'" class="ll-figure">
-    <figcaption><strong>Fig. 3</strong> Bar speed through one clean, calculated three ways from the same noisy 60 fps track. The dashed line is the true speed. The quadratic fit, using 50 ms either side of each point, keeps the peak where it should be with little noise.</figcaption>
+    <figcaption><strong>Fig. 3</strong> Bar speed through one clean, calculated three ways from the same jittery track. The dashed line is the true speed. The curve fit uses 50 ms either side of each point.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`${methods[method].label}: peak ${estPeak.v.toFixed(2)} m/s`">
         <line v-for="v in [-1, 0, 1, 2, 3]" :key="v" class="ll-grid" :class="{ zero: v === 0 }" :x1="sx(0)" :x2="sx(1)" :y1="sy(v)" :y2="sy(v)"/>
