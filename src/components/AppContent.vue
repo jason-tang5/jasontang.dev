@@ -135,6 +135,7 @@ const places = [
       { id: 'games', path: 'Portfolio:\\Games' },
       { id: 'music', path: 'Portfolio:\\Fun Stuff\\CD Player' },
       { id: 'pictures', path: 'Portfolio:\\Fun Stuff\\My Pictures' },
+      { id: 'chat', path: 'Portfolio:\\MSN Messenger' },
       { id: 'analytics', path: 'Portfolio:\\Analytics' },
     ],
   },

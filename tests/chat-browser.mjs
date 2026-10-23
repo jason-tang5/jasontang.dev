@@ -59,6 +59,13 @@ try {
   const send = async (visitor, text) => { await visitor.app.getByLabel('Your message').fill(text); await visitor.app.getByRole('button', { name: 'Send', exact: true }).click(); };
   await send(alice, 'Hey! Welcome to the little corner of the internet.');
   await expect(bob.app.getByRole('log')).toContainText('Hey! Welcome');
+  // a turned-down message goes back in the box and the visitor stays in the room
+  await send(alice, 'you are a sh1t');
+  await expect(alice.app.getByRole('alert')).toContainText('Keep it friendly');
+  await expect(alice.app.locator('.msn-pending')).toHaveCount(0);
+  await expect(alice.app.getByLabel('Your message')).toHaveValue('you are a sh1t');
+  await expect(alice.app.locator('.msn-identity')).toContainText('Connected');
+  await expect(bob.app.getByRole('log')).not.toContainText('sh1t');
   const html = '<img src=x onerror="window.chatXss=true">';
   await send(bob, html);
   await expect(alice.app.getByRole('log')).toContainText(html);
