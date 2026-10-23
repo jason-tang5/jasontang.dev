@@ -115,12 +115,14 @@ existing blog admin router, so blog administration continues to use its own path
   Names are reserved while connected and for 60 seconds after joining. `Jason`
   requires verified owner identity; other administration names are reserved.
 - Messages: 250 Unicode characters, plain text, no clickable links or uploads.
+  Messages and nicknames go through the Snake leaderboard's profanity filter.
   Vue text interpolation renders HTML literally.
 - At least 3 seconds between messages (owner-adjustable up to 60), at most 20 per
   rolling minute per session, across all tabs. Rate timestamps live in SQLite.
 - Last-three-message duplicate suppression; retry IDs acknowledge an already
   stored message without broadcasting or inserting it again.
-- 5 join attempts per IP hash per 10 minutes; daily salted hashes, no stored raw
+- 10 successful joins per IP hash per 10 minutes (failed attempts and the owner are
+  not counted); daily salted hashes, no stored raw
   IP addresses. 200 sockets per room, 4 per session, 5,000 retained sessions.
 - Client frames are limited to 4 KiB, allowing 250-character Unicode messages plus
   JSON overhead. Floods above 30 frames per 10 seconds per socket are disconnected.

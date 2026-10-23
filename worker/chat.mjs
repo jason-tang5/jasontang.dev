@@ -74,8 +74,11 @@ export async function chat(request, env, { verify = verifyAccess, fetcher = fetc
   try { data = await body(request); } catch { return failure('invalid-request'); }
   const ip = request.headers.get('CF-Connecting-IP') || 'local';
   const ipHash = await hash(`${env.TURNSTILE_SECRET || 'local'}:${new Date().toISOString().slice(0, 10)}:${ip}`);
-  const admitted = await call('/admit', { ip: ipHash });
-  if (!admitted.ok) return admitted;
+  const owner = await isAdmin();
+  if (!owner) {
+    const admitted = await call('/admit', { ip: ipHash });
+    if (!admitted.ok) return admitted;
+  }
   if (!local) {
     if (typeof data.turnstileToken !== 'string' || !data.turnstileToken.trim() || data.turnstileToken.length > 2048) return failure('captcha-failed', 403);
     try {
@@ -90,7 +93,7 @@ export async function chat(request, env, { verify = verifyAccess, fetcher = fetc
     } catch { return failure('captcha-unavailable', 503); }
   }
   const value = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
-  const response = await call('/join', { nickname: data.nickname, tokenHash: await hash(value), previousHash: tokenHash, admin: await isAdmin() });
+  const response = await call('/join', { nickname: data.nickname, tokenHash: await hash(value), previousHash: tokenHash, admin: owner, ip: owner ? null : ipHash });
   if (!response.ok) return response;
   return json(await response.json(), 200, { 'Set-Cookie': cookie(value, 2592000) });
 }

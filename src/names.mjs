@@ -14,6 +14,9 @@ const words = new DataSet()
   .addPhrase(phrase => phrase.addPattern(pattern`hitler`));
 const matcher = new RegExpMatcher({ ...words.build(), ...englishRecommendedTransformers });
 
+// whether text has a word the filter catches. chat messages and nicknames use it too
+export const profane = text => matcher.hasMatch(String(text ?? ''));
+
 // names are capital letters only, like an arcade. lowercase is turned into capitals
 export const tidyName = input => String(input ?? '').toUpperCase().replace(/[^A-Z]/g, '');
 

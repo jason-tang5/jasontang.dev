@@ -38,6 +38,9 @@ test('nickname and text rules reject impersonation and count Unicode characters'
   assert.equal(nicknameError('ADMIN', true), 'nickname-reserved');
   assert.equal(nicknameError('two words'), 'nickname-invalid');
   assert.equal(messageError('  '), 'empty');
+  assert.equal(messageError('you are a sh1t'), 'profanity');
+  assert.equal(messageError('the assassin in scunthorpe'), null);
+  assert.equal(nicknameError('fuuuck_you'), 'nickname-profanity');
   assert.equal(messageError('🙂'.repeat(250)), null);
   assert.equal(messageError('🙂'.repeat(251)), 'too-long');
   assert.equal(messageError('<img src=x onerror=alert(1)>'), null);
@@ -132,7 +135,9 @@ test('malformed and oversized frames cannot write messages or crash the room', a
 
 test('join admission limits persist across object recreation', async () => {
   const s = setup();
-  for (let i = 0; i < 5; i++) assert.equal((await s.call('/admit', { ip: 'one-ip' })).status, 200);
+  // checking admission alone, like a failed captcha, never uses up an attempt
+  for (let i = 0; i < 20; i++) assert.equal((await s.call('/admit', { ip: 'one-ip' })).status, 200);
+  for (let i = 0; i < 10; i++) assert.equal((await s.call('/join', { nickname: `guest${i}x`, tokenHash: await hash(crypto.randomUUID()), ip: 'one-ip' })).status, 200);
   s.restart(); assert.equal((await s.call('/admit', { ip: 'one-ip' })).status, 429);
   assert.equal((await s.call('/admit', { ip: 'another-ip' })).status, 200);
 });

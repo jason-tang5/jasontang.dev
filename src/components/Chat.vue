@@ -31,6 +31,8 @@ const errors = {
   'nickname-invalid': 'Use 3–20 letters, numbers, underscores or hyphens.',
   'nickname-reserved': 'That name is reserved. Choose another nickname.',
   'nickname-taken': 'That nickname is in use. Choose another one.',
+  'nickname-profanity': 'Pick a friendlier nickname.',
+  'profanity': 'Keep it friendly! That message wasn’t sent.',
   'empty': 'Write a message first.', 'too-long': 'Messages can be up to 250 characters.',
   'invalid-message': 'That message could not be sent. Use plain text, up to 250 characters.',
   'rate-limited': 'Slow down! Please wait before sending another message.',

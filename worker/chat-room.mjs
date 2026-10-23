@@ -31,6 +31,7 @@ export class ChatRoom {
   session(tokenHash) {
     return this.one('SELECT * FROM sessions WHERE token_hash=? AND expires>?', tokenHash || '', Date.now());
   }
+  joins(ip, now) { return JSON.parse(this.one('SELECT attempts FROM joins WHERE ip=?', ip)?.attempts || '[]').filter(t => t > now - 600000); }
   person(session) { return { nickname: session.nickname, admin: Boolean(session.admin) }; }
   async scheduleCleanup() {
     if (await this.ctx.storage.getAlarm() === null) await this.ctx.storage.setAlarm(Date.now() + DAY);
@@ -62,12 +63,10 @@ export class ChatRoom {
       const conflict = session && this.sockets().some(ws => { const person = ws.deserializeAttachment(); return person.id !== session.id && person.nickname.toLowerCase() === session.nickname.toLowerCase(); });
       return json({ you: session && !conflict ? this.person(session) : null, banned: Boolean(session?.banned), joinError: conflict ? 'nickname-taken' : null, settings: this.settings() });
     }
+    // Only successful joins count, so a failed captcha or a taken nickname doesn't
+    // use up an attempt. /admit checks before the Turnstile call, /join records.
     if (path === '/admit') {
-      const attempts = JSON.parse(this.one('SELECT attempts FROM joins WHERE ip=?', body.ip)?.attempts || '[]').filter(t => t > now - 600000);
-      if (attempts.length >= 5) return failure('join-limited', 429);
-      attempts.push(now);
-      this.sql.exec('INSERT INTO joins VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET attempts=excluded.attempts, at=excluded.at', body.ip, JSON.stringify(attempts), now);
-      await this.scheduleCleanup();
+      if (this.joins(body.ip, now).length >= 10) return failure('join-limited', 429);
       return json({ ok: true });
     }
     if (path === '/join') {
@@ -88,6 +87,7 @@ export class ChatRoom {
       if (old) { this.disconnect(old.id, 4401, 'Signed out'); this.sql.exec('DELETE FROM sessions WHERE id=?', old.id); }
       this.sql.exec('INSERT INTO sessions (id, token_hash, nickname, admin, expires, created) VALUES (?, ?, ?, ?, ?, ?)',
         crypto.randomUUID(), body.tokenHash, nickname, body.admin ? 1 : 0, now + RETENTION, now);
+      if (body.ip) this.sql.exec('INSERT INTO joins VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET attempts=excluded.attempts, at=excluded.at', body.ip, JSON.stringify([...this.joins(body.ip, now), now]), now);
       await this.scheduleCleanup();
       return json({ nickname });
     }
