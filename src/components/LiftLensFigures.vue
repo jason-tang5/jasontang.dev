@@ -1,89 +1,77 @@
 <script setup>
-// the figures in the liftlens writeup (content.mjs, figures): a clean you can scrub
-// through with the joint angles worked out the way the app does it, the plate finder's
+// the figures in the liftlens writeup (content.mjs, figures): a real clean on video with
+// the app's joint angles and bar speed for it alongside, the plate finder's
 // circle check with a circle you can drag around, and three ways to get bar speed out
 // of the same noisy track. the numbers follow lift-lens/backend (metrics.py,
 // plate_tracking.py), drawn at 140 px a metre
 import { computed, onBeforeUnmount, ref } from 'vue';
+import { angles, clip, speed } from '../liftlens-clip.mjs';
 defineProps({ figure: { type: String, required: true } });
 
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
-const len = v => Math.hypot(v[0], v[1]);
-const lerp = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
-
-// ---- angles: a side-on clean, facing right, the floor at y 280 ----
-const poses = [
-  { t: 0, label: 'Setup', p: { ankle: [150, 272], knee: [190, 232], hip: [135, 205], shoulder: [190, 150], elbow: [178, 200], wrist: [165, 246] } },
-  { t: 0.25, label: 'Bar past the knee', p: { ankle: [150, 272], knee: [172, 224], hip: [118, 182], shoulder: [180, 120], elbow: [172, 165], wrist: [165, 206] } },
-  { t: 0.5, label: 'Extension', p: { ankle: [152, 262], knee: [160, 212], hip: [148, 158], shoulder: [140, 88], elbow: [148, 132], wrist: [156, 176] } },
-  { t: 0.75, label: 'Catch', p: { ankle: [150, 272], knee: [196, 232], hip: [132, 218], shoulder: [152, 148], elbow: [196, 150], wrist: [176, 140] } },
-  { t: 1, label: 'Stand', p: { ankle: [150, 272], knee: [153, 212], hip: [150, 158], shoulder: [153, 86], elbow: [194, 90], wrist: [174, 80] } },
-];
-const jointNames = ['shoulder', 'elbow', 'wrist', 'hip', 'knee', 'ankle'];
-function poseAt(t) {
-  const i = Math.min(poses.length - 2, Math.max(0, poses.findIndex(p => p.t > t) - 1));
-  const a = poses[i], b = poses[i + 1];
-  const raw = Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t)));
-  const k = raw * raw * (3 - 2 * raw);
-  return Object.fromEntries(jointNames.map(j => [j, lerp(a.p[j], b.p[j], k)]));
-}
-const progress = ref(0);
-const pose = computed(() => poseAt(progress.value));
-const bar = computed(() => [pose.value.wrist[0], pose.value.wrist[1] + 2]);
-const head = computed(() => {
-  const { shoulder, hip } = pose.value;
-  const up = sub(shoulder, hip);
-  const n = len(up);
-  return [shoulder[0] + up[0] / n * 22 + 4, shoulder[1] + up[1] / n * 22];
-});
-const toe = computed(() => [pose.value.ankle[0] + 24, 279]);
-const path = computed(() => Array.from({ length: 41 }, (_, i) => {
-  const w = poseAt(i / 40).wrist;
-  return `${w[0].toFixed(1)},${(w[1] + 2).toFixed(1)}`;
-}).join(' '));
-const phase = computed(() => poses.reduce((best, p) => (Math.abs(p.t - progress.value) < Math.abs(best.t - progress.value) ? p : best)).label);
-
-// clicking a joint drops it under the 0.35 confidence floor, which blanks any angle using it
-const dropped = ref(new Set());
-function toggle(j) {
-  const next = new Set(dropped.value);
-  next.has(j) ? next.delete(j) : next.add(j);
-  dropped.value = next;
-}
-// theta = acos(dot(A-B, C-B) / (|A-B| |C-B|)) at joint B
-const angleDefs = [
-  { name: 'Knee', at: 'knee', from: ['hip', 'ankle'] },
-  { name: 'Hip', at: 'hip', from: ['shoulder', 'knee'] },
-  { name: 'Elbow', at: 'elbow', from: ['shoulder', 'wrist'] },
-];
-const angles = computed(() => angleDefs.map(d => {
-  const used = [d.at, ...d.from];
-  if (used.some(j => dropped.value.has(j))) return { ...d, value: null, missing: used.filter(j => dropped.value.has(j)), label: [pose.value[d.at][0] + 12, pose.value[d.at][1] + 4] };
-  const u = sub(pose.value[d.from[0]], pose.value[d.at]);
-  const v = sub(pose.value[d.from[1]], pose.value[d.at]);
-  const cos = Math.min(1, Math.max(-1, (u[0] * v[0] + u[1] * v[1]) / (len(u) * len(v))));
-  // the label sits outside the angle, opposite the line halfway between the two limbs
-  const mid = [u[0] / len(u) + v[0] / len(v), u[1] / len(u) + v[1] / len(v)];
-  // a straight limb has no inside, so its label goes out the front, where there's room
-  const across = [-v[1] / len(v), v[0] / len(v)];
-  const front = across[0] >= 0 ? across : [-across[0], -across[1]];
-  const out = len(mid) > 0.2 ? [-mid[0] / len(mid), -mid[1] / len(mid)] : front;
-  return { ...d, value: Math.round(Math.acos(cos) * 180 / Math.PI), label: [pose.value[d.at][0] + out[0] * 20, pose.value[d.at][1] + out[1] * 20 + 4] };
-}));
-const bones = [['shoulder', 'elbow'], ['elbow', 'wrist'], ['shoulder', 'hip'], ['hip', 'knee'], ['knee', 'ankle']];
-
-let frame = 0;
+// ---- angles: a real clean on video, with liftlens's numbers for it alongside ----
+// the video already has the app's skeleton and bar path drawn on. the charts and readouts
+// follow its playback, from the analysis in liftlens-clip.mjs
+const videoUrl = new URL('../../assets/projects/liftlens-clean.mp4', import.meta.url).href;
+const posterUrl = new URL('../../assets/projects/liftlens-clean-poster.jpg', import.meta.url).href;
+const video = ref(null);
+const now = ref(clip.start);
 const playing = ref(false);
+// the value at time t, straight between the samples either side, or null where there's none
+function sampleAt(rows, col, t) {
+  const i = rows.findIndex(r => r[0] >= t);
+  if (i <= 0) return rows[Math.max(0, i)]?.[col] ?? null;
+  const a = rows[i - 1], b = rows[i];
+  if (a[col] === null || b[col] === null) return a[col] ?? b[col];
+  return a[col] + (b[col] - a[col]) * (t - a[0]) / (b[0] - a[0]);
+}
+const angleDefs = [
+  { name: 'Knee', col: 1, color: 'var(--ll-knee)' },
+  { name: 'Hip', col: 2, color: 'var(--ll-hip)' },
+  { name: 'Elbow', col: 3, color: 'var(--ll-elbow)' },
+];
+const readouts = computed(() => angleDefs.map(d => ({ ...d, value: sampleAt(angles, d.col, now.value) })));
+const speedNow = computed(() => sampleAt(speed, 1, now.value));
+
+// the charts run from the start of the clip to the end
+const CW = 200, CH = 70;
+const cx = t => 4 + (t - clip.start) / (clip.end - clip.start) * (CW - 8);
+const inClip = rows => rows.filter(r => r[0] >= clip.start && r[0] <= clip.end);
+const angleLines = angleDefs.map(d => ({
+  ...d,
+  points: inClip(angles).filter(r => r[d.col] !== null).map(r => `${cx(r[0]).toFixed(1)},${(CH - 6 - r[d.col] / 180 * (CH - 18)).toFixed(1)}`).join(' '),
+}));
+const VLO = -0.5, VHI = 2;
+const vy = v => CH - 6 - (Math.min(VHI, Math.max(VLO, v)) - VLO) / (VHI - VLO) * (CH - 18);
+const speedLine = inClip(speed).map(r => `${cx(r[0]).toFixed(1)},${vy(r[1]).toFixed(1)}`).join(' ');
+
+// the video loops the lift itself, skipping the summary the export ends on
+let frame = 0;
+function follow() {
+  const v = video.value;
+  if (!v) return;
+  if (v.currentTime >= clip.end || v.currentTime < clip.start - 0.05) v.currentTime = clip.start;
+  now.value = v.currentTime;
+  frame = requestAnimationFrame(follow);
+}
 function play() {
-  if (playing.value) { cancelAnimationFrame(frame); playing.value = false; return; }
-  const start = performance.now() - (progress.value >= 1 ? 0 : progress.value * 2400);
-  playing.value = true;
-  const tick = now => {
-    progress.value = Math.min(1, (now - start) / 2400);
-    if (progress.value < 1) frame = requestAnimationFrame(tick);
-    else playing.value = false;
-  };
-  frame = requestAnimationFrame(tick);
+  const v = video.value;
+  if (!v) return;
+  if (!v.paused) { v.pause(); return; }
+  v.play().catch(() => {});
+}
+function seek(event) {
+  const v = video.value;
+  if (!v) return;
+  v.pause();
+  v.currentTime = now.value = Number(event.target.value);
+}
+function started() { playing.value = true; cancelAnimationFrame(frame); frame = requestAnimationFrame(follow); }
+function stopped() { playing.value = false; cancelAnimationFrame(frame); if (video.value) now.value = video.value.currentTime; }
+function loaded() {
+  const v = video.value;
+  v.currentTime = clip.start;
+  // with reduced motion it waits on the first frame until you press play
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) v.play().catch(() => {});
 }
 onBeforeUnmount(() => cancelAnimationFrame(frame));
 
@@ -208,46 +196,48 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 
 <template>
   <figure v-if="figure === 'angles'" class="ll-figure">
-    <figcaption><strong>Fig. 1</strong> A clean, side on. Each angle comes from three keypoints. Click a joint to drop its confidence below 35%.</figcaption>
+    <figcaption><strong>Fig. 1</strong> A power clean, filmed from the side and run through LiftLens. Each angle comes from three keypoints, and the graphs follow the video.</figcaption>
     <div class="ll-panel ll-angles">
-      <svg class="ll-lifter" viewBox="84 60 160 228" role="group" aria-label="Lifter">
-        <line class="ll-floor" x1="84" y1="280" x2="244" y2="280"/>
-        <polyline class="ll-path" :points="path"/>
-        <g class="ll-plate" aria-hidden="true">
-          <circle :cx="bar[0]" :cy="bar[1]" r="31.5"/>
-          <circle class="ll-hub" :cx="bar[0]" :cy="bar[1]" r="3"/>
-        </g>
-        <line class="ll-bone" :x1="pose.ankle[0]" :y1="pose.ankle[1]" :x2="toe[0]" :y2="toe[1]"/>
-        <line v-for="b in bones" :key="b.join()" class="ll-bone" :class="{ off: dropped.has(b[0]) || dropped.has(b[1]) }"
-          :x1="pose[b[0]][0]" :y1="pose[b[0]][1]" :x2="pose[b[1]][0]" :y2="pose[b[1]][1]"/>
-        <circle class="ll-head" :cx="head[0]" :cy="head[1]" r="11"/>
-        <g v-for="j in jointNames" :key="j" class="ll-joint" :class="{ off: dropped.has(j) }" role="button" tabindex="0"
-          :aria-label="`${j}, ${dropped.has(j) ? 'low' : 'high'} confidence`" :aria-pressed="dropped.has(j)"
-          @click="toggle(j)" @keydown.enter.space.prevent="toggle(j)">
-          <circle :cx="pose[j][0]" :cy="pose[j][1]" r="9" class="ll-hit"/>
-          <circle :cx="pose[j][0]" :cy="pose[j][1]" r="4.5"/>
-        </g>
-        <text v-for="a in angles" :key="a.name" class="ll-angle-label" :x="a.label[0]" :y="a.label[1]" text-anchor="middle">{{ a.value === null ? '—' : `${a.value}°` }}</text>
-      </svg>
+      <div class="ll-cam">
+        <video ref="video" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
+          aria-label="A power clean with LiftLens's skeleton and bar path drawn on"
+          @loadedmetadata="loaded" @play="started" @pause="stopped" @seeked="now = video.currentTime"/>
+      </div>
       <div class="ll-side">
-        <p class="ll-phase"><b>{{ phase }}</b></p>
-        <dl class="ll-readout" aria-live="polite">
-          <template v-for="a in angles" :key="a.name">
-            <dt>{{ a.name }}</dt>
-            <dd :class="{ blank: a.value === null }">{{ a.value === null ? `blank, no ${a.missing.join(' or ')}` : `${a.value}°` }}</dd>
-          </template>
+        <dl class="ll-stats">
+          <div v-for="a in readouts" :key="a.name">
+            <dt><i :style="{ background: a.color }" aria-hidden="true"/>{{ a.name }}</dt>
+            <dd>{{ a.value === null ? '—' : `${Math.round(a.value)}°` }}</dd>
+          </div>
+          <div>
+            <dt><i class="bar" aria-hidden="true"/>Bar speed</dt>
+            <dd>{{ speedNow === null ? '—' : speedNow.toFixed(2) }}<small>m/s</small></dd>
+          </div>
         </dl>
-        <input v-model.number="progress" class="ll-scrub" type="range" min="0" max="1" step="0.005" aria-label="Point in the lift">
-        <div class="ll-buttons">
+        <div class="ll-charts" aria-hidden="true">
+          <svg :viewBox="`0 0 ${CW} ${CH}`">
+            <text x="4" y="9">Joint angles</text>
+            <polyline v-for="l in angleLines" :key="l.name" :points="l.points" :style="{ stroke: l.color }"/>
+            <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4"/>
+          </svg>
+          <svg :viewBox="`0 0 ${CW} ${CH}`">
+            <text x="4" y="9">Bar speed, m/s</text>
+            <line class="ll-zero" x1="4" :x2="CW - 4" :y1="vy(0)" :y2="vy(0)"/>
+            <polyline class="ll-speed" :points="speedLine"/>
+            <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4"/>
+          </svg>
+        </div>
+        <div class="ll-transport">
           <button class="raised ll-button" @click="play">{{ playing ? 'Pause' : 'Play' }}</button>
-          <button class="raised ll-button" :disabled="!dropped.size" @click="dropped = new Set()">All joints back</button>
+          <input :value="now" class="ll-scrub" type="range" :min="clip.start" :max="clip.end" step="0.01" aria-label="Point in the lift" @input="seek">
+          <code>{{ (now - clip.start).toFixed(1) }} / {{ (clip.end - clip.start).toFixed(1) }} s</code>
         </div>
       </div>
     </div>
   </figure>
 
   <figure v-else-if="figure === 'plate'" class="ll-figure">
-    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle: green ticks are rim angles with a strong edge across them.</figcaption>
+    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle. Green ticks are rim angles with a strong edge across them.</figcaption>
     <div class="ll-panel">
       <svg ref="plateSvg" class="ll-scene" viewBox="0 0 320 200" @pointermove="drag" @pointerup="release" @pointercancel="release">
         <rect class="ll-ground" x="0" :y="floor + 2" width="320" :height="200 - floor - 2"/>
@@ -283,7 +273,7 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
   </figure>
 
   <figure v-else-if="figure === 'smooth'" class="ll-figure">
-    <figcaption><strong>Fig. 3</strong> Bar speed through one clean, three ways, from the same noisy 60 fps track. The dashed line is the true speed.</figcaption>
+    <figcaption><strong>Fig. 3</strong> Bar speed through one clean, calculated three ways from the same noisy 60 fps track. The dashed line is the true speed. The quadratic fit, using 50 ms either side of each point, keeps the peak where it should be with little noise.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`${methods[method].label}: peak ${estPeak.v.toFixed(2)} m/s`">
         <line v-for="v in [-1, 0, 1, 2, 3]" :key="v" class="ll-grid" :class="{ zero: v === 0 }" :x1="sx(0)" :x2="sx(1)" :y1="sy(v)" :y2="sy(v)"/>
@@ -320,40 +310,48 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 .ll-toggle { display: inline-flex; flex-wrap: wrap; gap: 0; }
 .ll-note { min-height: 2.8em; margin: 10px 0 8px; font-size: 13px; line-height: 1.4; }
 
-/* the lifter, in the app's dark dashboard colours */
-.ll-bone { stroke: var(--ink); stroke-width: 4; stroke-linecap: round; fill: none; }
-.ll-bone.off { stroke-dasharray: 2 5; opacity: .45; }
-.ll-bone.thin { stroke-width: 3; opacity: .55; }
-.ll-head { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
-.ll-floor { stroke: var(--muted); stroke-width: 2; }
-.ll-path { fill: none; stroke: #1baf7a; stroke-width: 2; stroke-dasharray: 3 3; }
-.ll-plate circle { fill: rgba(0, 0, 128, .07); stroke: var(--navy, #000080); stroke-width: 3; }
-:root[data-theme="dark"] .ll-plate circle { fill: rgba(140, 160, 255, .1); stroke: #8ca0ff; }
-.ll-plate .ll-hub, .ll-hub { fill: var(--ink); stroke: none; }
-.ll-joint { cursor: var(--classic-pointer, pointer); outline: none; }
-.ll-joint circle { fill: #e8a33d; stroke: var(--ink); stroke-width: 1.5; }
-.ll-joint .ll-hit { fill: transparent; stroke: none; }
-.ll-joint.off circle:not(.ll-hit) { fill: var(--paper); stroke-dasharray: 2 2; }
-.ll-joint:focus-visible .ll-hit { stroke: var(--ink); stroke-dasharray: 2 2; stroke-width: 1; }
-.ll-angle-label { font: bold 11px 'Courier New', monospace; fill: var(--ink); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
-
-.ll-angles { display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr); gap: 12px 18px; align-items: center; }
-.ll-lifter { display: block; width: 100%; }
-.ll-phase { margin: 0 0 6px; font-size: 13px; }
-.ll-readout { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0 0 10px; font-size: 13px; }
-.ll-readout dt { color: var(--muted); }
-.ll-readout dd { margin: 0; font: bold 13px 'Courier New', monospace; }
-.ll-readout dd.blank { font: 12px 'Pixel MS Sans Serif', Tahoma, sans-serif; color: #c0392b; }
-.ll-scrub { width: 100%; margin: 0 0 8px; }
-@container (max-width: 420px) { .ll-angles { grid-template-columns: minmax(0, 1fr); } .ll-lifter { max-width: 240px; margin: 0 auto; } }
+/* fig 1: the video beside its readouts and the rep's charts. they follow the site's
+   theme, and in dark mode take the app's own dark dashboard colours */
+.ll-angles {
+  --ll-tile: var(--d-page-alt, #fffdf2); --ll-edge: var(--d-line, #999); --ll-text: var(--ink); --ll-dim: var(--muted);
+  --ll-knee: #000080; --ll-hip: #8a3fc7; --ll-elbow: #c46a00; --ll-bar: #138a5f;
+  display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 12px; align-items: start;
+}
+:root[data-theme="dark"] .ll-angles {
+  --ll-tile: #1b1c1f; --ll-edge: #303136; --ll-text: #f4f4f5; --ll-dim: #989ba4;
+  --ll-knee: #c6f36b; --ll-hip: #b49bff; --ll-elbow: #ffb35c; --ll-bar: #c6f36b;
+}
+.ll-video { display: block; width: 100%; max-height: 460px; aspect-ratio: 9 / 16; object-fit: contain; margin: 0 auto; }
+.ll-side { display: grid; gap: 8px; }
+.ll-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.ll-stats > div { padding: 6px 8px; background: var(--ll-tile); border: 1px solid var(--ll-edge); color: var(--ll-text); }
+.ll-stats dt { display: flex; align-items: center; gap: 5px; font: 11px Tahoma, sans-serif; color: var(--ll-dim); }
+.ll-stats dt i { width: 7px; height: 7px; border-radius: 50%; }
+.ll-stats dt i.bar { background: var(--ll-bar); border-radius: 0; }
+.ll-stats dd { margin: 2px 0 0; font: bold 20px 'Courier New', monospace; }
+.ll-stats dd small { margin-left: 4px; font: 11px Tahoma, sans-serif; color: var(--ll-dim); }
+.ll-charts { display: grid; gap: 6px; }
+.ll-charts svg { display: block; width: 100%; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
+.ll-charts text { font: 7px Tahoma, sans-serif; fill: var(--ll-dim); }
+.ll-charts polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
+.ll-charts .ll-speed { stroke: var(--ll-bar); }
+.ll-zero { stroke: var(--ll-edge); }
+.ll-cursor { stroke: var(--ll-text); stroke-width: 1; opacity: .6; }
+.ll-transport { display: flex; align-items: center; gap: 8px; }
+.ll-transport code { flex: none; font: 11px 'Courier New', monospace; color: var(--muted); }
+.ll-scrub { flex: 1; min-width: 0; margin: 0; }
+@container (max-width: 420px) { .ll-angles { grid-template-columns: minmax(0, 1fr); } .ll-video { max-height: 360px; } }
 
 /* fig 2 */
+.ll-scene .ll-bone { stroke: var(--ink); stroke-width: 4; fill: none; opacity: 1; }
+.ll-scene .ll-bone.thin { stroke-width: 3; opacity: .55; }
+.ll-hub { fill: var(--ink); stroke: none; }
+.ll-scene .ll-key { fill: #e8a33d; stroke: var(--ink); stroke-width: 1; opacity: 1; }
 .ll-scene { display: block; width: 100%; max-width: 480px; margin: 0 auto; touch-action: none; }
 .ll-ground { fill: var(--d-page-alt, #fffdf2); stroke: var(--muted); stroke-width: 1; }
 .ll-rack rect { fill: var(--muted); opacity: .5; }
 .ll-real { fill: rgba(0, 0, 0, .08); stroke: var(--ink); stroke-width: 3; }
 :root[data-theme="dark"] .ll-real { fill: rgba(255, 255, 255, .08); }
-.ll-key { fill: #e8a33d; stroke: var(--ink); stroke-width: 1; }
 .ll-tag { font: 8px 'Courier New', monospace; fill: var(--muted); }
 .ll-tick { stroke: var(--muted); stroke-width: 1.5; opacity: .45; }
 .ll-tick.hit { stroke: #1baf7a; stroke-width: 2.5; opacity: 1; }

@@ -45,18 +45,19 @@ const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
 const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures };
-// a project's what i built and implementation sections as one list of items: a string is
-// a paragraph, an array a paragraph mixing text with { open, text } links to other
-// windows, then { heading }, { subheading }, { figure } and { list } (numbered, or
-// bulleted with bullets: true). paragraphs and list points can use **bold** and the rest
-// of InlineText. contribution and implementation can each be one string or a list of
-// items. the lead figure goes at the top of what i built unless contribution places it
-// itself
+// a project's why i built it, what i built and implementation sections as one list of
+// items: a string is a paragraph, an array a paragraph mixing text with { open, text }
+// links to other windows, then { heading }, { subheading }, { figure } and { list }
+// (numbered, or bulleted with bullets: true). paragraphs and list points can use **bold**
+// and the rest of InlineText. why, contribution and implementation can each be one string
+// or a list of items. the lead figure goes at the top of what i built unless contribution
+// places it itself
 const figureItems = f => [f ?? []].flat().map(figure => ({ figure }));
 function writeup(p) {
   const built = [p.contribution ?? []].flat();
   const lead = built.some(item => item.figure === p.figures?.lead) ? [] : figureItems(p.figures?.lead);
   return [
+    ...(p.why ? [{ heading: 'Why I built it' }, ...[p.why].flat()] : []),
     ...(built.length ? [{ heading: 'What I built' }, ...lead, ...built, ...figureItems(p.figures?.built)] : []),
     { heading: p.implementationTitle ?? 'Implementation' },
     ...[p.implementation].flat(),

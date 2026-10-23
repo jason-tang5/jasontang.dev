@@ -203,6 +203,15 @@ const [balloonBody, balloonEdge] = balloonColors[0];
           <path :d="f.string" :fill="balloonString"/>
         </g>
       </svg>
+      <!-- a barbell side on, two bumper plates a side, framed by a camera's viewfinder
+           corners in liftlens's green -->
+      <g v-else-if="name === 'barbell'">
+        <path stroke="none" fill="#7bbf2a" d="M2 2h8v2H4v6H2zM22 2h8v8h-2V4h-6zM2 22h2v6h6v2H2zM28 22h2v8h-8v-2h6z"/>
+        <path fill="#bbb" d="M4 15h24v2H4z"/>
+        <path fill="#333" d="M8 8h4v16H8zM20 8h4v16h-4z"/>
+        <path fill="#555" d="M6 11h2v10H6zM24 11h2v10h-2z"/>
+        <path stroke="none" fill="#777" d="M9 9h1v14H9zM21 9h1v14h-1z"/>
+      </g>
       <!-- a green board with the four opening discs in the middle -->
       <g v-else-if="name === 'reversi'">
         <path fill="#6b3e1c" d="M2 2h28v28H2z"/>
