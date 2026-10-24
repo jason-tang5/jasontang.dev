@@ -130,7 +130,7 @@ export function nextVisible(windows) {
 // numbers are x, y, width, height as fractions of the work area.
 export const columnApps = ['projects', 'experience', 'contact'];
 const columnSpots = {
-  projects: [0.02, 0.37, 0.4, 0.52],
+  projects: [0.02, 0.36, 0.47, 0.58],
   experience: [0.3, 0.44, 0.42, 0.55],
   // contact is tall so its arcade cabinet has room
   contact: [0.73, 0.14, 0.26, 0.82],

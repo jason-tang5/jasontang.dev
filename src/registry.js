@@ -17,7 +17,7 @@ export const apps = [
   // cell after resume, so the work stuff reads as its own group above the rest
   app('about', 'About Me', 'person', 900, 740, 430, 350),
   app('experience', 'Experience', 'case', 680, 570, 410, 310),
-  app('projects', 'Projects', 'folder', 720, 480, 430, 310),
+  app('projects', 'Projects', 'folder', 840, 580, 430, 310),
   app('resume', 'Resume', 'document', 740, 650),
   app('blog', 'Blog', 'notebook', 720, 580),
   app('chat', 'MSN Messenger', 'messenger', 760, 640, 340, 440),
