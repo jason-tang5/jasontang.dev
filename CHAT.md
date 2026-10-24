@@ -126,6 +126,12 @@ existing blog admin router, so blog administration continues to use its own path
   a request cap, not a guaranteed neuron budget; account-wide AI usage also counts.
   The Workers AI binding runs `@cf/meta/llama-3.2-3b-instruct`. The previous
   Llama 3.1 8B identifier returns deprecation error 5028 through the binding.
+  Each question includes up to 20 preceding public messages, capped at 6,000
+  characters of context. This includes other visitors and Clippy's replies, with
+  speaker labels. Deleted and expired messages are excluded. Context comes from
+  the existing chat history and survives reconnects; there is no separate memory
+  store. Only `@Clippy` messages trigger an AI response. More context consumes
+  more input tokens, so the daily request cap does not guarantee a neuron budget.
 - At least 3 seconds between messages (owner-adjustable up to 60), at most 20 per
   rolling minute per session, across all tabs. Rate timestamps live in SQLite.
 - Last-three-message duplicate suppression; retry IDs acknowledge an already

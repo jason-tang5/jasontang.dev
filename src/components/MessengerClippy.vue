@@ -26,7 +26,7 @@ const line = computed(() => ({
     <div class="msn-clippy-balloon">
       <div class="msn-clippy-heading"><strong>Clippy <small>Website assistant · AI</small></strong><button type="button" :disabled="!available || !connected || thinking" @click="$emit('ask')">Ask Clippy</button></div>
       <p role="status">{{ line }}<span v-if="thinking" class="msn-clippy-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
-      <span class="msn-clippy-hint">Start with @Clippy · Questions and replies are public</span>
+      <span class="msn-clippy-hint">Ask with @Clippy · AI can read recent public chat</span>
     </div>
   </div>
 </template>

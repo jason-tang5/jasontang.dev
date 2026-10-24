@@ -313,3 +313,42 @@ test('Clippy trims oversized or token-limited replies at a complete sentence', a
   assert.equal(await answer({ response: 'Here is a complete thought. And another incom', choices: [{ finish_reason: 'length' }] }), 'Here is a complete thought.');
   assert.match(await answer({ response: 'unfinished '.repeat(150) }), /more specific question\?/);
 });
+
+test('Clippy receives public-room history with speaker identity and no duplicate current question', async () => {
+  const requests = [];
+  const s = setup({ run: async (_, input) => { requests.push(input.messages); return { response: 'Open Games, then Reversi.' }; } });
+  const alice = await s.join('Alice'); const bob = await s.join('Bob');
+  send(s.room, bob.ws, 'I enjoy board games.');
+  send(s.room, alice.ws, '@Clippy which game should we try?');
+  await Promise.all(s.tasks);
+  assert.deepEqual(JSON.parse(requests[0][1].content), { speaker: 'Bob', text: 'I enjoy board games.' });
+  s.restart();
+  s.room.sql.exec("UPDATE sessions SET sent='[]'");
+  s.room.sql.exec('UPDATE clippy_usage SET last_at=0');
+  send(s.room, bob.ws, '@Clippy where do I find that?');
+  await Promise.all(s.tasks);
+  const context = requests[1].slice(1);
+  assert.deepEqual(context.map(entry => entry.role), ['user', 'user', 'assistant', 'user']);
+  assert.equal(JSON.parse(context[1].content).speaker, 'Alice');
+  assert.equal(context[2].content, 'Open Games, then Reversi.');
+  assert.deepEqual(JSON.parse(context.at(-1).content), { speaker: 'Bob', text: 'where do I find that?' });
+  await s.call('/admin/delete', { id: s.room.one("SELECT id FROM messages WHERE text='I enjoy board games.'").id });
+  assert.equal(s.room.clippyHistory(99999).some(entry => entry.content.includes('I enjoy board games.')), false);
+});
+
+test('Clippy memory keeps only recent messages within both limits and excludes expired content', () => {
+  const s = setup();
+  const insert = (index, text, at = Date.now()) => s.room.sql.exec('INSERT INTO messages (id, session_id, client_id, nickname, admin, text, at) VALUES (?, ?, ?, ?, 0, ?, ?)', String(index), 'bot:clippy', String(index), 'Clippy', text, at);
+  for (let i = 0; i < 25; i++) insert(i, `Message ${i}.`);
+  insert(25, 'Expired message.', Date.now() - RETENTION - 1000);
+  const history = s.room.clippyHistory(99999);
+  assert.equal(history.length, 20);
+  assert.equal(history[0].content, 'Message 5.');
+  assert.equal(history.at(-1).content, 'Message 24.');
+  // A snapshot must not include messages that arrived after the addressed question.
+  assert.equal(s.room.clippyHistory(3).length, 2);
+  for (let i = 26; i < 36; i++) insert(i, 'x'.repeat(999));
+  const bounded = s.room.clippyHistory(99999);
+  assert.equal(bounded.length, 6);
+  assert.ok(bounded.reduce((sum, entry) => sum + [...entry.content].length, 0) <= 6000);
+});

@@ -216,12 +216,25 @@ export class ChatRoom {
   clippyState() {
     return { available: Boolean(this.env.AI), thinking: this.one('SELECT busy_until FROM clippy_usage WHERE id=1').busy_until > Date.now() };
   }
+  clippyHistory(beforeSeq) {
+    const recent = this.rows('SELECT * FROM messages WHERE seq<? AND deleted=0 AND at>=? ORDER BY seq DESC LIMIT 20', beforeSeq, Date.now() - RETENTION);
+    const history = []; let characters = 0;
+    for (const row of recent) {
+      const entry = row.session_id === CLIPPY_SESSION
+        ? { role: 'assistant', content: row.text }
+        : { role: 'user', content: JSON.stringify({ speaker: row.nickname, text: row.text }) };
+      characters += [...entry.content].length;
+      if (characters > 6000) break;
+      history.push(entry);
+    }
+    return history.reverse();
+  }
   async answerClippy(question, sessionId) {
     let failed = false;
     try {
       let text;
       try {
-        text = await replyAsClippy(this.env.AI, question.text);
+        text = await replyAsClippy(this.env.AI, question.text, this.clippyHistory(question.seq), question.nickname);
         if (messageError(text, CLIPPY_MAX_CHARACTERS)) throw new Error('filtered');
       } catch (error) {
         // Record a diagnostic code, never the visitor's prompt or model output.
