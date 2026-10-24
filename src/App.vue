@@ -909,7 +909,7 @@ const starterTips = [
   'Dark mode + volume are in the taskbar',
   'Drag and resize windows',
   'Right-click for more options',
-  'Check out the blog, games, and analytics',
+  'Check out the blog, games, analytics, and the chat room',
   'Try contacting me :)',
   'This note is editable!',
 ];
@@ -927,7 +927,7 @@ function openStarterNote() {
   win.width = 260;
   win.height = 460;
   win.x = area.width - win.width - 24;
-  win.y = innerWidth > 1100 && tip.value ? 200 : 25;
+  win.y = innerWidth > 1100 && tip.value ? 190 : 25;
   return id;
 }
 
@@ -1312,8 +1312,8 @@ onBeforeUnmount(() => {
         <strong class="tip-subheading">Where to?</strong>
         <ul class="tip-paths">
           <li>In a hurry? <button class="tip-link" @click="open('resume')">Resume</button> · <button class="tip-link" @click="open('projects')">Projects</button></li>
-          <li>Want to poke around? <button class="tip-link" @click="open('contact')">Play Breakout</button> to reveal my email</li>
           <li>Too quiet? <button class="tip-link" @click="open('music')">Play some music</button></li>
+          <li>Lonely? <button class="tip-link" @click="open('chat')">Talk to Clippy</button></li>
           <li>Just looking? Take your time!</li>
         </ul>
       </aside>
