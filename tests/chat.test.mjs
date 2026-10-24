@@ -265,7 +265,7 @@ test('Clippy is reserved, opt-in, server identified, and duplicate retries never
 test('Clippy daily cap persists and missing binding does not fake an AI reply', async () => {
   const s = setup({ run: async () => { throw new Error('must not run'); } });
   const a = await s.join();
-  s.room.sql.exec('UPDATE clippy_usage SET day=?, requests=50', new Date().toISOString().slice(0, 10));
+  s.room.sql.exec('UPDATE clippy_usage SET day=?, requests=500', new Date().toISOString().slice(0, 10));
   s.restart(); send(s.room, a.ws, '@Clippy hi');
   assert.equal(a.ws.events.at(-1).code, 'clippy-limit');
   assert.equal(s.room.one('SELECT COUNT(*) AS n FROM messages').n, 0);

@@ -117,6 +117,11 @@ existing blog admin router, so blog administration continues to use its own path
 - Messages: 250 Unicode characters, plain text, no clickable links or uploads.
   Messages and nicknames go through the Snake leaderboard's profanity filter.
   Vue text interpolation renders HTML literally.
+- Clippy: 3 seconds between AI requests across the room, one answer in flight,
+  and 500 attempts per UTC day. Each reply generates at most 100 tokens. This is
+  a request cap, not a guaranteed neuron budget; account-wide AI usage also counts.
+  The Workers AI binding runs `@cf/meta/llama-3.2-3b-instruct`. The previous
+  Llama 3.1 8B identifier returns deprecation error 5028 through the binding.
 - At least 3 seconds between messages (owner-adjustable up to 60), at most 20 per
   rolling minute per session, across all tabs. Rate timestamps live in SQLite.
 - Last-three-message duplicate suppression; retry IDs acknowledge an already

@@ -194,10 +194,10 @@ export class ChatRoom {
       if (!state.available) { error('clippy-offline'); return; }
       if (state.thinking) { error('clippy-busy'); return; }
       const usage = this.one('SELECT * FROM clippy_usage WHERE id=1');
-      if (now - usage.last_at < 15000) { error('clippy-busy'); return; }
+      if (now - usage.last_at < 3000) { error('clippy-busy'); return; }
       const day = new Date(now).toISOString().slice(0, 10);
       // Conservative request cap, not a guarantee about Cloudflare's compute billing.
-      if (usage.day === day && usage.requests >= 50) { error('clippy-limit'); return; }
+      if (usage.day === day && usage.requests >= 500) { error('clippy-limit'); return; }
       this.sql.exec('UPDATE clippy_usage SET day=?, requests=?, last_at=?, busy_until=? WHERE id=1', day, usage.day === day ? usage.requests + 1 : 1, now, now + 25000);
     }
     const id = crypto.randomUUID();
@@ -223,7 +223,10 @@ export class ChatRoom {
       try {
         text = await replyAsClippy(this.env.AI, question.text);
         if (messageError(text)) throw new Error('filtered');
-      } catch {
+      } catch (error) {
+        // Record a diagnostic code, never the visitor's prompt or model output.
+        console.warn('Clippy inference failed', { code: /^(\d+):/.exec(error?.message || '')?.[1]
+          || (['timeout', 'empty', 'filtered'].includes(error?.message) ? error.message : 'provider-error') });
         failed = true;
         text = 'My paperclip brain is taking a break. Please try me again in a little while!';
       }
