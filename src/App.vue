@@ -27,6 +27,7 @@ import { read, save, remove } from './storage.js';
 import { play, setSoundEnabled, setSoundLevel, soundEnabled, soundLevel } from './sound.js';
 import { isUnlocked } from './unlocks.js';
 import { trackOnce } from './analytics.js';
+import { cueTrack } from './cd-cue.js';
 import { theme, setTheme } from './theme.js';
 import { defaultWallpaper, wallpaperFilter, wallpapers } from './wallpaper.js';
 import { useResting } from './resting.js';
@@ -141,7 +142,15 @@ function route(id) {
 }
 
 function hashApp() {
-  return canonicalApp(new URLSearchParams(location.hash.slice(1)).get('app'));
+  const params = new URLSearchParams(location.hash.slice(1));
+  const id = canonicalApp(params.get('app'));
+  // #app=music&track=jane-doe opens the cd player on that song. the track comes off the
+  // url once it's cued, so the same link still works next time
+  if (id === 'music' && params.get('track')) {
+    cueTrack(params.get('track'));
+    history.replaceState(null, '', '#app=music');
+  }
+  return id;
 }
 
 function open(id, updateUrl = true, sound = true) {

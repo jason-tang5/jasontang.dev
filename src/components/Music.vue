@@ -3,7 +3,8 @@
 // loads the first time you press play. while it plays, little pixel notes float
 // up off the disc.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { defaultDisc, musicDiscs } from '../music.mjs';
+import { defaultDisc, findTrack, musicDiscs } from '../music.mjs';
+import { cdCue } from '../cd-cue.js';
 import { loadSpotifyApi } from '../spotify.js';
 import { createPlaybackEndTracker } from '../playback-end.mjs';
 import { noteGlyphs, noteColors } from '../notes.mjs';
@@ -298,8 +299,29 @@ watch(paused, isPaused => {
   }
 });
 
+// a link asked for a song (cd-cue.js): put its disc in, pick the track and play it
+function playCue() {
+  const found = cdCue.value && findTrack(cdCue.value.slug);
+  cdCue.value = null;
+  if (!found || disposed) return;
+  clearTimeout(insertTimer);
+  insertPending = false;
+  spin(discOffset(found.disc));
+  inserted.value = found.disc;
+  discEjected.value = false;
+  playbackEnd.reset();
+  selected.value = found.track;
+  position.value = 0;
+  duration.value = 0;
+  if (controller) { controller.loadUri(current.value.uri); requestPlay(); }
+  else initialize();
+}
+watch(cdCue, playCue);
+
 onMounted(() => {
   window.addEventListener('site-sound', siteSound);
+  // the link that opened the window may have cued a song before it was here
+  playCue();
 });
 
 onBeforeUnmount(() => {

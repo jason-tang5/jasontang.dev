@@ -24,8 +24,11 @@ export const profile = {
     { label: 'Currently building', text: '[LiftLens](/#app=liftlens), a computer vision app that analyzes Olympic lifts and gives technique feedback' },
     { label: 'Sports', text: 'volleyball (captain), ultimate frisbee, badminton' },
     // best lifts in lb, each weight in the pixel font after the lift's name
-    { label: 'Lifts (lb)', lifts: [['Power clean', '265'], ['Squat', '405'], ['Bench', '265'], ['Pull-up', '+100']] },
+    { label: 'Lifts (lb)', lifts: [['power clean', '265'], ['squat', '405'], ['bench', '265'], ['pull-up', '+100']] },
+    { label: 'Peak league rank', text: '**grandmaster** 528 LP (tft **master**)' },
     { label: 'Favorite books', text: '[The Name of the Wind](https://www.goodreads.com/book/show/186074.The_Name_of_the_Wind), [Meditations](https://www.goodreads.com/book/show/30659.Meditations)', books: true },
+    // opens the cd player on JANE DOE, from the chainsaw man movie
+    { label: 'Favorite manga', text: '[Chainsaw Man](/#app=music&track=jane-doe)', books: true },
   ],
   education: 'BASc, Computer Engineering · September 2023 – May 2028',
   skills: ['Python', 'TypeScript', 'JavaScript', 'Rust', 'C++', 'Ruby', 'SQL', 'Vue.js', 'Node.js', 'PostgreSQL', 'CUDA', 'Verilog'],

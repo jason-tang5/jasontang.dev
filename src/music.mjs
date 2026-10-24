@@ -70,3 +70,15 @@ export const playlistTracks = [
 
 musicDiscs[0].tracks = tracks;
 musicDiscs[1].tracks = playlistTracks;
+
+// a track title as it goes in a link: JANE DOE is jane-doe
+export const trackSlug = title => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// which disc and track a slug points at, or null if no disc has it
+export function findTrack(slug) {
+  for (const [disc, { tracks: list = [] }] of musicDiscs.entries()) {
+    const track = list.findIndex(t => trackSlug(t.title) === slug);
+    if (track >= 0) return { disc, track };
+  }
+  return null;
+}
