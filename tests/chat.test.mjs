@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { ChatRoom } from '../worker/chat-room.mjs';
-import { replyAsClippy } from '../worker/clippy.mjs';
+import { replyAsClippy, siteFacts } from '../worker/clippy.mjs';
 import { chat, localChat } from '../worker/chat.mjs';
 import { DAY, RETENTION, hash, nicknameError, messageError } from '../worker/chat-rules.mjs';
 
@@ -381,4 +381,10 @@ test('messages and Clippy tokens are counted for analytics, and the asker hears 
   assert.deepEqual(points.map(p => [p.blobs[0], p.doubles[0]]), [['chat-message', 0], ['clippy-tokens', 150]]);
   assert.deepEqual(a.ws.events.filter(e => e.type === 'tokens'), [{ type: 'tokens', tokens: 150 }]);
   assert.equal(b.ws.events.some(e => e.type === 'tokens'), false);
+});
+
+test('Clippy knows the 90 day messenger messages and Workers AI tokens', () => {
+  const facts = siteFacts({ recent: { visitors: 10, daily: [], chatMessages: 1234, tokensBurnt: 56789 } });
+  assert.match(facts, /1,234 messages sent/);
+  assert.match(facts, /56,789 Workers AI tokens/);
 });
