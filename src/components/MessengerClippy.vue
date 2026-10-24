@@ -16,7 +16,7 @@ const line = computed(() => ({
   thinking: 'Hmm, let me straighten out that thought…',
   sad: 'A little snag. Try asking me again in a moment.',
   happy: 'One freshly paperclipped answer, coming right up!',
-  idle: 'It looks like you’re having a conversation. Can I help?',
+  idle: 'Need a hand finding your way around the website?',
 }[state.value]));
 </script>
 
@@ -24,7 +24,7 @@ const line = computed(() => ({
   <div class="msn-clippy" :data-state="state">
     <ClippyArt class="msn-clippy-art" :mood="state === 'idle' || state === 'offline' ? 'neutral' : state"/>
     <div class="msn-clippy-balloon">
-      <div class="msn-clippy-heading"><strong>Clippy <small>AI helper</small></strong><button type="button" :disabled="!available || !connected || thinking" @click="$emit('ask')">Ask Clippy</button></div>
+      <div class="msn-clippy-heading"><strong>Clippy <small>Website assistant · AI</small></strong><button type="button" :disabled="!available || !connected || thinking" @click="$emit('ask')">Ask Clippy</button></div>
       <p role="status">{{ line }}<span v-if="thinking" class="msn-clippy-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
       <span class="msn-clippy-hint">Start with @Clippy · Questions and replies are public</span>
     </div>
