@@ -31,12 +31,12 @@ const uid = `cf-${Math.random().toString(36).slice(2, 8)}`;
 const contactFlow = {
   template: 'flow', title: 'Send → response', items: [
     // branches stay short, they sit in narrow boxes under each step
-    { label: 'Press Send', text: 'Mail gathers the name, email and message, plus the hidden website field and elapsed, how long the window has been open.' },
+    { label: 'Press Send', text: 'Mail gathers the subject, email and message, plus the hidden website field and elapsed, how long the window has been open.' },
     { label: 'Valid in Mail?', text: 'Mail runs the Worker’s own validate first, timing included, so a mistake is caught before any request is sent. Mail shows it in an error box and keeps everything typed.', branch: 'No → error box' },
     { label: 'POST to Worker', text: 'The browser POSTs the fields as JSON to /api/contact, and adds the Origin header on its own.' },
     { label: 'Origin allowed?', text: 'The Worker accepts its own Origin, or no Origin header at all.', branch: 'No → 403' },
     { label: 'Honeypot empty?', text: 'Anything in the hidden website field means a bot. It gets a fake success and the message is dropped.', branch: 'No → fake 200' },
-    { label: 'Timing and fields OK?', text: 'At least 3 seconds since the window opened, then the name, email and message are checked again. A failure answers 400 with the reason, and Mail keeps the message.', branch: 'No → 400' },
+    { label: 'Timing and fields OK?', text: 'At least 3 seconds since the window opened, then the subject, email and message are checked again. A failure answers 400 with the reason, and Mail keeps the message.', branch: 'No → 400' },
     { label: 'Handoff accepted?', text: 'buildEmail writes the email and the Worker waits for SEND_EMAIL.send. If that throws, the answer is 502 and the message stays in the box to retry.', branch: 'No → 502' },
     { label: '200 · Mail shows Sent', text: 'Cloudflare accepted the email. Mail clears the box and shows “Message sent!”. Gmail still decides between inbox and spam.' },
   ],
@@ -81,14 +81,14 @@ const actors = [
 ];
 // wire n joins actors n and n + 1. back means the packet runs toward the mail window
 const type = { at: 'mail', title: 'Send', text: 'You type a message and press Send.' };
-const post = { wire: 0, title: 'POST /api/contact', text: 'Mail.vue runs the same checks as the Worker, then sends the name, email and message as JSON, plus the hidden website field and elapsed, how long the window was open.' };
+const post = { wire: 0, title: 'POST /api/contact', text: 'Mail.vue runs the same checks as the Worker, then sends the subject, email and message as JSON, plus the hidden website field and elapsed, how long the window was open.' };
 const scenarios = {
   sent: {
     label: 'Sent',
     steps: [
       type,
       post,
-      { at: 'worker', title: 'Validate', text: 'The Worker checks the Origin, the honeypot and the timing, then that the name, email and message are there, look right and fit.' },
+      { at: 'worker', title: 'Validate', text: 'The Worker checks the Origin, the honeypot and the timing, then that the subject, email and message are there, look right and fit.' },
       { wire: 1, title: 'Hand off', text: 'buildEmail writes the raw email and SEND_EMAIL.send hands it to Email Routing. The Worker waits until Cloudflare accepts it.' },
       { wire: 0, back: true, title: '200 { ok: true }', text: 'Accepted, so the Worker answers ok. Mail clears the message box and shows “Message sent!” with a tick. Ok means Cloudflare took the message, not that it has reached my inbox yet.', result: 'ok' },
       { wire: 2, title: 'Deliver', text: 'Email Routing delivers it to my one verified Gmail address. From there Gmail’s own checks decide between inbox and spam.', inbox: true },
@@ -138,7 +138,7 @@ function wireState(n) {
 // ---- delivery: where the message goes ----
 const hops = {
   browser: { name: 'Your browser', icon: 'computer', code: 'Mail.vue',
-    text: 'Sends the name, email and message once you press Send. If anything fails, the message stays in the box.' },
+    text: 'Sends the subject, email and message once you press Send. If anything fails, the message stays in the box.' },
   worker: { name: 'Cloudflare Worker', icon: 'chip', code: 'worker/index.js',
     text: 'Checks the request, writes the email with buildEmail and hands it off, then answers the browser. It doesn’t save the message anywhere.' },
   routing: { name: 'Email Routing', icon: 'contact', code: 'SEND_EMAIL binding',
@@ -177,7 +177,7 @@ const spam = computed(() => {
     return { checks, status: 403, body: { error: 'Forbidden.' }, tone: 'bad', outcome: 'Turned away', sees: 'An error', gets: 'Nothing' };
   }
   checks[0].state = 'pass';
-  const v = validate({ name: 'Ada', email: 'ada@example.com', message: 'Hello!', website: trap.value ? 'http://spam.example' : '', elapsed: seconds.value * 1000 });
+  const v = validate({ subject: 'Hello', email: 'ada@example.com', message: 'Hello!', website: trap.value ? 'http://spam.example' : '', elapsed: seconds.value * 1000 });
   checks[1].state = trap.value ? 'fail' : 'pass';
   if (v.spam) return { checks, status: 200, body: { ok: true }, tone: 'fake', outcome: 'Fake success', sees: 'Sent! (it wasn’t)', gets: 'Nothing, it’s quietly dropped' };
   checks[2].state = v.ok ? 'pass' : 'fail';
@@ -186,7 +186,7 @@ const spam = computed(() => {
 });
 
 // ---- headers: what buildEmail writes, and the version that doesn't work ----
-const visitor = ref({ name: 'Zoë Kim', email: 'zoe@example.com' });
+const visitor = ref({ subject: 'Café next week?', email: 'zoe@example.com' });
 const fromVisitor = ref(false);
 const raw = ref(false);
 const example = { from: 'contact@jasontang.dev', to: 'jasontcanada@gmail.com', id: 'example', now: new Date('2026-09-26T18:30:00Z') };
@@ -199,7 +199,7 @@ const email = computed(() => {
   // the obvious version: the visitor as the sender, and no need for a reply-to
   if (fromVisitor.value) {
     lines = lines.filter(l => !l.startsWith('Reply-To:'))
-      .map(l => (l.startsWith('From:') ? l.replace(/<.*>/, `<${v.data.email}>`).replace(/=\?UTF-8\?B\?[^?]*\?=/, `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode(v.data.name)))}?=`) : l));
+      .map(l => (l.startsWith('From:') ? `From: <${v.data.email}>` : l));
   }
   const domain = fromVisitor.value ? v.data.email.split('@').pop() : 'jasontang.dev';
   const ownDomain = domain.toLowerCase() === 'jasontang.dev';
@@ -226,7 +226,7 @@ const groups = {
   delivery: { name: 'Delivery', color: '#e0483e' },
 };
 const layers = [
-  { name: 'Vue', group: 'frontend', text: 'Mail.vue collects the name, email and message, shows how the send went, and keeps the message if it fails.' },
+  { name: 'Vue', group: 'frontend', text: 'Mail.vue collects the subject, email and message, shows how the send went, and keeps the message if it fails.' },
   { name: 'HTTP', group: 'frontend', text: 'One POST to /api/contact with a JSON body. The browser adds the Origin header on its own.' },
   { name: 'Cloudflare Worker', group: 'backend', text: 'Checks the origin, the honeypot, the timing and every field, then has buildEmail write the email and hands it to SEND_EMAIL.' },
   { name: 'MIME', group: 'backend', text: 'buildEmail writes the headers and a Base64 plain text body by hand, with the visitor as Reply-To.' },
@@ -267,11 +267,11 @@ function layerKey(event) {
       <span class="cf-unlock"><span>unlocks</span></span>
       <div class="cf-window">
         <div class="cf-title"><RetroIcon name="mail" small /><span>Mail</span><i>×</i></div>
-        <!-- the same rows as Mail.vue: from, to with send beside it, then name -->
+        <!-- the same rows as Mail.vue: from, to with send beside it, then subject -->
         <div class="cf-fields">
           <span class="raised">From:</span><span class="inset cf-wide">ada@example.com</span>
           <span class="raised">To:</span><span class="inset cf-readonly">{{ contact.email }}</span><span class="raised tinted cf-send">Send</span>
-          <span class="raised">Name:</span><span class="inset cf-wide">Ada</span>
+          <span class="raised">Subject:</span><span class="inset cf-wide">Hello</span>
         </div>
         <p class="inset cf-message">{{ note.slice(0, typed) }}<i class="cf-caret" /></p>
       </div>
@@ -375,8 +375,8 @@ function layerKey(event) {
     <div v-else-if="figure === 'headers'" class="cf-panel">
       <div class="cf-controls">
         <div class="cf-control cf-inputs">
-          <label :for="`${uid}-name`">Name</label>
-          <input :id="`${uid}-name`" v-model="visitor.name" class="inset" maxlength="100" autocomplete="off">
+          <label :for="`${uid}-subject`">Subject</label>
+          <input :id="`${uid}-subject`" v-model="visitor.subject" class="inset" maxlength="150" autocomplete="off">
           <label :for="`${uid}-email`">Email</label>
           <input :id="`${uid}-email`" v-model="visitor.email" class="inset" maxlength="200" autocomplete="off">
         </div>
@@ -484,7 +484,7 @@ function layerKey(event) {
 .cf-title { display: flex; align-items: center; gap: 4px; padding: 2px 3px; background: var(--navy, #000080); color: #fff; font-size: 12px; font-weight: bold; }
 .cf-title svg { width: 16px; height: 16px; }
 .cf-title i { margin-left: auto; width: 14px; line-height: 12px; text-align: center; font-style: normal; color: var(--ink); background: var(--surface); border: 1px solid; border-color: var(--light) var(--edge) var(--edge) var(--light); }
-/* from, to + send, name, like the real window */
+/* from, to + send, subject, like the real window */
 .cf-fields { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 3px 4px; align-items: center; margin: 4px 0; font-size: 11px; }
 .cf-fields span { padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cf-fields .raised { padding-inline: 0; font-weight: bold; text-align: center; }

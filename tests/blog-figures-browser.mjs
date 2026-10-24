@@ -109,8 +109,8 @@ try {
   await headers.getByRole('button', { name: 'Raw', exact: true }).click();
   await expect(headers.locator('pre')).toContainText('=?UTF-8?B?');
   await headers.getByRole('button', { name: 'Readable', exact: true }).click();
-  await headers.getByLabel('Name', { exact: true }).fill('Zoë Kim');
-  await expect(headers.locator('pre')).toContainText('Zoë Kim');
+  await headers.getByLabel('Subject', { exact: true }).fill('Café next week?');
+  await expect(headers.locator('pre')).toContainText('Subject: Café next week?');
   await headers.getByRole('button', { name: 'The visitor', exact: true }).click();
   await expect(headers.locator('pre')).not.toContainText('Reply-To:');
   await headers.getByLabel('Email', { exact: true }).fill('bad-address');

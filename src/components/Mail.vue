@@ -9,9 +9,9 @@ import { contact } from '../content.mjs';
 import { play } from '../sound.js';
 // the same checks the worker runs, so the two can't disagree
 import { validate } from '../../worker/contact.mjs';
-import { track, trackOnce } from '../analytics.js';
+import { track } from '../analytics.js';
 
-const name = ref('');
+const subject = ref('');
 const email = ref('');
 const message = ref('');
 // hidden from people, bots tend to fill it in
@@ -24,14 +24,14 @@ const result = ref(null);
 // the error box: its text and which field to go back to afterwards
 const dialog = ref(null);
 const okButton = ref(null);
-const fields = { name: ref(null), email: ref(null), message: ref(null) };
+const fields = { subject: ref(null), email: ref(null), message: ref(null) };
 
 // success or failure also shows up as the yellow note on the desktop (App.vue)
 const notify = (title, text) => window.dispatchEvent(new CustomEvent('site-notice', { detail: { title, message: text } }));
 
 // which field an error is about, going by its wording
 function fieldFor(error) {
-  if (/name/i.test(error)) return 'name';
+  if (/subject/i.test(error)) return 'subject';
   if (/email/i.test(error)) return 'email';
   if (/message/i.test(error)) return 'message';
   return null;
@@ -56,7 +56,7 @@ async function send() {
   if (sending.value || dialog.value) return;
 
   const body = {
-    name: name.value,
+    subject: subject.value,
     email: email.value,
     message: message.value,
     website: website.value,
@@ -78,7 +78,7 @@ async function send() {
     message.value = '';
     result.value = { ok: true, text: 'Message sent! I’ll get back to you soon.' };
     notify('Message sent', 'Thanks! I’ll get back to you soon.');
-    trackOnce('mail-sent');
+    track('mail-sent');
     play('chime');
   } catch (error) {
     // the message stays in the box so it can be sent again
@@ -107,8 +107,8 @@ async function send() {
         {{ sending ? 'Sending…' : 'Send' }}
       </button>
 
-      <label class="raised mail-label" for="mail-name">Name:</label>
-      <input id="mail-name" :ref="fields.name" v-model="name" class="inset" placeholder="Your name…" autocomplete="name" maxlength="100" required>
+      <label class="raised mail-label" for="mail-subject">Subject:</label>
+      <input id="mail-subject" :ref="fields.subject" v-model="subject" class="inset" placeholder="What’s it about…" autocomplete="off" maxlength="150" required>
     </div>
 
     <textarea

@@ -596,7 +596,7 @@ try {
 
   const mail = mailFixture.locator('#mail-fixture');
   await expect(mail.getByRole('textbox', { name: 'To', exact: true })).toHaveValue('jasontcanada@gmail.com');
-  await mail.getByRole('textbox', { name: 'Name:', exact: true }).fill('Ada');
+  await mail.getByRole('textbox', { name: 'Subject:', exact: true }).fill('Hello');
   await mail.getByRole('textbox', { name: 'From:', exact: true }).fill('ada@example.com');
   await mail.getByRole('textbox', { name: 'Message', exact: true }).fill('hello!');
   // mail reports how it went with a 'site-notice' event, which the desktop shows as a note
@@ -612,7 +612,7 @@ try {
   await expect(mail.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('');
   assert.deepEqual(
     { ...sent[0], elapsed: typeof sent[0].elapsed },
-    { name: 'Ada', email: 'ada@example.com', message: 'hello!', website: '', elapsed: 'number' },
+    { subject: 'Hello', email: 'ada@example.com', message: 'hello!', website: '', elapsed: 'number' },
   );
 
   // errors from the worker show up with the email as a fallback
