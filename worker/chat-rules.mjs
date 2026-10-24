@@ -16,9 +16,9 @@ export function nicknameError(name, admin = false) {
   if (profane(name)) return 'nickname-profanity';
   return null;
 }
-export function messageError(text) {
+export function messageError(text, maxCharacters = 250) {
   if (typeof text !== 'string' || !text.trim()) return 'empty';
-  if ([...text.trim()].length > 250) return 'too-long';
+  if ([...text.trim()].length > maxCharacters) return 'too-long';
   if (profane(text)) return 'profanity';
   if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text)) return 'invalid-message';
   return null;

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { ChatRoom } from '../worker/chat-room.mjs';
+import { replyAsClippy } from '../worker/clippy.mjs';
 import { chat, localChat } from '../worker/chat.mjs';
 import { DAY, RETENTION, hash, nicknameError, messageError } from '../worker/chat-rules.mjs';
 
@@ -295,4 +296,20 @@ test('AI errors and filtered output release thinking state with a safe public fa
     assert.match(s.room.one("SELECT text FROM messages WHERE nickname='Clippy'").text, /taking a break/);
     assert.equal(a.ws.events.at(-1).failed, true);
   }
+});
+
+test('Clippy can finish a longer reply without increasing the visitor message limit', async () => {
+  const text = 'You can play Reversi against me in the website’s Reversi game. ' + 'Try to take corners and leave your opponent fewer legal moves. '.repeat(5);
+  const s = setup({ run: async () => ({ response: text }) });
+  const a = await s.join(); send(s.room, a.ws, '@Clippy how do I play?');
+  await Promise.all(s.tasks);
+  assert.equal(s.room.one("SELECT text FROM messages WHERE nickname='Clippy'").text, text.trim());
+  assert.equal(messageError(text), 'too-long');
+});
+
+test('Clippy trims oversized or token-limited replies at a complete sentence', async () => {
+  const answer = async result => replyAsClippy({ run: async () => result }, '@Clippy hello');
+  assert.equal(await answer({ response: 'Here is a complete thought. ' + 'unfinished '.repeat(150) }), 'Here is a complete thought.');
+  assert.equal(await answer({ response: 'Here is a complete thought. And another incom', choices: [{ finish_reason: 'length' }] }), 'Here is a complete thought.');
+  assert.match(await answer({ response: 'unfinished '.repeat(150) }), /more specific question\?/);
 });

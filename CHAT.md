@@ -118,7 +118,11 @@ existing blog admin router, so blog administration continues to use its own path
   Messages and nicknames go through the Snake leaderboard's profanity filter.
   Vue text interpolation renders HTML literally.
 - Clippy: 3 seconds between AI requests across the room, one answer in flight,
-  and 500 attempts per UTC day. Each reply generates at most 100 tokens. This is
+  and 500 attempts per UTC day. Each reply generates at most 200 tokens and may
+  contain up to 1,000 characters; visitor messages remain capped at 250. Clippy
+  is prompted for short complete sentences. Oversized or token-limited answers
+  are trimmed to the last complete sentence, with a clarification fallback if
+  none fits. This is
   a request cap, not a guaranteed neuron budget; account-wide AI usage also counts.
   The Workers AI binding runs `@cf/meta/llama-3.2-3b-instruct`. The previous
   Llama 3.1 8B identifier returns deprecation error 5028 through the binding.

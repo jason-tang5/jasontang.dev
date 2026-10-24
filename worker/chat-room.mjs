@@ -1,5 +1,5 @@
 import { DAY, RETENTION, removedText, json, failure, nicknameError, messageError } from './chat-rules.mjs';
-import { asksClippy, CLIPPY_SESSION, replyAsClippy } from './clippy.mjs';
+import { asksClippy, CLIPPY_SESSION, CLIPPY_MAX_CHARACTERS, replyAsClippy } from './clippy.mjs';
 
 // One room, separate from the portfolio's analytics object. Every mutation below
 // is synchronous SQL, so a send cannot interleave with a mute or another send.
@@ -222,7 +222,7 @@ export class ChatRoom {
       let text;
       try {
         text = await replyAsClippy(this.env.AI, question.text);
-        if (messageError(text)) throw new Error('filtered');
+        if (messageError(text, CLIPPY_MAX_CHARACTERS)) throw new Error('filtered');
       } catch (error) {
         // Record a diagnostic code, never the visitor's prompt or model output.
         console.warn('Clippy inference failed', { code: /^(\d+):/.exec(error?.message || '')?.[1]
