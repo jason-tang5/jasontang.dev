@@ -1,10 +1,12 @@
 import { DAY, RETENTION, removedText, json, failure, nicknameError, messageError } from './chat-rules.mjs';
+import { asksClippy, CLIPPY_SESSION, replyAsClippy } from './clippy.mjs';
 
 // One room, separate from the portfolio's analytics object. Every mutation below
 // is synchronous SQL, so a send cannot interleave with a mute or another send.
 export class ChatRoom {
-  constructor(ctx) {
+  constructor(ctx, env = {}) {
     this.ctx = ctx;
+    this.env = env;
     this.sql = ctx.storage.sql;
     this.sql.exec(`CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, nickname TEXT NOT NULL,
@@ -21,6 +23,8 @@ export class ChatRoom {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL, slow INTEGER NOT NULL)`);
     this.sql.exec('INSERT OR IGNORE INTO settings VALUES (1, 1, 3)');
     this.sql.exec('CREATE TABLE IF NOT EXISTS joins (ip TEXT PRIMARY KEY, attempts TEXT NOT NULL, at INTEGER NOT NULL)');
+    this.sql.exec('CREATE TABLE IF NOT EXISTS clippy_usage (id INTEGER PRIMARY KEY, day TEXT NOT NULL, requests INTEGER NOT NULL, last_at INTEGER NOT NULL, busy_until INTEGER NOT NULL)');
+    this.sql.exec("INSERT OR IGNORE INTO clippy_usage VALUES (1, '', 0, 0, 0)");
   }
   rows(query, ...args) { return [...this.sql.exec(query, ...args)]; }
   one(query, ...args) { return this.rows(query, ...args)[0]; }
@@ -49,7 +53,7 @@ export class ChatRoom {
   broadcast(data) { for (const ws of this.sockets()) this.send(ws, data); }
   presence() { this.broadcast({ type: 'presence', online: this.online() }); }
   message(row) {
-    return { id: row.id, seq: row.seq, nickname: row.nickname, admin: Boolean(row.admin),
+    return { id: row.id, seq: row.seq, nickname: row.nickname, admin: Boolean(row.admin), bot: row.session_id === CLIPPY_SESSION,
       text: row.deleted ? removedText : row.text, at: row.at, deleted: Boolean(row.deleted) };
   }
   async fetch(request) {
@@ -145,7 +149,7 @@ export class ChatRoom {
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ id: session.id, nickname: session.nickname, admin: Boolean(session.admin), seen: Date.now() });
     this.send(server, { type: 'welcome', you: this.person(session), settings: this.settings(),
-      history: this.rows('SELECT * FROM messages ORDER BY seq DESC LIMIT 50').reverse().map(r => this.message(r)), online: this.online() });
+      history: this.rows('SELECT * FROM messages ORDER BY seq DESC LIMIT 50').reverse().map(r => this.message(r)), online: this.online(), clippy: this.clippyState() });
     if (!sockets.some(ws => ws.deserializeAttachment()?.id === session.id)) this.broadcast({ type: 'system', text: `${session.nickname} has joined the conversation.` });
     this.presence();
     return new Response(null, { status: 101, webSocket: client });
@@ -185,6 +189,17 @@ export class ChatRoom {
     if (wait > 0) { error('rate-limited', { retryAfter: Math.ceil(wait / 1000) }); return; }
     const text = data.text.trim();
     if (this.rows('SELECT text FROM messages WHERE session_id=? ORDER BY seq DESC LIMIT 3', session.id).some(m => m.text === text)) { error('duplicate'); return; }
+    if (asksClippy(text)) {
+      const state = this.clippyState();
+      if (!state.available) { error('clippy-offline'); return; }
+      if (state.thinking) { error('clippy-busy'); return; }
+      const usage = this.one('SELECT * FROM clippy_usage WHERE id=1');
+      if (now - usage.last_at < 15000) { error('clippy-busy'); return; }
+      const day = new Date(now).toISOString().slice(0, 10);
+      // Conservative request cap, not a guarantee about Cloudflare's compute billing.
+      if (usage.day === day && usage.requests >= 50) { error('clippy-limit'); return; }
+      this.sql.exec('UPDATE clippy_usage SET day=?, requests=?, last_at=?, busy_until=? WHERE id=1', day, usage.day === day ? usage.requests + 1 : 1, now, now + 25000);
+    }
     const id = crypto.randomUUID();
     this.ctx.storage.transactionSync(() => {
       this.sql.exec('INSERT INTO messages (id, session_id, client_id, nickname, admin, text, at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, session.id, clientId, session.nickname, session.admin, text, now);
@@ -193,6 +208,37 @@ export class ChatRoom {
     const message = this.message(this.one('SELECT * FROM messages WHERE id=?', id));
     this.broadcast({ type: 'message', ...message });
     this.send(ws, { type: 'ack', clientId, message });
+    if (asksClippy(text)) {
+      this.broadcast({ type: 'clippy', ...this.clippyState() });
+      this.ctx.waitUntil(this.answerClippy(message, session.id));
+    }
+  }
+  clippyState() {
+    return { available: Boolean(this.env.AI), thinking: this.one('SELECT busy_until FROM clippy_usage WHERE id=1').busy_until > Date.now() };
+  }
+  async answerClippy(question, sessionId) {
+    let failed = false;
+    try {
+      let text;
+      try {
+        text = await replyAsClippy(this.env.AI, question.text);
+        if (messageError(text)) throw new Error('filtered');
+      } catch {
+        failed = true;
+        text = 'My paperclip brain is taking a break. Please try me again in a little while!';
+      }
+      // Moderation can happen while inference is in flight.
+      const session = this.one('SELECT * FROM sessions WHERE id=?', sessionId);
+      if (!this.settings().chatEnabled || !session || session.banned || session.muted_until > Date.now()
+        || this.one('SELECT deleted FROM messages WHERE id=?', question.id)?.deleted !== 0) return;
+      const id = crypto.randomUUID();
+      this.sql.exec('INSERT INTO messages (id, session_id, client_id, nickname, admin, text, at) VALUES (?, ?, ?, ?, 0, ?, ?)',
+        id, CLIPPY_SESSION, question.id, 'Clippy', text, Date.now());
+      this.broadcast({ type: 'message', ...this.message(this.one('SELECT * FROM messages WHERE id=?', id)) });
+    } finally {
+      this.sql.exec('UPDATE clippy_usage SET busy_until=0 WHERE id=1');
+      this.broadcast({ type: 'clippy', ...this.clippyState(), failed });
+    }
   }
   webSocketClose(ws) { try { ws.close(1000, 'Connection closed'); } catch {} this.depart(ws); }
   webSocketError(ws) { try { ws.close(1011, 'Connection lost'); } catch {} this.depart(ws); }

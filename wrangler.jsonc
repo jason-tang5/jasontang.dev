@@ -6,6 +6,7 @@
 	"name": "jasontang-dev",
 	"main": "worker/index.js",
 	"compatibility_date": "2026-09-25",
+	"ai": { "binding": "AI" },
 	"durable_objects": { "bindings": [
 		{ "name": "LIVE_STATS", "class_name": "LiveStats" },
 		{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }

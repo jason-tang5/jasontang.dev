@@ -5,15 +5,17 @@ import { ChatRoom } from '../worker/chat-room.mjs';
 import { chat, localChat } from '../worker/chat.mjs';
 import { DAY, RETENTION, hash, nicknameError, messageError } from '../worker/chat-rules.mjs';
 
-function setup() {
+function setup(ai) {
+  const tasks = [];
+  const botEnv = ai ? { AI: ai } : {};
   const db = new DatabaseSync(':memory:');
   const sockets = []; let alarm = null;
-  const ctx = { getWebSockets: () => sockets, storage: {
+  const ctx = { waitUntil: task => tasks.push(task), getWebSockets: () => sockets, storage: {
     sql: { exec(query, ...args) { const statement = db.prepare(query); return statement.columns().length ? statement.all(...args) : (statement.run(...args), []); } },
     transactionSync(fn) { db.exec('BEGIN'); try { const result = fn(); db.exec('COMMIT'); return result; } catch (err) { db.exec('ROLLBACK'); throw err; } },
     getAlarm: async () => alarm, setAlarm: async value => { alarm = value; },
   } };
-  let room = new ChatRoom(ctx);
+  let room = new ChatRoom(ctx, botEnv);
   const call = (path, data = {}) => room.fetch(new Request(`https://chat${path}`, { method: 'POST', body: JSON.stringify(data) }));
   const env = { CHAT_LOCAL: '1', CHAT_ROOM: { idFromName: name => name, get: () => ({ fetch: request => room.fetch(request) }) } };
   async function join(nickname = 'visitor', admin = false) {
@@ -27,7 +29,7 @@ function setup() {
     sockets.push(ws);
     return { tokenHash, session, ws };
   }
-  return { ctx, env, join, call, get room() { return room; }, restart() { room = new ChatRoom(ctx); }, sockets };
+  return { ctx, env, join, call, tasks, get room() { return room; }, restart() { room = new ChatRoom(ctx, botEnv); }, sockets };
 }
 const send = (room, ws, text, clientId = crypto.randomUUID()) => { room.webSocketMessage(ws, JSON.stringify({ type: 'send', text, clientId })); return clientId; };
 const gatewayRequest = (path, { method = 'GET', data, cookie = '', origin = 'http://127.0.0.1:8787', host = origin } = {}) => new Request(`${host}${path}`, { method, headers: { Origin: origin, Cookie: cookie }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
@@ -236,4 +238,61 @@ test('Siteverify runs server-side with form encoding and replay rejection gates 
   const state = await (await chat(gatewayRequest('/api/chat/session', { origin: 'https://jasontang.dev' }), env, { verify: async () => false })).json();
   assert.equal(state.siteKey, 'public');
   assert.equal(JSON.stringify(state).includes('private'), false);
+});
+
+
+test('Clippy is reserved, opt-in, server identified, and duplicate retries never run AI twice', async () => {
+  let resolve, calls = 0;
+  const s = setup({ run: () => { calls++; return new Promise(done => { resolve = done; }); } });
+  assert.equal(nicknameError('CLIPPY', true), 'nickname-reserved');
+  const a = await s.join('alice'); const b = await s.join('bob');
+  send(s.room, a.ws, 'hello'); assert.equal(calls, 0);
+  s.room.sql.exec("UPDATE sessions SET sent='[]'");
+  const id = send(s.room, a.ws, '@Clippy hello');
+  assert.equal(calls, 1); assert.equal(s.room.clippyState().thinking, true);
+  send(s.room, a.ws, '@Clippy hello', id); assert.equal(calls, 1);
+  send(s.room, b.ws, '@Clippy another question');
+  assert.equal(b.ws.events.at(-1).code, 'clippy-busy');
+  resolve({ response: 'Hello from your friendly paperclip!' }); await Promise.all(s.tasks);
+  const reply = b.ws.events.find(event => event.bot);
+  assert.equal(reply.nickname, 'Clippy'); assert.equal(reply.admin, false);
+  assert.equal(reply.text, 'Hello from your friendly paperclip!');
+  s.restart(); assert.equal(s.room.clippyState().thinking, false);
+  assert.equal(s.room.one('SELECT requests FROM clippy_usage').requests, 1);
+  assert.equal(s.room.message(s.room.one("SELECT * FROM messages WHERE nickname='Clippy'")).bot, true);
+});
+
+test('Clippy daily cap persists and missing binding does not fake an AI reply', async () => {
+  const s = setup({ run: async () => { throw new Error('must not run'); } });
+  const a = await s.join();
+  s.room.sql.exec('UPDATE clippy_usage SET day=?, requests=50', new Date().toISOString().slice(0, 10));
+  s.restart(); send(s.room, a.ws, '@Clippy hi');
+  assert.equal(a.ws.events.at(-1).code, 'clippy-limit');
+  assert.equal(s.room.one('SELECT COUNT(*) AS n FROM messages').n, 0);
+  const offline = setup(); const b = await offline.join();
+  send(offline.room, b.ws, '@Clippy hi'); assert.equal(b.ws.events.at(-1).code, 'clippy-offline');
+});
+
+test('Clippy respects moderation while AI is in flight', async () => {
+  for (const action of ['delete', 'mute', 'disable']) {
+    let resolve;
+    const s = setup({ run: () => new Promise(done => { resolve = done; }) });
+    const a = await s.join(); send(s.room, a.ws, '@Clippy hi');
+    if (action === 'delete') await s.call('/admin/delete', { id: s.room.one('SELECT id FROM messages').id });
+    if (action === 'mute') await s.call('/admin/moderate', { id: a.session.id, action: 'mute', minutes: 10 });
+    if (action === 'disable') await s.call('/admin/settings', { chatEnabled: false, slowModeSeconds: 3 });
+    resolve({ response: 'This answer must be suppressed.' }); await Promise.all(s.tasks);
+    assert.equal(s.room.one("SELECT COUNT(*) AS n FROM messages WHERE nickname='Clippy'").n, 0);
+    assert.equal(s.room.clippyState().thinking, false);
+  }
+});
+
+test('AI errors and filtered output release thinking state with a safe public fallback', async () => {
+  for (const run of [async () => { throw new Error('quota'); }, async () => ({ response: 'you are a sh1t' })]) {
+    const s = setup({ run }); const a = await s.join(); send(s.room, a.ws, '@Clippy hi');
+    await Promise.all(s.tasks);
+    assert.equal(s.room.clippyState().thinking, false);
+    assert.match(s.room.one("SELECT text FROM messages WHERE nickname='Clippy'").text, /taking a break/);
+    assert.equal(a.ws.events.at(-1).failed, true);
+  }
 });

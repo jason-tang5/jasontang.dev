@@ -88,6 +88,30 @@ try {
   assert.ok(cookies.find(c => c.name === 'chat_session')?.httpOnly);
   await alice.app.screenshot({ path: `${output}/conversation.png` });
 
+  // UI-only AI events: the local Worker intentionally makes no cloud AI calls.
+  await expect(alice.app.locator('.msn-clippy')).toHaveAttribute('data-state', 'offline');
+  const botEvent = data => alice.page.evaluate(data => window.__chatSockets.at(-1).dispatchEvent(new MessageEvent('message', { data: JSON.stringify(data) })), data);
+  await botEvent({ type: 'clippy', available: true, thinking: false });
+  await expect(alice.app.locator('.msn-clippy')).toHaveAttribute('data-state', 'idle');
+  await alice.app.getByRole('button', { name: 'Ask Clippy', exact: true }).click();
+  await expect(alice.app.getByLabel('Your message')).toHaveValue('@Clippy ');
+  await expect(alice.app.getByLabel('Your message')).toBeFocused();
+  await alice.app.getByLabel('Your message').fill('');
+  await botEvent({ type: 'clippy', available: true, thinking: true });
+  await expect(alice.app.locator('.msn-clippy-art')).toHaveAttribute('data-mood', 'thinking');
+  await expect(alice.app.getByRole('button', { name: 'Ask Clippy', exact: true })).toBeDisabled();
+  await alice.app.screenshot({ path: `${output}/clippy-thinking.png` });
+  await botEvent({ type: 'message', id: 'ui-test-clippy', nickname: 'Clippy', bot: true, text: 'It looks like you could use a paperclip.', at: Date.now() });
+  await botEvent({ type: 'clippy', available: true, thinking: false });
+  await expect(alice.app.locator('.msn-clippy')).toHaveAttribute('data-state', 'happy');
+  await expect(alice.app.locator('.msn-bot-avatar')).toHaveCount(1);
+  await alice.page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(await alice.app.locator('.msn-clippy-art').evaluate(el => getComputedStyle(el).animationName), 'none');
+  await alice.page.emulateMedia({ reducedMotion: 'no-preference' });
+  await alice.page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+  await alice.app.screenshot({ path: `${output}/clippy-dark.png` });
+  await alice.page.evaluate(() => document.documentElement.dataset.theme = 'light');
+
   const owner = await visitor(true);
   await owner.app.getByRole('button', { name: 'Moderation', exact: true }).click();
   const moderation = owner.app.getByRole('region', { name: 'Chat moderation' });

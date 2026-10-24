@@ -1,6 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import RetroIcon from './RetroIcon.vue';
+import MessengerClippy from './MessengerClippy.vue';
+import ClippyArt from './ClippyArt.vue';
 import { read, save } from '../storage.js';
 
 const phase = ref('connecting');
@@ -11,7 +13,10 @@ const messages = ref([]);
 const draft = ref('');
 const pending = ref(null);
 // what the room turns down for the message itself, rather than the connection
-const rejected = ['profanity', 'duplicate', 'too-long', 'empty', 'invalid-message'];
+const rejected = ['profanity', 'duplicate', 'too-long', 'empty', 'invalid-message', 'clippy-offline', 'clippy-busy', 'clippy-limit'];
+const clippy = ref({ available: false, thinking: false, failed: false });
+const clippyReplies = ref(0);
+const composer = ref(null);
 const error = ref('');
 const settings = ref({ chatEnabled: true, slowModeSeconds: 3 });
 const config = ref(null);
@@ -30,6 +35,9 @@ const joined = computed(() => Boolean(you.value));
 const canSend = computed(() => phase.value === 'connected' && settings.value.chatEnabled && !pending.value && draft.value.trim() && [...draft.value.trim()].length <= 250);
 const status = computed(() => ({ connecting: 'Connecting…', reconnecting: 'Reconnecting…', connected: settings.value.chatEnabled ? 'Connected' : 'Chat offline', join: 'Signed out', banned: 'Session banned', unavailable: 'Unavailable' })[phase.value] || 'Offline');
 const errors = {
+  'clippy-offline': 'Clippy is away right now. You can still chat with everyone here.',
+  'clippy-busy': 'Clippy needs a moment between questions. Try again shortly.',
+  'clippy-limit': 'Clippy has used his daily allowance. He will be back tomorrow (00:00 UTC).',
   'nickname-invalid': 'Use 3–20 letters, numbers, underscores or hyphens.',
   'nickname-reserved': 'That name is reserved. Choose another nickname.',
   'nickname-taken': 'That nickname is in use. Choose another one.',
@@ -102,6 +110,7 @@ async function connect() {
       if (data.type === 'welcome') {
         phase.value = 'connected'; attempts = 0; error.value = '';
         you.value = data.you; online.value = data.online; settings.value = data.settings;
+        clippy.value = data.clippy || { available: false, thinking: false };
         messages.value = data.history; scrollDown();
         if (pending.value && !pending.value.failed) ws.send(JSON.stringify({ type: 'send', clientId: pending.value.clientId, text: pending.value.text }));
         clearInterval(heartbeat);
@@ -109,7 +118,8 @@ async function connect() {
           if (Date.now() - lastHeard > 70000) { ws.close(); return; }
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
         }, 25000);
-      } else if (data.type === 'message') add(data);
+      } else if (data.type === 'message') { add(data); if (data.bot) clippyReplies.value++; }
+      else if (data.type === 'clippy') clippy.value = data;
       else if (data.type === 'ack') {
         add(data.message);
         if (pending.value?.clientId === data.clientId) pending.value = null;
@@ -189,6 +199,10 @@ function send() {
   pending.value = { text: draft.value.trim(), clientId: crypto.randomUUID(), failed: false };
   draft.value = ''; error.value = ''; resend(); scrollDown();
 }
+function askClippy() {
+  if (!/^@clippy\b/i.test(draft.value.trim())) draft.value = `@Clippy ${draft.value}`;
+  composer.value?.focus();
+}
 function resend() {
   if (!pending.value || socket?.readyState !== WebSocket.OPEN) return;
   pending.value.failed = false; error.value = '';
@@ -256,14 +270,15 @@ onBeforeUnmount(() => { disposed = true; ++generation; stopSocket(); if (widget 
           <div v-if="!messages.length" class="msn-welcome"><span aria-hidden="true">☺</span><strong>{{ phase === 'connected' ? 'You’re in good company.' : 'Finding the conversation…' }}</strong><p>{{ phase === 'connected' ? 'Be the first to say hello. Everyone in the room will see your message.' : 'Connecting to Jason’s lobby.' }}</p></div>
           <div v-for="message in messages" :key="message.id" class="msn-message" :class="{ system: message.system, deleted: message.deleted, own: message.nickname === you?.nickname }">
             <template v-if="message.system"><span aria-hidden="true">· </span>{{ message.text }}</template>
-            <template v-else><div class="msn-message-heading"><strong>{{ message.nickname }}</strong><span v-if="message.admin" class="msn-owner">OWNER</span><time :datetime="new Date(message.at).toISOString()">{{ time(message.at) }}</time></div><p>{{ message.text }}</p></template>
+            <template v-else><div class="msn-message-heading"><ClippyArt v-if="message.bot" class="msn-bot-avatar" mood="happy"/><strong>{{ message.nickname }}</strong><span v-if="message.bot" class="msn-owner">AI</span><span v-if="message.admin" class="msn-owner">OWNER</span><time :datetime="new Date(message.at).toISOString()">{{ time(message.at) }}</time></div><p>{{ message.text }}</p></template>
           </div>
           <div v-if="pending" class="msn-message msn-pending"><strong>You <small>{{ pending.failed ? '— not sent' : '— sending…' }}</small></strong><p>{{ pending.text }}</p><template v-if="pending.failed"><button :disabled="phase !== 'connected' || !settings.chatEnabled" @click="resend">Retry</button> <button @click="editPending">Edit message</button></template></div>
         </div>
         <button v-if="unread" class="msn-new" @click="scrollDown">{{ unread }} new {{ unread === 1 ? 'message' : 'messages' }} ↓</button>
+        <MessengerClippy v-bind="clippy" :reply="clippyReplies" :connected="phase === 'connected' && settings.chatEnabled" @ask="askClippy"/>
         <form class="msn-compose" @submit.prevent="send">
           <label for="msn-message">Your message <span>{{ [...draft].length }}/250</span></label>
-          <div><textarea id="msn-message" v-model="draft" rows="2" placeholder="Say hello…" :disabled="!joined || phase === 'banned'" @keydown="keydown"></textarea><button class="msn-send" type="submit" :disabled="!canSend">Send</button></div>
+          <div><textarea ref="composer" id="msn-message" v-model="draft" rows="2" placeholder="Say hello…" :disabled="!joined || phase === 'banned'" @keydown="keydown"></textarea><button class="msn-send" type="submit" :disabled="!canSend">Send</button></div>
           <small>Enter to send · Shift + Enter for a new line</small>
         </form>
       </main>
@@ -276,7 +291,7 @@ onBeforeUnmount(() => { disposed = true; ++generation; stopSocket(); if (widget 
         <div class="msn-admin-settings"><button :disabled="adminBusy" @click="moderate('settings', { ...overview.settings, chatEnabled: !overview.settings.chatEnabled })">{{ overview.settings.chatEnabled ? 'Disable chat' : 'Enable chat' }}</button><label>Slow mode <select :value="overview.settings.slowModeSeconds" :disabled="adminBusy" @change="moderate('settings', { ...overview.settings, slowModeSeconds: Number($event.target.value) })"><option v-for="seconds in [3, 5, 10, 30, 60]" :key="seconds" :value="seconds">{{ seconds }} seconds</option></select></label></div>
         <details><summary>Sessions ({{ overview.sessions.length }})</summary><div v-for="session in overview.sessions" :key="session.id" class="msn-admin-row"><strong>{{ session.nickname }}</strong><span v-if="session.banned">Banned</span><span v-else-if="session.mutedUntil > Date.now()">Muted until {{ time(session.mutedUntil) }}</span><button :disabled="adminBusy" @click="moderate('moderate', { id: session.id, action: session.banned ? 'unban' : 'ban' })">{{ session.banned ? 'Unban' : 'Ban' }}</button></div></details>
         <p v-if="!overview.messages.length">No messages yet.</p>
-        <div v-for="message in overview.messages" :key="message.id" class="msn-admin-row"><strong>{{ message.nickname }}</strong><p>{{ message.original }}</p><small v-if="message.deleted">Removed from public chat</small><div><button :disabled="adminBusy || message.deleted" @click="moderate('delete', { id: message.id })">Delete</button><button :disabled="adminBusy || message.admin" @click="moderate('moderate', { id: message.sessionId, action: 'mute', minutes: 10 })">Mute 10m</button><button :disabled="adminBusy || message.admin" @click="moderate('moderate', { id: message.sessionId, action: 'mute', minutes: 60 })">Mute 1h</button><button :disabled="adminBusy || message.admin" @click="moderate('moderate', { id: message.sessionId, action: 'ban' })">Ban</button></div></div>
+        <div v-for="message in overview.messages" :key="message.id" class="msn-admin-row"><strong>{{ message.nickname }}</strong><p>{{ message.original }}</p><small v-if="message.deleted">Removed from public chat</small><div><button :disabled="adminBusy || message.deleted" @click="moderate('delete', { id: message.id })">Delete</button><button :disabled="adminBusy || message.admin || message.bot" @click="moderate('moderate', { id: message.sessionId, action: 'mute', minutes: 10 })">Mute 10m</button><button :disabled="adminBusy || message.admin || message.bot" @click="moderate('moderate', { id: message.sessionId, action: 'mute', minutes: 60 })">Mute 1h</button><button :disabled="adminBusy || message.admin || message.bot" @click="moderate('moderate', { id: message.sessionId, action: 'ban' })">Ban</button></div></div>
       </template>
     </section>
     <footer class="msn-footer"><span class="msn-dot" :class="{ live: phase === 'connected' && settings.chatEnabled }"></span><span role="status">{{ status }}</span><span>Messages are visible to other visitors.</span></footer>
@@ -284,13 +299,14 @@ onBeforeUnmount(() => { disposed = true; ++generation; stopSocket(); if (widget 
 </template>
 
 <style scoped>
+.msn-bot-avatar{width:14px;height:25px;flex-shrink:0}
 .messenger{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;position:relative;background:#eef2f8;color:#23344e;font-family:Tahoma,Arial,sans-serif;font-size:12px;overflow:hidden;container-type:inline-size}
 .messenger button,.messenger input,.messenger textarea,.messenger select{font:inherit;color:inherit}.messenger button{cursor:pointer}.messenger button:disabled{cursor:default;opacity:.5}.messenger button:focus-visible,.messenger a:focus-visible,.messenger input:focus-visible,.messenger textarea:focus-visible,.messenger select:focus-visible{outline:2px solid #255fa4;outline-offset:2px}
 .msn-menu{display:flex;align-items:center;gap:2px;background:#f4f4f1;padding:3px 7px;border-bottom:1px solid #c5c8ce;flex-shrink:0}.msn-menu button,.msn-menu a{border:0;background:none;text-decoration:none;color:#28384d;padding:4px 8px;font-size:11px}.msn-menu a{margin-left:auto}.msn-menu button:hover,.msn-menu a:hover{background:#dde8f6}
 .msn-banner{display:flex;align-items:center;gap:12px;padding:18px 22px;background:linear-gradient(115deg,#f8fcff 0%,#d9e9f9 50%,#b4d0ee 100%);border-bottom:1px solid #97b5d7;box-shadow:inset 0 1px #fff;flex-shrink:0}.msn-logo{width:52px;height:52px;display:grid;place-items:center;background:#ffffff86;border-radius:50%;border:1px solid #fff}.msn-logo .retro-icon{width:39px;height:39px}.msn-wordmark{font-size:23px;font-weight:400;color:#214f84;letter-spacing:-1px}.msn-wordmark b{font-style:italic;font-size:30px;letter-spacing:-2px;margin-right:3px}.msn-public{margin-left:auto;text-align:right;font-size:9px;font-weight:bold;letter-spacing:1.6px;color:#41658e}.msn-public span{display:block;font-size:10px;font-weight:normal;letter-spacing:0;margin-top:6px}
 .msn-identity{display:flex;align-items:center;gap:7px;padding:8px 15px;background:#f4f7fb;border-bottom:1px solid #c5d2e2;flex-shrink:0}.msn-identity>span:last-child{margin-left:auto;color:#627287;font-size:10px}.msn-dot{display:inline-block;width:7px;height:7px;flex-shrink:0;border-radius:50%;background:#96a0ad;border:1px solid #77818e}.msn-dot.live{background:#6ac245;border-color:#438d26;box-shadow:inset 0 1px #b3ef90}
 .msn-join,.msn-empty{flex:1;min-height:0;overflow:auto;text-align:center;padding:24px 20px;background:radial-gradient(ellipse at top,#fff,#edf3fa)}.msn-join>.retro-icon,.msn-empty>.retro-icon{width:48px;height:48px;margin:0 auto 8px}.msn-join h2,.msn-empty h2{font-size:22px;color:#285687;font-weight:normal;margin:6px 0 10px;letter-spacing:-.5px}.msn-join p,.msn-empty p{line-height:1.6;color:#61748c;margin:8px 0 18px}.msn-join form{max-width:310px;margin:0 auto;text-align:left}.msn-join label{display:block;font-weight:bold;font-size:11px;margin:0 0 7px}.msn-join input{width:100%;box-sizing:border-box;background:white;padding:9px 10px;border:1px solid #91a8c2;box-shadow:inset 1px 1px 2px #0000000c;border-radius:3px}.msn-join small{display:block;color:#687b91;font-size:10px;line-height:1.5;margin:6px 0 12px}.msn-challenge:empty{display:none}.msn-primary{display:flex;justify-content:space-between;width:100%;padding:10px 14px;background:linear-gradient(#fff,#dbe8f7);border:1px solid #7d9dbf;border-radius:3px;box-shadow:inset 0 0 0 1px #fff;margin-top:12px}.msn-join .msn-privacy{font-size:10px;margin:18px 0 0}.msn-empty button{padding:7px 18px}
-.msn-room{display:flex;flex:1;min-height:0}.msn-conversation{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;position:relative}.msn-room-title{display:flex;justify-content:space-between;gap:10px;padding:12px 15px;background:#fff;border-bottom:1px solid #e2e8f0;font-size:11px}.msn-room-title span{color:#6f8194;font-size:10px}.msn-transcript{flex:1;overflow:auto;min-height:0;padding:10px 16px;background:#fff;overflow-wrap:anywhere;scrollbar-width:thin}.msn-welcome{padding:26px 12px;text-align:center;color:#7488a0}.msn-welcome>span{display:block;font:36px Georgia;color:#94b5d9;margin-bottom:10px}.msn-welcome strong{display:block;color:#4c6b8e;font-size:13px}.msn-welcome p{max-width:270px;margin:10px auto;line-height:1.7;font-size:11px}.msn-message{margin:7px 0 15px;font-size:12px}.msn-message-heading{display:flex;align-items:center;gap:7px;color:#315e91;font-size:11px}.msn-message.own .msn-message-heading{color:#507b38}.msn-message-heading time{margin-left:auto;color:#9aa6b3;font-size:9px}.msn-message p{white-space:pre-wrap;line-height:1.5;margin:5px 0 0;color:#293a4f}.msn-message.system{color:#8593a4;font-size:10px;line-height:1.6;margin:8px 0 12px}.msn-message.deleted p{font-style:italic;color:#8492a3}.msn-owner{font-size:8px;letter-spacing:.6px;background:#e7eef8;padding:2px 4px;border-radius:2px}.msn-pending{opacity:.6}.msn-pending button{margin-top:7px}.msn-new{position:absolute;bottom:128px;align-self:center;border:1px solid #a3b7ce;border-radius:12px;padding:5px 12px;background:#e8f1fd;box-shadow:0 2px 8px #0002}
+.msn-room{display:flex;flex:1;min-height:0}.msn-conversation{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;position:relative}.msn-room-title{display:flex;justify-content:space-between;gap:10px;padding:12px 15px;background:#fff;border-bottom:1px solid #e2e8f0;font-size:11px}.msn-room-title span{color:#6f8194;font-size:10px}.msn-transcript{flex:1;overflow:auto;min-height:0;padding:10px 16px;background:#fff;overflow-wrap:anywhere;scrollbar-width:thin}.msn-welcome{padding:26px 12px;text-align:center;color:#7488a0}.msn-welcome>span{display:block;font:36px Georgia;color:#94b5d9;margin-bottom:10px}.msn-welcome strong{display:block;color:#4c6b8e;font-size:13px}.msn-welcome p{max-width:270px;margin:10px auto;line-height:1.7;font-size:11px}.msn-message{margin:7px 0 15px;font-size:12px}.msn-message-heading{display:flex;align-items:center;gap:7px;color:#315e91;font-size:11px}.msn-message.own .msn-message-heading{color:#507b38}.msn-message-heading time{margin-left:auto;color:#9aa6b3;font-size:9px}.msn-message p{white-space:pre-wrap;line-height:1.5;margin:5px 0 0;color:#293a4f}.msn-message.system{color:#8593a4;font-size:10px;line-height:1.6;margin:8px 0 12px}.msn-message.deleted p{font-style:italic;color:#8492a3}.msn-owner{font-size:8px;letter-spacing:.6px;background:#e7eef8;padding:2px 4px;border-radius:2px}.msn-pending{opacity:.6}.msn-pending button{margin-top:7px}.msn-new{position:absolute;bottom:225px;align-self:center;border:1px solid #a3b7ce;border-radius:12px;padding:5px 12px;background:#e8f1fd;box-shadow:0 2px 8px #0002}
 .msn-compose{padding:10px 12px 9px;border-top:1px solid #b9cce0;background:linear-gradient(#f5f8fc,#e9eff7)}.msn-compose label{display:flex;justify-content:space-between;font-size:10px;color:#627894;margin-bottom:6px}.msn-compose label span{font-size:9px}.msn-compose>div{display:flex;gap:7px}.msn-compose textarea{resize:none;min-width:0;flex:1;background:#fff;border:1px solid #a3b8d0;border-radius:3px;padding:8px;line-height:1.5;box-sizing:border-box;min-height:57px}.msn-send{width:65px;border:1px solid #8fa9c6;border-radius:3px;background:linear-gradient(#fff,#dce8f6);box-shadow:inset 0 0 0 1px #fff;font-weight:bold!important}.msn-compose>small{display:block;font-size:9px;color:#8090a3;margin-top:6px}.msn-people{display:flex;flex-direction:column;width:170px;flex-shrink:0;background:linear-gradient(100deg,#eaf1fa,#f6f9fd);border-left:1px solid #bfcee0;overflow:auto}.msn-people h3{font-size:11px;font-weight:normal;color:#557391;padding:13px 13px 8px;margin:0}.msn-people ul{list-style:none;margin:0;padding:0 12px}.msn-people li{display:flex;align-items:center;gap:7px;padding:9px 0;font-size:11px;overflow-wrap:anywhere}.msn-people li>span{min-width:0}.msn-people li small{display:block;font-size:9px;color:#8193a8;margin-top:3px}
 .msn-error,.msn-offline{background:#fff6d9;border-top:1px solid #e2d19b;color:#765b2e;padding:8px 12px;font-size:11px;line-height:1.5;flex-shrink:0}.msn-error{display:flex;align-items:center;gap:10px;max-height:95px;overflow:auto}.msn-error button{margin-left:auto;border:0;background:none;font-size:18px}.msn-footer{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#e4eaf3;border-top:1px solid #bdcbdd;font-size:9px;color:#687d96;flex-shrink:0}.msn-footer>span:last-child{margin-left:auto;text-align:right}
 .msn-admin{position:absolute;inset:34px 8px 28px;z-index:2;background:#f6f8fc;border:1px solid #7593b7;box-shadow:0 4px 20px #1235;padding:12px;overflow:auto}.msn-admin header{display:flex;align-items:center;gap:8px;margin-bottom:12px}.msn-admin header strong{margin-right:auto}.msn-admin button{padding:4px 8px;border:1px solid #a5b4c8;background:#fff;border-radius:2px}.msn-admin-settings{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.msn-admin-settings select{margin-left:5px}.msn-admin-row{padding:10px 0;border-top:1px solid #d5dfe9;overflow-wrap:anywhere}.msn-admin-row p{white-space:pre-wrap;margin:6px 0}.msn-admin-row button{margin:5px 5px 0 0}.msn-admin-row>span{margin:0 8px}.msn-admin details{padding:8px 0}.msn-admin summary{cursor:pointer}

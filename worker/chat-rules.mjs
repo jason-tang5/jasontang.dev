@@ -12,7 +12,7 @@ export async function hash(value) {
 }
 export function nicknameError(name, admin = false) {
   if (typeof name !== 'string' || !/^[A-Za-z0-9_-]{3,20}$/.test(name)) return 'nickname-invalid';
-  if (/^(jason|admin|administrator|system|moderator)$/i.test(name) && !(admin && name === 'Jason')) return 'nickname-reserved';
+  if (/^(jason|clippy|admin|administrator|system|moderator)$/i.test(name) && !(admin && name === 'Jason')) return 'nickname-reserved';
   if (profane(name)) return 'nickname-profanity';
   return null;
 }
