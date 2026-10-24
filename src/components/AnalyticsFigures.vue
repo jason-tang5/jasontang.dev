@@ -8,7 +8,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import RetroIcon from './RetroIcon.vue';
 import PixelPie from './PixelPie.vue';
-import { validateEvent, queries, summarize, periods } from '../../worker/analytics.mjs';
+import { validateEvent, queries, summarize, periods, eventNames } from '../../worker/analytics.mjs';
 import { createOptimisticStats } from '../optimistic-stats.mjs';
 import '../post-figures.css';
 
@@ -49,7 +49,7 @@ const nodes = {
 const journey = [
   { on: ['browser'], title: 'First click', text: 'Nothing is sent while the page just sits there. The first click, tap or key press makes a random visit id, kept only in memory, and sends a visit event.' },
   { on: ['browser', 'worker'], path: 'browser-worker', title: 'POST /api/event', text: 'navigator.sendBeacon posts a small JSON body: the visit id, the event name, a detail slug and a number. Beacons still go out while the page is closing.' },
-  { on: ['worker'], title: 'Check it', text: 'The Origin has to be jasontang.dev, the body under 1000 bytes, the name one of 20 known events, and every field shaped like a slug. Anything else gets a 400.' },
+  { on: ['worker'], title: 'Check it', text: `The Origin has to be jasontang.dev, the body under 1000 bytes, the name one of ${eventNames.length} known events, every field shaped like a slug and the number at most a million. A wrong Origin gets a 403, a body that’s too big a 413, and anything else a 400.` },
   { on: ['worker', 'object'], path: 'worker-object', title: 'Live numbers', text: 'The event goes to the Durable Object first. It bumps the all-time counters, marks the visit as online and keeps the Snake leaderboard. Heartbeats and leaves stop here.' },
   { on: ['worker', 'engine'], path: 'worker-engine', title: 'History', text: 'writeDataPoint stores the event in Analytics Engine: the visit as the index, five text fields and one number. It doesn’t wait for a reply.' },
   { on: ['window', 'api'], path: 'window-api', title: 'Open Analytics', text: 'The window asks for /api/analytics?days=30 for history, and /api/stats for the live numbers. It asks again every 30 seconds while it’s open.' },
@@ -61,18 +61,50 @@ const journeyStep = ref(0);
 const journeyNow = computed(() => journey[journeyStep.value]);
 let journeyTimer;
 let journeyTouched = false;
-// plays itself while it's on screen, until someone presses a button
+// plays itself while it's on screen, until someone presses a button. it stays quiet
+// for screen readers while it plays, so they aren't read a new step every few seconds
+const journeyPlaying = ref(false);
 watch(visible, on => {
   clearInterval(journeyTimer);
+  journeyPlaying.value = false;
   if (!on || reduced || journeyTouched || props.figure !== 'journey') return;
-  journeyTimer = setInterval(() => { journeyStep.value = (journeyStep.value + 1) % journey.length; }, 3200);
+  journeyPlaying.value = true;
+  journeyTimer = setInterval(() => { journeyStep.value = (journeyStep.value + 1) % journey.length; }, 3600);
 });
 onBeforeUnmount(() => clearInterval(journeyTimer));
 function journeyGo(step) {
   journeyTouched = true;
+  journeyPlaying.value = false;
   clearInterval(journeyTimer);
   journeyStep.value = step;
 }
+// the wires are drawn from where the boxes really are, so they meet the edges at any
+// width. each one points the way the request goes
+const mapBox = ref(null);
+const wireBox = ref({ width: 300, height: 150, wires: [] });
+const wireEnds = [
+  ['browser', 'worker'], ['worker', 'engine'], ['worker', 'object'],
+  ['window', 'api'], ['api', 'engine'], ['api', 'object'],
+];
+function measureWires() {
+  const map = mapBox.value;
+  if (!map) return;
+  const outer = map.getBoundingClientRect();
+  const box = id => {
+    const r = map.querySelector(`.af-at-${id}`).getBoundingClientRect();
+    return { left: r.left - outer.left, right: r.right - outer.left, mid: (r.top + r.bottom) / 2 - outer.top };
+  };
+  const wires = wireEnds.map(([from, to]) => {
+    const a = box(from);
+    const b = box(to);
+    // same row: straight across. otherwise corner to corner, a little off the middle
+    const tilt = Math.abs(a.mid - b.mid) < 4 ? 0 : Math.sign(b.mid - a.mid) * 10;
+    return { id: `${from}-${to}`, d: `M${(a.right + 2).toFixed(1)} ${(a.mid + tilt).toFixed(1)}L${(b.left - 3).toFixed(1)} ${(b.mid - tilt).toFixed(1)}` };
+  });
+  wireBox.value = { width: outer.width, height: outer.height, wires };
+}
+let wireObserver;
+onBeforeUnmount(() => wireObserver?.disconnect());
 
 // ---- event: what one visit sends ----
 // the same rules as analytics.js: nothing until the first press, events before then wait
@@ -80,23 +112,40 @@ const eventLog = ref([]);
 const waiting = ref([]);
 const visit = ref(null);
 const loaded = ref(false);
+const closed = ref(false);
+// the window in the address (#app=blog) when the page loaded, sent with the visit
+const entry = ref('');
 const sentOnce = new Set();
 const randomVisit = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join('');
 function send(event) {
   const body = { visit: visit.value, ...event };
   const point = validateEvent(body);
   const live = !['heartbeat', 'leave'].includes(body.name);
-  eventLog.value = [{ id: eventLog.value.length, body, point, live }, ...eventLog.value].slice(0, 6);
+  eventLog.value = [{ id: sentCount++, body, point, live, object: objectNote(body.name) }, ...eventLog.value].slice(0, 8);
+}
+let sentCount = 0;
+// the json as sent, with a space after each comma so long lines can wrap there
+const spaced = value => JSON.stringify(value, null, 1).replace(/\n\s*/g, ' ').replace(/([[{]) | ([\]}])/g, '$1$2');
+// what live-stats.mjs does with each event, before it goes on to analytics engine
+const objectCounters = { 'minesweeper-win': 'minesweeperWins', 'breakout-complete': 'breakoutWins', 'reversi-lose': 'clippyWins', 'reversi-win': 'clippyLosses', '2048-win': 'twenty48Wins' };
+function objectNote(name) {
+  if (name === 'visit') return 'counts a visitor and marks the visit online';
+  if (name === 'heartbeat') return 'keeps the visit marked online';
+  if (name === 'leave') return 'takes the visit off “online now”';
+  if (objectCounters[name]) return `adds one to ${objectCounters[name]}`;
+  return 'has no counter for it';
 }
 function pageLoad() {
   eventLog.value = [];
   waiting.value = [];
   visit.value = null;
+  entry.value = '';
   sentOnce.clear();
   loaded.value = true;
+  closed.value = false;
 }
 function track(name, detail = '', value = 0, once = false) {
-  if (!loaded.value) return;
+  if (!loaded.value || closed.value) return;
   const key = `${name}:${detail}`;
   if (once && sentOnce.has(key)) return;
   if (once) sentOnce.add(key);
@@ -105,9 +154,11 @@ function track(name, detail = '', value = 0, once = false) {
   else waiting.value = [...waiting.value, event];
 }
 function firstPress() {
-  if (!loaded.value || visit.value) return;
+  if (!loaded.value || closed.value || visit.value) return;
   visit.value = randomVisit();
-  send({ name: 'visit', detail: '', device: 'desktop', referrer: 'github.com' });
+  // the device is measured the same way as analytics.js, the referrer is made up
+  const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches;
+  send({ name: 'visit', detail: entry.value, device: phone ? 'phone' : 'desktop', referrer: 'github.com' });
   for (const event of waiting.value) send(event);
   waiting.value = [];
 }
@@ -116,11 +167,13 @@ const actions = [
   { label: 'Beat Minesweeper', run: () => { firstPress(); track('minesweeper-win'); } },
   { label: 'Read a post', run: () => { firstPress(); track('blog-post', 'How the Analytics Work', 0, true); } },
   { label: '30 s pass', run: () => { if (visit.value) send({ name: 'heartbeat' }); } },
-  { label: 'Close the tab', run: () => { if (visit.value) send({ name: 'leave' }); } },
+  // pagehide sends a leave, then the page is gone until it's loaded again
+  { label: 'Close the tab', run: () => { if (visit.value) send({ name: 'leave' }); closed.value = true; } },
   { label: 'Forge an event', run: () => { if (visit.value) send({ name: 'free-money', detail: '<script>', value: 1e9 }); } },
 ];
 // a window that opens itself (a link to #app=blog) counts before any press, then waits
 function autoOpen() {
+  entry.value = 'blog';
   track('open', 'blog', 0, true);
 }
 
@@ -195,16 +248,19 @@ const pieRows = ref([
 ]);
 const pieBox = ref(null);
 const pixel = ref({ x: 16, y: 6 });
+// summarize() sorts the referrers biggest first, so the pie gets them that way too.
+// the sliders keep their own order
+const pieSorted = computed(() => [...pieRows.value].sort((a, b) => b.count - a.count));
 // the same maths as PixelPie.vue, for the pixel being pointed at
 const pieSlices = computed(() => {
-  const rows = pieRows.value.filter(row => row.count > 0);
+  const rows = pieSorted.value.filter(row => row.count > 0);
   const top = rows.slice(0, 5);
   const rest = rows.slice(5).reduce((sum, row) => sum + row.count, 0);
   if (rest) top.push({ label: 'Other', count: rest });
   const total = top.reduce((sum, row) => sum + row.count, 0);
   let start = 0;
-  return top.map(row => {
-    const slice = { label: row.label, start, end: start + row.count / total };
+  return top.map((row, i) => {
+    const slice = { label: row.label, color: `var(--bar-${rest && i === top.length - 1 ? 6 : i + 1})`, start, end: start + row.count / total };
     start = slice.end;
     return slice;
   });
@@ -219,6 +275,8 @@ const inspected = computed(() => {
   const slice = where === 'slice' ? (pieSlices.value.find(s => turn < s.end) || pieSlices.value.at(-1)) : null;
   return { x, y, dx, dy, distance, turn, where, slice };
 });
+// dx and dy with a real minus sign
+const signed = n => (n < 0 ? `−${-n}` : `${n}`);
 function pointPixel(event) {
   const svg = pieBox.value?.querySelector('svg');
   if (!svg) return;
@@ -297,9 +355,10 @@ function sample() {
 function note(text) {
   floorLog.value = [{ id: `${sim.clock.t}-${floorLog.value.length}`, t: sim.clock.t, text }, ...floorLog.value].slice(0, 5);
 }
-function poll(reason) {
-  // the request sees the server as it is now, and lands a second later
-  sim.polls.push({ at: sim.clock.t + 1, value: sim.server, revision: sim.floors.revision, reason });
+function poll(reason, wait = 0) {
+  // a request leaves after wait seconds, sees the server as it is then and lands
+  // half a second later. like live-stats.js it keeps the revision from when it left
+  sim.polls.push({ leaves: sim.clock.t + wait, reason });
 }
 function win() {
   const t = sim.clock.t;
@@ -314,7 +373,7 @@ function win() {
     note(`You won. The event reaches the server in ${lag.value} s.`);
   }
   // the site refreshes a second after a local event
-  poll('after your win');
+  poll('after your win', 1);
   sample();
 }
 function someoneElse() {
@@ -331,13 +390,16 @@ function tick(dt) {
     note('Your event reached the server.');
   }
   sim.posts = sim.posts.filter(p => p.at > sim.clock.t);
-  for (const reply of sim.polls.filter(p => p.at <= sim.clock.t)) {
+  for (const request of sim.polls.filter(p => p.at === undefined && p.leaves <= sim.clock.t)) {
+    Object.assign(request, { at: sim.clock.t + 0.5, value: sim.server, revision: sim.floors.revision });
+  }
+  for (const reply of sim.polls.filter(p => p.at !== undefined && p.at <= sim.clock.t)) {
     sim.snapshot = { minesweeperWins: reply.value };
     const before = sim.floors.value().minesweeperWins;
     const after = sim.floors.accept({ minesweeperWins: reply.value }, reply.revision).minesweeperWins;
     note(`A poll (${reply.reason}) said ${reply.value}. Floors show ${after}${after > reply.value ? ', held up by your win' : before > after ? ', the server won after 90 s' : ''}.`);
   }
-  sim.polls = sim.polls.filter(p => p.at > sim.clock.t);
+  sim.polls = sim.polls.filter(p => p.at === undefined || p.at > sim.clock.t);
   if (sim.clock.t >= sim.nextPoll) {
     poll('every 30 s');
     sim.nextPoll = sim.clock.t + 30;
@@ -352,26 +414,39 @@ function runFloors() {
 }
 watch([visible, paused, speed], runFloors);
 onBeforeUnmount(() => clearInterval(floorTimer));
+// when lines agree they lie on top of each other, so each is thinner than the one
+// under it and they all still show
 const series = [
-  { key: 'server', label: 'Server only', color: 'var(--bar-6)' },
-  { key: 'naive', label: 'Server + your changes', color: 'var(--bar-2)' },
-  { key: 'floor', label: 'Floors (the site)', color: 'var(--bar-1)' },
+  { key: 'server', label: 'Server only', color: 'var(--bar-6)', width: 8 },
+  { key: 'naive', label: 'Server + your changes', color: 'var(--bar-2)', width: 5 },
+  { key: 'floor', label: 'Floors (the site)', color: 'var(--bar-1)', width: 2.5 },
 ];
 const chart = computed(() => {
   const points = history.value;
-  if (!points.length) return { lines: [], min: 0, max: 1, start: 0 };
+  if (!points.length) return { lines: [], ticks: [], min: 0, max: 1, start: 0 };
   const values = points.flatMap(p => series.map(s => p[s.key]).concat(p.truth));
   const min = Math.min(...values) - 1;
   const max = Math.max(...values) + 1;
+  // whole numbers only, five at most
+  const step = Math.max(1, Math.ceil((max - min) / 4));
+  const ticks = [];
+  for (let v = Math.ceil(min / step) * step; v <= max; v += step) ticks.push({ value: v, y: 100 - (v - min) / (max - min) * 100 });
   const start = Math.max(0, simTime.value - 120);
   const x = t => (t - start) / 120 * 300;
   const y = v => 100 - (v - min) / (max - min) * 100;
   const path = key => points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)} ${y(p[key]).toFixed(1)}`).join('');
-  return { lines: [...series, { key: 'truth', color: 'var(--ink)', dash: true }].map(s => ({ ...s, d: path(s.key) })), min, max, start };
+  return { lines: [...series, { key: 'truth', color: 'var(--ink)', width: 1.5, dash: true }].map(s => ({ ...s, d: path(s.key) })), ticks, min, max, start };
 });
 
 onMounted(() => {
   if (props.figure === 'floors') resetFloors();
+  if (props.figure === 'journey') {
+    measureWires();
+    if (typeof ResizeObserver === 'function') {
+      wireObserver = new ResizeObserver(measureWires);
+      wireObserver.observe(mapBox.value);
+    }
+  }
   if (props.figure === 'pie') {
     measurePie();
     if (typeof ResizeObserver === 'function') {
@@ -391,22 +466,22 @@ onMounted(() => {
 
     <!-- lead: the whole trip -->
     <div v-if="figure === 'journey'" class="pf-panel">
-      <div class="af-map" aria-hidden="true">
+      <div ref="mapBox" class="af-map" aria-hidden="true">
         <div v-for="(n, id) in nodes" :key="id" class="af-node" :class="[`af-at-${id}`, { on: journeyNow.on.includes(id) }]">
-          <RetroIcon :name="n.icon" /><strong>{{ n.name }}</strong><code>{{ n.code }}</code>
+          <!-- paths only break after a slash -->
+          <RetroIcon :name="n.icon" /><strong>{{ n.name }}</strong><code><template v-for="(part, i) in n.code.split(/(?<=\/)/)" :key="i">{{ part }}<wbr></template></code>
         </div>
-        <svg class="af-wires" viewBox="0 0 300 150" preserveAspectRatio="none">
-          <path d="M64 35H118" :class="{ on: journeyNow.path === 'browser-worker' }" />
-          <path d="M182 35H236" :class="{ on: journeyNow.path === 'worker-engine' }" />
-          <path d="M182 42L236 108" :class="{ on: journeyNow.path === 'worker-object' }" />
-          <path d="M64 115H118" :class="{ on: journeyNow.path === 'window-api' }" />
-          <path d="M182 108L236 42" :class="{ on: journeyNow.path === 'api-engine' }" />
-          <path d="M182 115H236" :class="{ on: journeyNow.path === 'api-object' }" />
+        <svg class="af-wires" :viewBox="`0 0 ${wireBox.width} ${wireBox.height}`">
+          <defs>
+            <marker id="af-tip" class="af-tip" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L6 3L0 6z" /></marker>
+            <marker id="af-tip-on" class="af-tip on" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L6 3L0 6z" /></marker>
+          </defs>
+          <path v-for="w in wireBox.wires" :key="w.id" :d="w.d" :class="{ on: journeyNow.path === w.id }" :marker-end="journeyNow.path === w.id ? 'url(#af-tip-on)' : 'url(#af-tip)'" />
         </svg>
         <span class="af-lane-label top">writing</span>
         <span class="af-lane-label bottom">reading</span>
       </div>
-      <div class="pf-detail" aria-live="polite">
+      <div class="pf-detail" :aria-live="journeyPlaying ? 'off' : 'polite'">
         <strong><b>{{ journeyStep + 1 }}/{{ journey.length }}</b> {{ journeyNow.title }}</strong>
         <p>{{ journeyNow.text }}</p>
       </div>
@@ -421,20 +496,27 @@ onMounted(() => {
     <div v-else-if="figure === 'event'" class="pf-panel">
       <div class="pf-buttons af-actions">
         <button class="raised pf-button" @click="pageLoad">{{ loaded ? 'Reload the page' : 'Load the page' }}</button>
-        <button class="raised pf-button" :disabled="!loaded || visit !== null" @click="autoOpen">A link opens Blog</button>
-        <button v-for="a in actions" :key="a.label" class="raised pf-button" :disabled="!loaded" @click="a.run">{{ a.label }}</button>
+        <button class="raised pf-button" :disabled="!loaded || closed || visit !== null || entry !== ''" @click="autoOpen">A link opens Blog</button>
+        <button v-for="a in actions" :key="a.label" class="raised pf-button" :disabled="!loaded || closed" @click="a.run">{{ a.label }}</button>
       </div>
       <dl class="pf-dl af-state">
-        <dt>Visit id</dt><dd><code>{{ visit ?? (loaded ? 'none yet, nobody has pressed anything' : 'no page loaded') }}</code></dd>
-        <dt>Waiting</dt><dd>{{ waiting.length ? waiting.map(e => `${e.name}:${e.detail}`).join(', ') : 'nothing' }}</dd>
+        <dt>Visit id</dt><dd><code v-if="visit">{{ visit }}</code><template v-else>{{ loaded ? 'none yet, nobody has pressed anything' : 'no page loaded' }}</template></dd>
+        <dt>Waiting</dt><dd>{{ waiting.length ? waiting.map(e => `${e.name} ${e.detail}`.trim()).join(', ') : 'nothing' }}</dd>
       </dl>
-      <ol class="af-log" aria-live="polite">
+      <p v-if="closed" class="pf-note">The tab is closed. Reload the page for a new visit.</p>
+      <ol class="af-log" aria-live="polite" aria-label="Events sent, newest first">
         <li v-if="!eventLog.length" class="empty">{{ loaded ? 'Nothing sent yet. Press any button to make the first interaction.' : 'Load the page to start.' }}</li>
         <li v-for="e in eventLog" :key="e.id">
-          <pre class="pf-code">POST /api/event {{ JSON.stringify(e.body) }}</pre>
-          <p v-if="!e.point" class="pf-bad">400 Invalid event. Nothing is stored.</p>
-          <p v-else-if="!e.live">204. Only the Durable Object hears it: it keeps the visit marked online{{ e.body.name === 'leave' ? ' until now' : '' }}.</p>
-          <p v-else>204. Stored as <code>indexes {{ JSON.stringify(e.point.indexes) }}</code> <code>blobs {{ JSON.stringify(e.point.blobs) }}</code> <code>doubles {{ JSON.stringify(e.point.doubles) }}</code></p>
+          <pre class="pf-code"><b>POST /api/event</b> {{ spaced(e.body) }}</pre>
+          <p v-if="!e.point" class="pf-bad">400 Invalid event. Nothing is stored or counted.</p>
+          <template v-else>
+            <p><span class="pf-good">204.</span> The Durable Object {{ e.object }}{{ e.live ? ', then Analytics Engine stores:' : '. Nothing goes to Analytics Engine.' }}</p>
+            <dl v-if="e.live" class="af-point">
+              <dt>indexes</dt><dd><code>{{ spaced(e.point.indexes) }}</code></dd>
+              <dt>blobs</dt><dd><code>{{ spaced(e.point.blobs) }}</code></dd>
+              <dt>doubles</dt><dd><code>{{ spaced(e.point.doubles) }}</code></dd>
+            </dl>
+          </template>
         </li>
       </ol>
     </div>
@@ -460,10 +542,10 @@ onMounted(() => {
       <p class="pf-note">{{ summaryRows.stored }} events from {{ summaryRows.kept }} visits stored{{ sampled ? `, each with _sample_interval = ${summaryRows.interval}` : '' }}, grouped into {{ summaryRows.rows.length }} rows:</p>
       <div class="pf-scroll af-rows">
         <table class="pf-table">
-          <thead><tr><th>name</th><th>detail</th><th>device</th><th>referrer</th><th>count</th></tr></thead>
+          <thead><tr><th>name</th><th>detail</th><th>device</th><th>referrer</th><th>count</th><th>total</th></tr></thead>
           <tbody>
-            <tr v-for="(r, i) in summaryRows.rows.slice(0, 8)" :key="i"><td>{{ r.name }}</td><td>{{ r.detail }}</td><td>{{ r.device }}</td><td>{{ r.referrer }}</td><td>{{ r.count }}</td></tr>
-            <tr v-if="summaryRows.rows.length > 8" class="empty"><td colspan="5">…and {{ summaryRows.rows.length - 8 }} more</td></tr>
+            <tr v-for="(r, i) in summaryRows.rows.slice(0, 8)" :key="i"><td>{{ r.name }}</td><td>{{ r.detail }}</td><td>{{ r.device }}</td><td>{{ r.referrer }}</td><td class="af-num">{{ r.count }}</td><td class="af-num">{{ r.total }}</td></tr>
+            <tr v-if="summaryRows.rows.length > 8" class="empty"><td colspan="6">…and {{ summaryRows.rows.length - 8 }} more</td></tr>
           </tbody>
         </table>
       </div>
@@ -483,8 +565,8 @@ onMounted(() => {
           <dl class="pf-dl">
             <dt>Visitors</dt><dd>{{ summary.visitors }}<span v-if="sampled" class="af-true"> (really {{ truth.visitors }})</span></dd>
             <dt>Minesweeper beaten</dt><dd>{{ summary.minesweeperWins }}<span v-if="sampled" class="af-true"> (really {{ truth.minesweeperWins }})</span></dd>
-            <dt>Avg Breakout win</dt><dd>{{ summary.breakout.averageWinSeconds ?? '—' }} s<span v-if="sampled" class="af-true"> (really {{ truth.breakout.averageWinSeconds }} s)</span></dd>
-            <dt>Devices</dt><dd>{{ summary.devices.map(d => `${d.label} ${d.count}`).join(', ') }}</dd>
+            <dt>Avg Breakout win</dt><dd>{{ summary.breakout.averageWinSeconds === null ? 'no wins kept' : `${summary.breakout.averageWinSeconds} s` }}<span v-if="sampled" class="af-true"> (really {{ truth.breakout.averageWinSeconds }} s)</span></dd>
+            <dt>Devices</dt><dd>{{ summary.devices.map(d => `${d.label} ${d.count}`).join(', ') }}<span v-if="sampled" class="af-true"> (really {{ truth.devices.map(d => `${d.label} ${d.count}`).join(', ') }})</span></dd>
           </dl>
         </div>
       </div>
@@ -495,7 +577,7 @@ onMounted(() => {
     <div v-else-if="figure === 'pie'" class="pf-panel">
       <div class="af-pie-layout">
         <div ref="pieBox" class="af-pie" tabindex="0" aria-label="Point at a pixel, or use the arrow keys" @pointermove="pointPixel" @pointerdown="pointPixel" @keydown="pieKeys">
-          <PixelPie :rows="pieRows" label="Referrers" />
+          <PixelPie :rows="pieSorted" label="Referrers" />
           <i class="af-marker" :style="markerStyle" aria-hidden="true" />
         </div>
         <div class="af-sliders">
@@ -508,10 +590,10 @@ onMounted(() => {
       <div class="pf-detail" aria-live="polite">
         <strong>Pixel {{ inspected.x }}, {{ inspected.y }}</strong>
         <dl class="pf-dl">
-          <dt>From the middle</dt><dd>dx {{ inspected.dx }}, dy {{ inspected.dy }}, distance {{ inspected.distance.toFixed(2) }}</dd>
+          <dt>From the middle</dt><dd>dx {{ signed(inspected.dx) }}, dy {{ signed(inspected.dy) }}, distance {{ inspected.distance.toFixed(2) }} of 12</dd>
           <template v-if="inspected.where === 'slice'">
             <dt>Angle</dt><dd><code>atan2(dx, −dy) / 2π</code> = {{ (inspected.turn * 100).toFixed(1) }}% of the way round from the top</dd>
-            <dt>Slice</dt><dd>{{ inspected.slice.label }}, which runs from {{ (inspected.slice.start * 100).toFixed(1) }}% to {{ (inspected.slice.end * 100).toFixed(1) }}%</dd>
+            <dt>Slice</dt><dd><i class="af-swatch" :style="{ background: inspected.slice.color }" />{{ inspected.slice.label }}, which runs from {{ (inspected.slice.start * 100).toFixed(1) }}% to {{ (inspected.slice.end * 100).toFixed(1) }}%</dd>
           </template>
           <template v-else>
             <dt>Result</dt><dd>{{ inspected.where === 'ring' ? 'Within 1.2 pixels of the edge, so it’s part of the outline ring' : 'Further than 12 from the middle, so it’s left empty' }}</dd>
@@ -531,13 +613,21 @@ onMounted(() => {
           </small>
         </div>
       </div>
-      <svg class="af-chart" viewBox="0 -4 300 108" preserveAspectRatio="none" role="img" :aria-label="`Minesweeper wins over the last two pretend minutes. Really ${current.truth}.`">
-        <path v-for="l in chart.lines" :key="l.key" :d="l.d" :style="{ stroke: l.color }" :stroke-dasharray="l.dash ? '3 3' : null" vector-effect="non-scaling-stroke" />
-      </svg>
+      <div class="af-plot">
+        <!-- the scale is html so the numbers don't stretch with the chart -->
+        <div class="af-axis" aria-hidden="true">
+          <span v-for="t in chart.ticks" :key="t.value" :style="{ top: `${(t.y + 4) / 108 * 100}%` }">{{ t.value }}</span>
+        </div>
+        <svg class="af-chart" viewBox="0 -4 300 108" preserveAspectRatio="none" role="img" :aria-label="`Minesweeper wins over the last two pretend minutes. Server only ${current.server}, server plus your changes ${current.naive}, floors ${current.floor}, really ${current.truth}.`">
+          <path v-for="t in chart.ticks" :key="t.value" class="af-grid" :d="`M0 ${t.y.toFixed(1)}H300`" vector-effect="non-scaling-stroke" />
+          <path v-for="l in chart.lines" :key="l.key" :d="l.d" :style="{ stroke: l.color, strokeWidth: l.width }" :stroke-dasharray="l.dash ? '4 3' : null" vector-effect="non-scaling-stroke" />
+        </svg>
+        <div class="af-time" aria-hidden="true"><span>{{ Math.round(chart.start) }} s</span><span>{{ Math.round(chart.start) + 120 }} s</span></div>
+      </div>
       <p class="pf-note af-chart-key">
         <span v-for="s in series" :key="s.key"><i :style="{ background: s.color }" />{{ s.label }}</span>
         <span><i class="truth" />What’s really true</span>
-        <span>{{ simTime.toFixed(0) }} s</span>
+        <span class="af-clock">Clock {{ simTime.toFixed(0) }} s</span>
       </p>
       <div class="pf-buttons">
         <button class="raised pf-button" @click="win">Win Minesweeper</button>
@@ -570,7 +660,8 @@ onMounted(() => {
 .af-map { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; gap: 44px 18%; padding: 14px 0; }
 .af-node { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; font-size: 12px; text-align: center; color: var(--ink); background: var(--d-page-alt, #fffdf2); border: 2px solid var(--d-line, #000); }
 .af-node svg { width: 26px; height: 26px; }
-.af-node code { overflow-wrap: anywhere; }
+.af-node strong { line-height: 1.2; }
+.af-node code { overflow-wrap: normal; line-height: 1.25; }
 .af-node.on { background: var(--navy, #000080); color: #fff; border-color: var(--navy, #000080); }
 .af-node.on code { color: #dfe3ff; }
 .af-at-browser { grid-area: 1 / 1; }
@@ -580,14 +671,17 @@ onMounted(() => {
 .af-at-api { grid-area: 2 / 2; }
 .af-at-object { grid-area: 2 / 3; }
 .af-wires { position: absolute; inset: 0; width: 100%; height: 100%; }
-.af-wires path { fill: none; stroke: var(--d-line, #888); stroke-width: 2; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; opacity: .45; }
-.af-wires path.on { stroke: #1baf7a; opacity: 1; stroke-width: 3; animation: af-flow .6s linear infinite; }
+.af-wires { overflow: visible; }
+.af-wires > path { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 4 4; opacity: .55; }
+.af-wires > path.on { stroke: var(--bar-3); opacity: 1; stroke-width: 3; animation: af-flow .6s linear infinite; }
+.af-tip path { fill: var(--muted); opacity: .55; }
+.af-tip.on path { fill: var(--bar-3); opacity: 1; }
 @keyframes af-flow { to { stroke-dashoffset: -8; } }
 .af-lane-label { position: absolute; left: 0; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .af-lane-label.top { top: 0; }
 .af-lane-label.bottom { bottom: 0; }
 @container (max-width: 460px) {
-  .af-map { gap: 34px 10px; }
+  .af-map { gap: 34px 22px; }
   .af-node { padding: 6px 2px; font-size: 11px; }
   .af-node code { font-size: 10px; }
 }
@@ -599,18 +693,27 @@ onMounted(() => {
 .af-log li { padding-bottom: 8px; border-bottom: 1px dotted var(--d-line, #999); }
 .af-log li.empty { color: var(--muted); font: 13px Tahoma, sans-serif; border: 0; }
 .af-log p { margin: 4px 0 0; font: 12px/1.5 Tahoma, sans-serif; overflow-wrap: anywhere; }
-.af-log p code { margin-right: 4px; }
+.af-log .pf-code { font-size: 11px; }
+.af-log .pf-code b { color: var(--muted); font-weight: normal; }
+.af-point { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 8px; margin: 4px 0 0 12px; font: 11px/1.5 'Courier New', monospace; }
+.af-point dt { color: var(--muted); }
+.af-point dd { margin: 0; overflow-wrap: anywhere; }
 
 /* summary */
 .af-sql { margin-bottom: 8px; font-size: 11px; }
 .af-rows { margin: 6px 0 12px; }
 .af-out { margin-top: 4px; }
-.af-out .pf-bars li { grid-template-columns: minmax(0, 12em) minmax(0, 1fr) 4.5em; }
+.af-out .pf-bars li { grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 4.5em; }
+/* the funnel's longer steps wrap instead of being cut off */
+.af-out .pf-bars li > span:first-child { white-space: normal; line-height: 1.25; }
+.af-num { text-align: right !important; }
 .af-true { color: var(--muted); font-weight: normal; }
 
 /* pie: a bigger pie with a marker on the pixel being looked at */
 .af-pie-layout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .af-pie { position: relative; outline-offset: 2px; touch-action: none; }
+.af-pie:focus-visible { outline: 1px dotted var(--ink); }
+.af-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--ink); }
 .af-pie :deep(.pixel-pie) { margin: 0; }
 .af-pie :deep(.pixel-pie svg) { width: 192px; height: 192px; cursor: crosshair; }
 .af-marker { position: absolute; outline: 2px solid var(--ink); pointer-events: none; }
@@ -622,13 +725,18 @@ onMounted(() => {
 .af-counter { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; text-align: center; background: var(--d-page-alt, #fffdf2); border: 2px solid var(--d-line, #000); box-shadow: inset 0 -4px var(--bar); font-size: 11px; }
 .af-counter strong { font: bold 28px/1.1 'Pixel MS Sans Serif', monospace; color: var(--ink); }
 .af-counter small { min-height: 1.2em; font-size: 11px; }
-.af-chart { display: block; width: 100%; height: 120px; margin-top: 10px; background: var(--paper); border: 1px solid var(--d-rule, #ccc); }
-.af-chart path { fill: none; stroke-width: 2; }
+.af-plot { position: relative; margin-top: 10px; padding-left: 26px; }
+.af-axis { position: absolute; left: 0; top: 0; width: 22px; height: 120px; font: 10px 'Courier New', monospace; color: var(--muted); text-align: right; }
+.af-axis span { position: absolute; right: 0; transform: translateY(-50%); }
+.af-chart { display: block; width: 100%; height: 120px; background: var(--paper); border: 1px solid var(--d-rule, #ccc); box-sizing: border-box; }
+.af-chart path { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.af-chart path.af-grid { stroke: var(--d-rule, #ccc); stroke-width: 1; }
+.af-time { display: flex; justify-content: space-between; margin-top: 2px; font: 10px 'Courier New', monospace; color: var(--muted); }
+.af-clock { margin-left: auto; font-family: 'Courier New', monospace; color: var(--ink); }
 .af-chart-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .af-chart-key span { display: inline-flex; align-items: center; gap: 4px; }
 .af-chart-key i { width: 12px; height: 4px; }
 .af-chart-key i.truth { height: 0; border-top: 2px dashed var(--ink); }
-.af-chart-key span:last-child { margin-left: auto; font-family: 'Courier New', monospace; }
 .af-floor-controls { margin: 10px 0 0; }
 .af-floor-log { margin: 10px 0 0; padding: 0; list-style: none; font: 12px/1.5 Tahoma, sans-serif; min-height: 5em; }
 .af-floor-log code { margin-right: 6px; }
