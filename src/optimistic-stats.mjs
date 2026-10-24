@@ -5,6 +5,8 @@ export function createOptimisticStats(now = Date.now) {
   let confirmed = null;
   let revision = 0;
   const floors = new Map();
+  // events from before the first snapshot, replayed on top of it once it loads
+  const early = [];
   const read = (data, path) => {
     const [field, label] = path.split(/[|#]/);
     const value = field.split('.').reduce((obj, key) => obj?.[key], data);
@@ -38,7 +40,8 @@ export function createOptimisticStats(now = Date.now) {
   }
   function apply(event) {
     revision++;
-    const current = value() || {};
+    if (!confirmed) return void early.push(event);
+    const current = value();
     const change = (path, amount = 1, maximum = false) => {
       floors.set(path, { value: maximum ? Math.max(read(current, path), amount) : read(current, path) + amount, at: now(), revision });
     };
@@ -88,6 +91,7 @@ export function createOptimisticStats(now = Date.now) {
         const caughtUp = floor.until ? read(snapshot, floor.until[0]) >= floor.until[1] : read(snapshot, path) >= floor.value;
         if (floor.revision <= startedRevision && (caughtUp || now() - floor.at >= 90000)) floors.delete(path);
       }
+      for (const event of early.splice(0)) apply(event);
       return value();
     },
   };
