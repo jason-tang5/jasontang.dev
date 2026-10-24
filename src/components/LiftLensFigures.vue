@@ -77,17 +77,22 @@ onBeforeUnmount(() => cancelAnimationFrame(frame));
 
 // ---- plate: the circle check from setup_plate. the plate is 450 mm, 31.5 px here ----
 const floor = 176;
+// a lifter at setup facing left, side on: shins against the bar, shoulders just over it,
+// straight arms down to the bar. the near plate hides the shins
 const wrist = [110, 145];
+const knee = [92, 110];
+const ankle = [136, 168];
+const joints = { ankle, knee, hip: [158, 96], shoulder: [104, 56], wrist };
 const circles = [{ x: 110, y: 145, r: 31.5 }, { x: 266, y: 66, r: 26 }];
-const knee = [168, 118];
 const presets = {
   plate: { label: 'The plate', x: 110, y: 145, r: 31.5 },
   near: { label: 'Close miss', x: 124, y: 136, r: 34 },
   knee: { label: 'A knee', x: knee[0], y: knee[1], r: 18 },
   rack: { label: 'Racked plate', x: 266, y: 66, r: 26 },
 };
-const cand = ref({ ...presets.near });
-const RIM = Array.from({ length: 72 }, (_, i) => i * Math.PI / 36);
+const cand = ref({ ...presets.plate });
+const isPreset = p => cand.value.x === p.x && cand.value.y === p.y && cand.value.r === p.r;
+const RIM = Array.from({ length: 48 }, (_, i) => i * Math.PI / 24);
 const RADIAL = Array.from({ length: 7 }, (_, i) => 0.88 + i * 0.04);
 // an angle has support when some sample along its short radial line sits on a real
 // circle's edge and that edge runs across the line rather than along it
@@ -141,13 +146,16 @@ function nudge(event) {
   cand.value = { ...cand.value, x: cand.value.x + step[0], y: cand.value.y + step[1] };
 }
 
-// ---- smooth: one clean's bar height at 60 fps with a pixel or so of noise ----
+// ---- smooth: one clean's bar height at 60 fps with about a pixel of noise ----
 const DT = 1 / 60;
 const PX = 140;
 const bump = (t, mu, s) => Math.exp(-(((t - mu) / s) ** 2) / 2);
-const times = Array.from({ length: 61 }, (_, i) => i * DT);
-const truth = times.map(t => 1.05 * bump(t, 0.32, 0.12) + 1.75 * bump(t, 0.7, 0.065));
-const seed = ref(7);
+// tracked from a little before the chart to a little after, so the moving average's
+// warm-up and the fit's one-sided windows at the ends stay off it
+const times = Array.from({ length: 79 }, (_, i) => -0.15 + i * DT);
+const shown = times.map((t, i) => i).filter(i => times[i] > -1e-9 && times[i] < 1 + 1e-9);
+const truth = times.map(t => 1.05 * bump(t, 0.32, 0.12) + 1.75 * bump(t, 0.7, 0.085));
+const seed = ref(10);
 // a small seeded generator so the same noise comes back each time the figure opens
 function noise(n) {
   let s = n * 9301 + 49297;
@@ -157,12 +165,12 @@ function noise(n) {
 const heights = computed(() => {
   const n = noise(seed.value);
   let h = 0;
-  return truth.map((v, i) => { if (i) h += (truth[i - 1] + v) / 2 * DT * PX; return h + n() * 1.2; });
+  return truth.map((v, i) => { if (i) h += (truth[i - 1] + v) / 2 * DT * PX; return h + n(); });
 });
 const methods = {
   raw: { label: 'Frame to frame', note: 'Every pixel of noise becomes a spike, since it’s divided by a 60th of a second.' },
-  average: { label: 'Moving average', note: 'Averaging the last 9 frames calms it down, but the peak comes out lower and late.' },
-  fit: { label: 'Curve fit', note: 'A curve fit to the 50 ms either side of each point keeps the peak where it was, with little noise.' },
+  average: { label: 'Moving average', note: 'Averaging the last 9 frames calms it down, but the peak always comes out late, and usually lower.' },
+  fit: { label: 'Curve fit', note: 'A curve fit to the 50 ms either side of each point lands close to the true peak, with little noise.' },
 };
 const method = ref('fit');
 const estimate = computed(() => {
@@ -184,11 +192,13 @@ const estimate = computed(() => {
     return det(withCol) / det(m) / PX;
   });
 });
-const W = 300, H = 130, VMIN = -1.5, VMAX = 3.5;
-const sx = t => 30 + t * (W - 40);
-const sy = v => 10 + (VMAX - v) / (VMAX - VMIN) * (H - 30);
-const line = vs => vs.map((v, i) => `${sx(times[i]).toFixed(1)},${sy(Math.max(VMIN, Math.min(VMAX, v))).toFixed(1)}`).join(' ');
-const peakOf = vs => vs.reduce((best, v, i) => (v > best.v ? { v, i } : best), { v: -Infinity, i: 0 });
+// the plot area, with the frame-to-frame spikes clipped at its edges
+const W = 300, H = 130, VMIN = -1, VMAX = 3;
+const plot = { x: 26, y: 18, w: W - 34, h: H - 38 };
+const sx = t => plot.x + t * plot.w;
+const sy = v => plot.y + (VMAX - v) / (VMAX - VMIN) * plot.h;
+const line = vs => shown.map(i => `${sx(times[i]).toFixed(1)},${sy(vs[i]).toFixed(1)}`).join(' ');
+const peakOf = vs => shown.reduce((best, i) => (vs[i] > best.v ? { v: vs[i], i } : best), { v: -Infinity, i: 0 });
 const truePeak = peakOf(truth);
 const estPeak = computed(() => peakOf(estimate.value));
 const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000));
@@ -239,18 +249,19 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
   <figure v-else-if="figure === 'plate'" class="ll-figure">
     <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle. Green ticks mark parts of the outline that line up with a real edge.</figcaption>
     <div class="ll-panel">
-      <svg ref="plateSvg" class="ll-scene" viewBox="0 0 320 200" @pointermove="drag" @pointerup="release" @pointercancel="release">
-        <rect class="ll-ground" x="0" :y="floor + 2" width="320" :height="200 - floor - 2"/>
-        <g class="ll-rack" aria-hidden="true"><rect x="290" y="30" width="8" height="148"/><rect x="232" y="90" width="66" height="5"/></g>
+      <svg ref="plateSvg" class="ll-scene" viewBox="0 24 320 162" @pointermove="drag" @pointerup="release" @pointercancel="release">
+        <line class="ll-floor" x1="0" x2="320" :y1="floor + 1" :y2="floor + 1"/>
+        <g class="ll-rack" aria-hidden="true"><rect x="292" y="30" width="7" height="147"/><rect x="236" y="92" width="63" height="4"/></g>
         <g aria-hidden="true">
+          <circle class="ll-head" cx="95" cy="46" r="8"/>
+          <polyline class="ll-bone" :points="`102,${floor} 144,${floor}`"/>
+          <polyline class="ll-bone" :points="Object.values(joints).join(' ')"/>
+          <circle v-for="(p, name) in joints" :key="name" class="ll-key" :cx="p[0]" :cy="p[1]" r="2.5"/>
           <circle v-for="(c, i) in circles" :key="i" class="ll-real" :cx="c.x" :cy="c.y" :r="c.r"/>
           <circle v-for="(c, i) in circles" :key="`h${i}`" class="ll-hub" :cx="c.x" :cy="c.y" r="3"/>
-          <polyline class="ll-bone thin" :points="`138,${floor} ${knee[0]},${knee[1]} 120,96 150,52`"/>
-          <polyline class="ll-bone thin" :points="`150,52 ${wrist[0] + 8},100 ${wrist[0]},${wrist[1]}`"/>
-          <circle v-for="(p, i) in [[138, floor], knee, [120, 96], [150, 52], wrist]" :key="`k${i}`" class="ll-key" :cx="p[0]" :cy="p[1]" r="3"/>
-          <text class="ll-tag" :x="knee[0] + 8" :y="knee[1] - 4">knee</text>
-          <text class="ll-tag" :x="wrist[0] - 30" :y="wrist[1] - 36">wrists</text>
-          <text class="ll-tag" x="142" :y="floor - 4">ankle</text>
+          <text class="ll-tag" :x="knee[0] - 23" :y="knee[1] - 8" text-anchor="end">knee</text>
+          <text class="ll-tag" :x="wrist[0] - 40" :y="wrist[1] + 3" text-anchor="end">wrists</text>
+          <text class="ll-tag" :x="ankle[0] + 8" :y="ankle[1] + 2">ankle</text>
         </g>
         <g aria-hidden="true">
           <line v-for="(t, i) in ticks" :key="i" class="ll-tick" :class="{ hit: t.hit }" :x1="t.inner[0]" :y1="t.inner[1]" :x2="t.outer[0]" :y2="t.outer[1]"/>
@@ -262,12 +273,12 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
       <div class="ll-controls">
         <label class="ll-radius">Radius <input v-model.number="cand.r" type="range" min="12" max="48" step="0.5"></label>
         <span class="ll-toggle" role="group" aria-label="Try a circle">
-          <button v-for="(p, id) in presets" :key="id" class="raised ll-button" @click="cand = { ...p }">{{ p.label }}</button>
+          <button v-for="(p, id) in presets" :key="id" class="raised ll-button" :class="{ pressed: isPreset(p) }" :aria-pressed="isPreset(p)" @click="cand = { ...p }">{{ p.label }}</button>
         </span>
       </div>
       <ul class="ll-checks" aria-live="polite">
         <li v-for="c in checks" :key="c.label" :class="{ ok: c.ok }"><b>{{ c.ok ? '✓' : '✗' }}</b> {{ c.label }}<template v-if="c.value"> ({{ c.value }})</template></li>
-        <li class="ll-verdict" :class="{ ok: accepted }">{{ accepted ? 'Taken as the plate' : 'Rejected' }}</li>
+        <li class="ll-verdict" :class="{ ok: accepted }">{{ accepted ? 'Accepted' : 'Rejected' }}</li>
       </ul>
     </div>
   </figure>
@@ -276,18 +287,28 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
     <figcaption><strong>Fig. 3</strong> Bar speed through one clean, calculated three ways from the same jittery track. The dashed line is the true speed. The curve fit uses 50 ms either side of each point.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`${methods[method].label}: peak ${estPeak.v.toFixed(2)} m/s`">
+        <clipPath id="ll-plot"><rect :x="plot.x" :y="plot.y" :width="plot.w" :height="plot.h"/></clipPath>
         <line v-for="v in [-1, 0, 1, 2, 3]" :key="v" class="ll-grid" :class="{ zero: v === 0 }" :x1="sx(0)" :x2="sx(1)" :y1="sy(v)" :y2="sy(v)"/>
         <text v-for="v in [-1, 0, 1, 2, 3]" :key="`l${v}`" class="ll-axis" :x="sx(0) - 5" :y="sy(v) + 3" text-anchor="end">{{ v }}</text>
-        <text v-for="t in [0, 0.5, 1]" :key="`t${t}`" class="ll-axis" :x="sx(t)" :y="H - 6" text-anchor="middle">{{ t }} s</text>
-        <text class="ll-axis" x="4" y="12">m/s</text>
-        <polyline class="ll-truth" :points="line(truth)"/>
-        <polyline class="ll-est" :points="line(estimate)"/>
+        <text v-for="t in [0, 0.5, 1]" :key="`t${t}`" class="ll-axis" :x="sx(t)" :y="H - 6" :text-anchor="t ? (t === 1 ? 'end' : 'middle') : 'start'">{{ t }} s</text>
+        <text class="ll-axis" :x="sx(0) - 5" y="9" text-anchor="end">m/s</text>
+        <g class="ll-legend" :transform="`translate(${sx(0) + 6}, 6)`">
+          <line class="ll-truth" x1="0" x2="14" y1="0" y2="0"/><text x="18" y="3">True</text>
+          <line class="ll-est" x1="44" x2="58" y1="0" y2="0"/><text x="62" y="3">{{ methods[method].label }}</text>
+        </g>
+        <g clip-path="url(#ll-plot)">
+          <polyline class="ll-truth" :points="line(truth)"/>
+          <polyline class="ll-est" :points="line(estimate)"/>
+        </g>
+        <circle class="ll-peak true" :cx="sx(times[truePeak.i])" :cy="sy(truePeak.v)" r="3.5"/>
         <circle class="ll-peak" :cx="sx(times[estPeak.i])" :cy="sy(Math.min(VMAX, estPeak.v))" r="3.5"/>
       </svg>
-      <p class="ll-note" aria-live="polite">
-        <b>Peak {{ estPeak.v.toFixed(2) }} m/s</b>, true {{ truePeak.v.toFixed(2) }} m/s,
-        {{ lag === 0 ? 'right on time' : `${Math.abs(lag)} ms ${lag > 0 ? 'late' : 'early'}` }}. {{ methods[method].note }}
-      </p>
+      <dl class="ll-readout" aria-live="polite">
+        <div><dt>Peak</dt><dd>{{ estPeak.v.toFixed(2) }}<small>m/s</small></dd></div>
+        <div><dt>True peak</dt><dd>{{ truePeak.v.toFixed(2) }}<small>m/s</small></dd></div>
+        <div><dt>Timing</dt><dd>{{ lag === 0 ? 'On time' : `${Math.abs(lag)} ms ${lag > 0 ? 'late' : 'early'}` }}</dd></div>
+      </dl>
+      <p class="ll-note">{{ methods[method].note }}</p>
       <div class="ll-buttons">
         <span class="ll-toggle" role="group" aria-label="Method">
           <button v-for="(m, id) in methods" :key="id" class="raised ll-button" :class="{ pressed: method === id }" :aria-pressed="method === id" @click="method = id">{{ m.label }}</button>
@@ -343,15 +364,16 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 @container (max-width: 420px) { .ll-angles { grid-template-columns: minmax(0, 1fr); } .ll-video { max-height: 360px; } }
 
 /* fig 2 */
-.ll-scene .ll-bone { stroke: var(--ink); stroke-width: 4; fill: none; opacity: 1; }
-.ll-scene .ll-bone.thin { stroke-width: 3; opacity: .55; }
+/* the lifter sits back in grey so the plates and the candidate circle read first */
+.ll-scene .ll-bone { stroke: var(--muted); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: .6; }
+.ll-head { fill: none; stroke: var(--muted); stroke-width: 2.5; opacity: .6; }
 .ll-hub { fill: var(--ink); stroke: none; }
-.ll-scene .ll-key { fill: #e8a33d; stroke: var(--ink); stroke-width: 1; opacity: 1; }
+.ll-scene .ll-key { fill: #e8a33d; stroke: none; }
 .ll-scene { display: block; width: 100%; max-width: 480px; margin: 0 auto; touch-action: none; }
-.ll-ground { fill: var(--d-page-alt, #fffdf2); stroke: var(--muted); stroke-width: 1; }
+.ll-floor { stroke: var(--muted); stroke-width: 1.5; }
 .ll-rack rect { fill: var(--muted); opacity: .5; }
-.ll-real { fill: rgba(0, 0, 0, .08); stroke: var(--ink); stroke-width: 3; }
-:root[data-theme="dark"] .ll-real { fill: rgba(255, 255, 255, .08); }
+.ll-real { fill: rgba(0, 0, 0, .1); stroke: var(--ink); stroke-width: 3; }
+:root[data-theme="dark"] .ll-real { fill: rgba(255, 255, 255, .1); }
 .ll-tag { font: 8px 'Courier New', monospace; fill: var(--muted); }
 .ll-tick { stroke: var(--muted); stroke-width: 1.5; opacity: .45; }
 .ll-tick.hit { stroke: #1baf7a; stroke-width: 2.5; opacity: 1; }
@@ -376,4 +398,11 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 .ll-est { fill: none; stroke: var(--navy, #000080); stroke-width: 2; stroke-linejoin: round; }
 :root[data-theme="dark"] .ll-est { stroke: #8ca0ff; }
 .ll-peak { fill: #e8a33d; stroke: var(--ink); stroke-width: 1; }
+.ll-peak.true { fill: var(--paper); stroke: var(--muted); stroke-dasharray: 2 1.5; }
+.ll-legend text { font: 8px Tahoma, sans-serif; fill: var(--muted); }
+.ll-readout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0 0; }
+.ll-readout > div { padding: 5px 8px; background: var(--d-page-alt, #fffdf2); border: 1px solid var(--d-line, #999); }
+.ll-readout dt { font: 11px Tahoma, sans-serif; color: var(--muted); }
+.ll-readout dd { margin: 2px 0 0; font: bold 17px 'Courier New', monospace; }
+.ll-readout dd small { margin-left: 4px; font: 11px Tahoma, sans-serif; color: var(--muted); }
 </style>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" shape-rendering="crispEdges">
+  <!-- one letter in a window with a chunk smashed off it, drawn like the contact post's mail icon -->
+  <rect width="1200" height="630" fill="#1b1840"/>
+  <rect x="494" y="254" width="225" height="165" fill="#999" stroke="#111" stroke-width="10"/>
+  <rect x="478" y="238" width="225" height="165" fill="#fdf5dc" stroke="#111" stroke-width="10"/>
+  <rect x="483" y="243" width="215" height="30" fill="#2b3f9e"/>
+  <rect x="478" y="273" width="225" height="8" fill="#111"/>
+  <!-- the A -->
+  <path d="M553 385V312l15-15h37l15 15v73h-22v-25h-23v25zm22-48h23v-18h-23z" fill="#2b3f9e" stroke="#111" stroke-width="7" fill-rule="evenodd"/>
+  <!-- the chunk, flying off -->
+  <rect x="652" y="207" width="56" height="56" fill="#cc3333" stroke="#111" stroke-width="10" transform="rotate(18 680 235)"/>
+</svg>

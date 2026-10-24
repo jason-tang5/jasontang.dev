@@ -3,8 +3,8 @@
 // or, instead of blocks, source: the same markup as the editor on the site
 // (blog-markup.mjs), read from a .md file in posts/
 // (subtitle is optional, one line under the title in the post list)
-// (thumbnail is the post list picture for a post that opens with a figure, made by
-// scripts/blog-thumbnails.mjs)
+// (thumbnail is the post list picture for a post that opens with a figure: a pixel
+// icon on a navy card in assets/blog/thumbs, like the contact post's mail icon)
 //
 // block types:
 //   paragraph { text }
@@ -25,7 +25,7 @@ import durableObject from './posts/one-durable-object-as-the-whole-backend.md?ra
 
 // the lead is also kept as leadImage, which the editor fills in when one is edited
 const lead = (src, alt) => ({ lead: { type: 'image', src, alt }, leadImage: src });
-const thumbnail = slug => `/assets/blog/thumbs/${slug}.png`;
+const thumbnail = slug => `/assets/blog/thumbs/${slug}.svg`;
 
 export const posts = [
   {

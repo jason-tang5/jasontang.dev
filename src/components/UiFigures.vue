@@ -163,20 +163,26 @@ const picked = ref(null);
 let rampGrid = null;
 function drawRamp() {
   if (!rampPixels.value || !rampLetters.value) return;
-  rampGrid = sampleScene(rampCols.value, 9 / 16);
+  // only sample again when the columns change, so pointing around stays cheap
+  if (rampGrid?.cols !== rampCols.value) rampGrid = sampleScene(rampCols.value, 9 / 16);
   const left = fit(rampPixels.value);
   left.ctx.imageSmoothingEnabled = false;
   left.ctx.drawImage(rampGrid.small, 0, 0, left.width, left.height);
   const right = fit(rampLetters.value);
   drawLetters(right.ctx, right.width, right.height, rampGrid);
-  // the picked cell gets a box on both sides
+  // the picked cell gets a box on both sides, black and white so it shows on any colour
   if (picked.value === null || picked.value >= rampGrid.cols * rampGrid.rows) picked.value = sunCell();
   for (const side of [left, right]) {
     const cw = side.width / rampGrid.cols;
     const ch = side.height / rampGrid.rows;
+    const x = (picked.value % rampGrid.cols) * cw;
+    const y = Math.floor(picked.value / rampGrid.cols) * ch;
+    side.ctx.lineWidth = 3;
+    side.ctx.strokeStyle = '#000';
+    side.ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+    side.ctx.lineWidth = 1.5;
     side.ctx.strokeStyle = '#fff';
-    side.ctx.lineWidth = 2;
-    side.ctx.strokeRect((picked.value % rampGrid.cols) * cw + 1, Math.floor(picked.value / rampGrid.cols) * ch + 1, cw - 2, ch - 2);
+    side.ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
   }
 }
 // start on the middle of the sun, where it's brightest
@@ -187,72 +193,109 @@ const cellInfo = computed(() => {
   const o = picked.value * 4;
   const [r, g, b] = rampGrid.pixels.slice(o, o + 3);
   const brightness = luma(r, g, b);
+  const rounded = Math.round(brightness * (characters.length - 1));
   const index = letterIndex(brightness);
-  return { r, g, b, brightness, index, letter: characters[index], col: picked.value % rampGrid.cols, row: Math.floor(picked.value / rampGrid.cols) };
+  const ink = [r, g, b].map(v => Math.round(lift(v)));
+  return { r, g, b, ink, brightness, rounded, index, letter: characters[index], col: picked.value % rampGrid.cols, row: Math.floor(picked.value / rampGrid.cols) };
 });
+// a short version for screen readers, read out as the picked cell moves
+const cellSpoken = computed(() => cellInfo.value && `Column ${cellInfo.value.col}, row ${cellInfo.value.row}: brightness ${cellInfo.value.brightness.toFixed(2)}, letter ${cellInfo.value.letter}`);
 function pickCell(event) {
   if (!rampGrid) return;
   const rect = event.currentTarget.getBoundingClientRect();
   const col = Math.min(rampGrid.cols - 1, Math.max(0, Math.floor((event.clientX - rect.left) / rect.width * rampGrid.cols)));
   const row = Math.min(rampGrid.rows - 1, Math.max(0, Math.floor((event.clientY - rect.top) / rect.height * rampGrid.rows)));
-  picked.value = row * rampGrid.cols + col;
+  const id = row * rampGrid.cols + col;
+  if (id === picked.value) return;
+  picked.value = id;
   drawRamp();
 }
+// pointing with a mouse is enough. a finger taps instead, so a swipe still scrolls
+const pointCell = event => { if (event.pointerType === 'mouse') pickCell(event); };
 function rampKeys(event) {
   if (!rampGrid) return;
-  const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: rampGrid.cols, ArrowUp: -rampGrid.cols }[event.key];
-  if (!move) return;
+  let col = picked.value % rampGrid.cols;
+  let row = Math.floor(picked.value / rampGrid.cols);
+  if (event.key === 'ArrowRight') col++;
+  else if (event.key === 'ArrowLeft') col--;
+  else if (event.key === 'ArrowDown') row++;
+  else if (event.key === 'ArrowUp') row--;
+  else return;
   event.preventDefault();
-  picked.value = Math.min(rampGrid.cols * rampGrid.rows - 1, Math.max(0, picked.value + move));
+  col = Math.min(rampGrid.cols - 1, Math.max(0, col));
+  row = Math.min(rampGrid.rows - 1, Math.max(0, row));
+  picked.value = row * rampGrid.cols + col;
   drawRamp();
 }
 watch(rampCols, () => { picked.value = null; drawRamp(); });
 
 // ---- stamp: draw each letter once, stamp it everywhere, colour it all at once ----
 const stampSteps = [
-  { id: 'strip', title: 'Draw every letter once', text: 'Each of the 14 letters is drawn one time, in white, into a strip. This is the only fillText call per letter, however many cells there are.' },
+  { id: 'strip', title: 'Draw every letter once', text: 'Each of the 14 letters is drawn one time, in white, into a strip. These are the only fillText calls, however many cells there are.' },
   { id: 'mask', title: 'Stamp the letters into place', text: 'Every cell copies its letter out of the strip with drawImage. Copying pixels is cheaper than laying out text, and it doesn’t need a colour change between cells.' },
-  { id: 'colors', title: 'One pixel per cell', text: 'The photo, shrunk so each cell is one pixel, is the colour map. Stretched back up with smoothing off, every cell is one flat colour.' },
+  { id: 'colors', title: 'One pixel per cell', text: 'The photo, shrunk so each cell is one pixel and brightened a little, is the colour map. Stretched back up with smoothing off, every cell is one flat colour.' },
   { id: 'result', title: 'Pour the colours in', text: 'With globalCompositeOperation set to source-in, the colours only land where the white letters are. One drawImage colours every letter.' },
 ];
 const stampStep = ref(0);
 const stampCanvases = ref([]);
+// how many calls each step makes for this little picture, under each panel
+const stampCounts = ref([]);
 const timing = ref(null);
 const timingBusy = ref(false);
+const timingFailed = ref(false);
 function drawStamp() {
   const [stripEl, maskEl, colorEl, resultEl] = stampCanvases.value;
   if (!resultEl) return;
   const grid = sampleScene(36, 9 / 16);
-  const strip = fit(stripEl);
-  const slot = strip.width / (characters.length - 1);
-  strip.ctx.fillStyle = '#15151e';
-  strip.ctx.fillRect(0, 0, strip.width, strip.height);
-  strip.ctx.font = `bold ${Math.min(slot, strip.height) * 0.8}px "Courier New", monospace`;
-  strip.ctx.textAlign = 'center';
-  strip.ctx.textBaseline = 'middle';
-  strip.ctx.fillStyle = '#fff';
-  for (let i = 1; i < characters.length; i++) strip.ctx.fillText(characters[i], (i - 0.5) * slot, strip.height / 2);
+  const cells = grid.cols * grid.rows;
+  stampCounts.value = ['14 × fillText', `${cells} × drawImage`, `${grid.cols} × ${grid.rows} pixels`, '1 × drawImage'];
 
+  // 1: the strip, shown big with its slots marked
+  const shown = fit(stripEl);
+  const slot = (shown.width - 16) / (characters.length - 1);
+  const band = Math.min(slot * 1.6, shown.height * 0.5);
+  const top = (shown.height - band) / 2;
+  shown.ctx.fillStyle = '#15151e';
+  shown.ctx.fillRect(0, 0, shown.width, shown.height);
+  shown.ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  shown.ctx.lineWidth = 1;
+  for (let i = 0; i < characters.length - 1; i++) shown.ctx.strokeRect(8 + i * slot + 0.5, top + 0.5, slot - 1, band - 1);
+  shown.ctx.font = `bold ${Math.min(slot * 1.3, band * 0.75)}px "Courier New", monospace`;
+  shown.ctx.textAlign = 'center';
+  shown.ctx.textBaseline = 'middle';
+  shown.ctx.fillStyle = '#fff';
+  for (let i = 1; i < characters.length; i++) shown.ctx.fillText(characters[i], 8 + (i - 0.5) * slot, top + band / 2);
+
+  // 2: every cell stamped from a real strip, the same way as KnockoffAscii
   const mask = fit(maskEl);
-  const letters = document.createElement('canvas');
-  letters.width = maskEl.width;
-  letters.height = maskEl.height;
-  const pen = letters.getContext('2d');
-  pen.scale(maskEl.width / mask.width, maskEl.height / mask.height);
-  const cw = mask.width / grid.cols;
-  const ch = mask.height / grid.rows;
+  const scale = maskEl.width / mask.width;
+  const cw = mask.width / grid.cols * scale;
+  const ch = mask.height / grid.rows * scale;
+  const slotWidth = Math.ceil(ch) + 2;
+  const slotHeight = Math.ceil(ch * 1.3) + 2;
+  const strip = document.createElement('canvas');
+  strip.width = slotWidth * characters.length;
+  strip.height = slotHeight;
+  const pen = strip.getContext('2d');
   pen.font = `bold ${ch}px "Courier New", monospace`;
   pen.textAlign = 'center';
   pen.textBaseline = 'middle';
   pen.fillStyle = '#fff';
-  for (let id = 0; id < grid.cols * grid.rows; id++) {
+  for (let i = 1; i < characters.length; i++) pen.fillText(characters[i], (i + 0.5) * slotWidth, slotHeight / 2);
+  const letters = document.createElement('canvas');
+  letters.width = maskEl.width;
+  letters.height = maskEl.height;
+  const stamps = letters.getContext('2d');
+  for (let id = 0; id < cells; id++) {
     const o = id * 4;
-    pen.fillText(characters[letterIndex(luma(grid.pixels[o], grid.pixels[o + 1], grid.pixels[o + 2]))], ((id % grid.cols) + 0.5) * cw, (Math.floor(id / grid.cols) + 0.5) * ch);
+    const letter = letterIndex(luma(grid.pixels[o], grid.pixels[o + 1], grid.pixels[o + 2]));
+    stamps.drawImage(strip, letter * slotWidth, 0, slotWidth, slotHeight, ((id % grid.cols) + 0.5) * cw - slotWidth / 2, (Math.floor(id / grid.cols) + 0.5) * ch - slotHeight / 2, slotWidth, slotHeight);
   }
   mask.ctx.fillStyle = '#15151e';
   mask.ctx.fillRect(0, 0, mask.width, mask.height);
   mask.ctx.drawImage(letters, 0, 0, mask.width, mask.height);
 
+  // 3: the colour map, one brightened pixel per cell
   const colors = fit(colorEl);
   const lifted = document.createElement('canvas');
   lifted.width = grid.cols;
@@ -268,6 +311,7 @@ function drawStamp() {
   colors.ctx.imageSmoothingEnabled = false;
   colors.ctx.drawImage(lifted, 0, 0, colors.width, colors.height);
 
+  // 4: the colours poured into the letters with source-in
   const result = fit(resultEl);
   const inked = document.createElement('canvas');
   inked.width = letters.width;
@@ -297,11 +341,15 @@ async function timeStamping() {
   if (timingBusy.value) return;
   timingBusy.value = true;
   timing.value = null;
+  timingFailed.value = false;
   let img;
   try {
     img = await loadPocky();
   } catch {
+    // forget the failed load so the next press tries again
+    pockyPicture = null;
     timingBusy.value = false;
+    timingFailed.value = true;
     return;
   }
   // let the button show it's busy before the page is held up
@@ -452,7 +500,7 @@ function drawHit() {
   drawLetters(ctx, width, height, grid, id => kind.has(id));
   ctx.font = `bold ${cellHeight}px "Courier New", monospace`;
   for (const id of broken) {
-    ctx.fillStyle = kind.get(id) === 'core' ? 'rgba(255, 236, 138, 0.28)' : 'rgba(95, 208, 200, 0.4)';
+    ctx.fillStyle = kind.get(id) === 'core' ? 'rgba(255, 236, 138, 0.42)' : 'rgba(95, 208, 200, 0.55)';
     ctx.fillRect((id % grid.cols) * cellWidth, Math.floor(id / grid.cols) * cellHeight, cellWidth, cellHeight);
   }
 
@@ -473,7 +521,8 @@ function drawHit() {
   }
   ctx.stroke();
 
-  // the chunks, grouped the same way as fallingLetters
+  // the chunks, grouped the same way as fallingLetters. only the first 60 fly, in the
+  // order the letters broke (top to bottom), the rest are dashed: they just vanish
   const rowsFor = groupCols => Math.max(1, Math.round(groupCols * cellWidth / cellHeight));
   let groupCols = Math.max(1, Math.ceil(8 / cellWidth));
   while (broken.length / (groupCols * rowsFor(groupCols)) > spritesPerHit) groupCols++;
@@ -484,12 +533,24 @@ function drawHit() {
     return row * grid.cols + col;
   }));
   if (hitChunks.value) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
     ctx.lineWidth = 1;
-    for (const key of groups) {
+    [...groups].forEach((key, i) => {
+      ctx.strokeStyle = i < spritesPerHit ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 107, 97, 0.9)';
+      ctx.setLineDash(i < spritesPerHit ? [] : [2, 2]);
       ctx.strokeRect((key % grid.cols) * cellWidth + 0.5, Math.floor(key / grid.cols) * cellHeight + 0.5, groupCols * cellWidth - 1, groupRows * cellHeight - 1);
-    }
+    });
+    ctx.setLineDash([]);
   }
+
+  // where the hammer landed
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x - 5, y);
+  ctx.lineTo(x + 5, y);
+  ctx.moveTo(x, y - 5);
+  ctx.lineTo(x, y + 5);
+  ctx.stroke();
   hitResult.value = {
     letters: count,
     core: broken.filter(id => kind.get(id) === 'core').length,
@@ -497,12 +558,26 @@ function drawHit() {
     chunks: Math.min(groups.size, spritesPerHit),
     over: Math.max(0, groups.size - spritesPerHit),
     group: `${groupCols} × ${groupRows}`,
+    across: Math.round(groupCols * cellWidth),
     radius: Math.round(radius),
   };
 }
 function hitHere(event) {
   const rect = hitCanvas.value.getBoundingClientRect();
   hitAt = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  swingAgain(false);
+}
+// arrow keys move where the hammer lands, enter or space swings there again
+function hitKeys(event) {
+  const rect = hitCanvas.value.getBoundingClientRect();
+  const step = event.shiftKey ? 40 : 12;
+  const at = hitAt ?? { x: rect.width / 2, y: rect.height / 2 };
+  const move = { ArrowRight: [step, 0], ArrowLeft: [-step, 0], ArrowDown: [0, step], ArrowUp: [0, -step] }[event.key];
+  if (move) {
+    hitAt = { x: Math.min(rect.width, Math.max(0, at.x + move[0])), y: Math.min(rect.height, Math.max(0, at.y + move[1])) };
+  } else if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  if (!move) hitAt = at;
   swingAgain(false);
 }
 function swingAgain(center = true) {
@@ -519,7 +594,7 @@ const scenes = {
   snake: { label: 'Snake', scene: snakeScene, pace: 'A step every 200 ms idle, 110 ms playing', text: 'Little snakes play their own game on a 12 px grid: mostly straight on, now and then a right angle, never straight back. They wrap round the edges and grow when they eat.' },
   mines: { label: 'Minesweeper', scene: minesScene, pace: 'A new patch every 400–867 ms idle, 167–333 ms playing', text: 'A minefield sweeps itself. A random safe cell opens and floods out a few cells a step, mines next to cleared ground get flagged, and past 60% cleared a mine goes off and it starts over.' },
   reversi: { label: 'Reversi', scene: reversiScene, pace: 'A capture every 560–1280 ms idle, 260–560 ms while Clippy thinks', text: 'The whole backdrop is a board of @ and O discs. A disc lands and flips a line of its neighbours in all eight directions, 90 ms apart, turning edge on through ( | ) so it reads as a wave.' },
-  tiles: { label: '2048', scene: tilesScene, pace: 'A slide every 1.1–1.9 s idle, 0.5–0.8 s playing', text: 'A faint 2048 board plays itself with the game’s own slideLine, so every merge follows the real rules. When it’s too crowded to move, some blocks go so it never locks up.' },
+  tiles: { label: '2048', scene: tilesScene, pace: 'A slide every 1.1–1.9 s idle, 0.52–0.82 s playing', text: 'A faint 2048 board plays itself with the game’s own slideLine, so every merge follows the real rules. When it’s too crowded to move, some blocks go so it never locks up.' },
 };
 const sceneId = ref('snake');
 const playing = ref(false);
@@ -615,29 +690,35 @@ onMounted(async () => {
       <div class="pf-pair">
         <div>
           <h4>One pixel per cell</h4>
-          <canvas ref="rampPixels" class="pf-screen uf-ramp-canvas" tabindex="0" aria-label="Pick a cell. Arrow keys move." @click="pickCell" @keydown="rampKeys" />
+          <canvas ref="rampPixels" class="pf-screen uf-ramp-canvas" tabindex="0" role="img" aria-label="The picture shrunk to one pixel per cell. Arrow keys move between cells." @click="pickCell" @pointermove="pointCell" @keydown="rampKeys" />
         </div>
         <div>
           <h4>One letter per cell</h4>
-          <canvas ref="rampLetters" class="pf-screen uf-ramp-canvas" aria-hidden="true" @click="pickCell" />
+          <canvas ref="rampLetters" class="pf-screen uf-ramp-canvas" aria-hidden="true" @click="pickCell" @pointermove="pointCell" />
         </div>
       </div>
-      <p class="uf-ramp" aria-hidden="true">
-        <span v-for="(c, i) in characters" :key="i" :class="{ on: cellInfo?.index === i, off: i === 0 }">{{ c === ' ' ? '␣' : c }}</span>
-      </p>
-      <div v-if="cellInfo" class="pf-detail" aria-live="polite">
-        <strong>Cell {{ cellInfo.col }}, {{ cellInfo.row }}</strong>
+      <div class="uf-ramp" aria-hidden="true">
+        <span class="uf-ramp-end">dark</span>
+        <ol>
+          <li v-for="(c, i) in characters" :key="i" :class="{ on: cellInfo?.index === i, off: i === 0 }" :title="i === 0 ? 'never used: every cell gets at least a dot' : `${i}`">{{ c === ' ' ? '␣' : c }}</li>
+        </ol>
+        <span class="uf-ramp-end">bright</span>
+      </div>
+      <p class="sr-only" aria-live="polite">{{ cellSpoken }}</p>
+      <div v-if="cellInfo" class="pf-detail">
+        <strong>Column {{ cellInfo.col }}, row {{ cellInfo.row }}</strong>
         <dl class="pf-dl">
-          <dt>Colour</dt><dd><i class="uf-swatch" :style="{ background: `rgb(${cellInfo.r}, ${cellInfo.g}, ${cellInfo.b})` }" /> rgb({{ cellInfo.r }}, {{ cellInfo.g }}, {{ cellInfo.b }})</dd>
+          <dt>Pixel</dt><dd><i class="uf-swatch" :style="{ background: `rgb(${cellInfo.r}, ${cellInfo.g}, ${cellInfo.b})` }" /> rgb({{ cellInfo.r }}, {{ cellInfo.g }}, {{ cellInfo.b }})</dd>
           <dt>Brightness</dt><dd><code>(0.2126·{{ cellInfo.r }} + 0.7152·{{ cellInfo.g }} + 0.0722·{{ cellInfo.b }}) / 255</code> = {{ cellInfo.brightness.toFixed(3) }}</dd>
-          <dt>Letter</dt><dd><code>round({{ cellInfo.brightness.toFixed(3) }} × 14)</code> = {{ cellInfo.index }} → <b class="uf-letter">{{ cellInfo.letter }}</b></dd>
+          <dt>Letter</dt><dd><code>round({{ cellInfo.brightness.toFixed(3) }} × 14)</code> = {{ cellInfo.rounded }}<template v-if="cellInfo.rounded < 1">, raised to 1 so it isn’t blank</template> → <b class="uf-letter" :style="{ color: `rgb(${cellInfo.ink.join(', ')})` }">{{ cellInfo.letter }}</b></dd>
+          <dt>Drawn in</dt><dd><i class="uf-swatch" :style="{ background: `rgb(${cellInfo.ink.join(', ')})` }" /> <code>each × 1.25 + 20</code> = rgb({{ cellInfo.ink.join(', ') }}), so dark cells don’t vanish</dd>
         </dl>
       </div>
     </div>
 
     <!-- stamp: why it doesn't lag -->
     <div v-else-if="figure === 'stamp'" class="pf-panel">
-      <div class="uf-stamps">
+      <div class="uf-stamps" role="group" aria-label="Steps">
         <button
           v-for="(s, i) in stampSteps"
           :key="s.id"
@@ -646,8 +727,9 @@ onMounted(async () => {
           :aria-pressed="stampStep === i"
           @click="stampStep = i"
         >
-          <span><b>{{ i + 1 }}</b> {{ s.title }}</span>
-          <canvas :ref="el => { if (el) stampCanvases[i] = el; }" class="pf-screen" :class="{ 'uf-strip': s.id === 'strip' }" aria-hidden="true" />
+          <span class="uf-stamp-title"><b>{{ i + 1 }}</b> {{ s.title }}</span>
+          <canvas :ref="el => { if (el) stampCanvases[i] = el; }" class="pf-screen" aria-hidden="true" />
+          <small>{{ stampCounts[i] }}</small>
         </button>
       </div>
       <div class="pf-detail" aria-live="polite">
@@ -656,9 +738,13 @@ onMounted(async () => {
       </div>
       <div class="pf-buttons">
         <button class="raised pf-button" :disabled="timingBusy" @click="timeStamping">{{ timingBusy ? 'Timing…' : 'Time both on this device' }}</button>
-        <span v-if="timing" class="uf-timing" aria-live="polite">
-          {{ timing.cells.toLocaleString() }} letters: one by one <b>{{ timing.oneByOne.toFixed(1) }} ms</b>, stamped <b>{{ timing.stamped.toFixed(1) }} ms</b>
-          <template v-if="timing.stamped > 0 && timing.oneByOne > 0"> ({{ timing.oneByOne >= timing.stamped ? `${(timing.oneByOne / timing.stamped).toFixed(1)}× faster` : `${(timing.stamped / timing.oneByOne).toFixed(1)}× slower on this device` }})</template>
+        <span class="uf-timing" aria-live="polite">
+          <template v-if="timing">
+            {{ timing.cells.toLocaleString() }} letters: one by one <b>{{ timing.oneByOne.toFixed(1) }} ms</b>, stamped <b>{{ timing.stamped.toFixed(1) }} ms</b>
+            <template v-if="timing.stamped > 0 && timing.oneByOne > 0"> ({{ timing.oneByOne >= timing.stamped ? `${(timing.oneByOne / timing.stamped).toFixed(1)}× faster` : `${(timing.stamped / timing.oneByOne).toFixed(1)}× slower on this device` }})</template>
+          </template>
+          <template v-else-if="timingFailed">Couldn’t load the photo to time it.</template>
+          <template v-else-if="!timingBusy">Pocky at full detail, 220 columns, the middle of 5 runs each way.</template>
         </span>
       </div>
     </div>
@@ -675,22 +761,36 @@ onMounted(async () => {
           <input id="uf-hit-letter" v-model.number="hitLetter" class="pf-range" type="range" min="3" max="16" step="1">
         </div>
         <div class="pf-control">
-          <span>Show</span>
-          <span class="pf-toggle">
+          <span id="uf-hit-show">Show</span>
+          <span class="pf-toggle" role="group" aria-labelledby="uf-hit-show">
             <button class="raised pf-button" :class="{ pressed: hitChunks }" :aria-pressed="hitChunks" @click="hitChunks = !hitChunks">Chunks</button>
           </span>
         </div>
       </div>
-      <canvas ref="hitCanvas" class="pf-screen uf-hit-canvas" aria-label="Click to swing somewhere else" @click="hitHere" />
+      <canvas
+        ref="hitCanvas"
+        class="pf-screen uf-hit-canvas"
+        tabindex="0"
+        role="img"
+        aria-label="One hammer hit on the letters. Click, or use the arrow keys and Enter, to swing somewhere else."
+        aria-describedby="uf-hit-result"
+        @click="hitHere"
+        @keydown="hitKeys"
+      />
       <div class="pf-buttons">
         <button class="raised pf-button" @click="swingAgain()">Swing again</button>
-        <span class="pf-note uf-legend"><i class="core" />always breaks <i class="edge" />broke by chance <i class="box" />one flying chunk</span>
+        <span class="pf-note uf-legend" aria-hidden="true">
+          <span><i class="core" />always breaks</span>
+          <span><i class="edge" />broke by chance</span>
+          <span v-if="hitChunks"><i class="box" />one flying chunk</span>
+          <span v-if="hitChunks && hitResult?.over"><i class="gone" />no room, vanishes</span>
+        </span>
       </div>
-      <div v-if="hitResult" class="pf-detail" aria-live="polite">
+      <div v-if="hitResult" id="uf-hit-result" class="pf-detail" aria-live="polite">
         <dl class="pf-dl">
           <dt>Radius</dt><dd>{{ hitResult.radius }} px, solid core at 82%</dd>
           <dt>Broken</dt><dd>{{ hitResult.core + hitResult.edge }} letters: {{ hitResult.core }} in the core, {{ hitResult.edge }} on the edge</dd>
-          <dt>Flying</dt><dd>{{ hitResult.chunks }} chunks of {{ hitResult.group }} letters<template v-if="hitResult.over">, {{ hitResult.over }} more just vanish</template> (60 per hit at most)</dd>
+          <dt>Flying</dt><dd>{{ hitResult.chunks }} chunks of {{ hitResult.group }} letters, {{ hitResult.across }} px across<template v-if="hitResult.over">. {{ hitResult.over }} more don’t fit in the 60 per hit and just vanish</template></dd>
         </dl>
       </div>
     </div>
@@ -705,8 +805,8 @@ onMounted(async () => {
           </span>
         </div>
         <div class="pf-control">
-          <span>Switches</span>
-          <span class="pf-toggle">
+          <span id="uf-switches">Switches</span>
+          <span class="pf-toggle" role="group" aria-labelledby="uf-switches">
             <button class="raised pf-button" :class="{ pressed: playing }" :aria-pressed="playing" @click="playing = !playing">Game running</button>
             <button class="raised pf-button" :class="{ pressed: front }" :aria-pressed="front" @click="front = !front">Window in front</button>
           </span>
@@ -714,8 +814,7 @@ onMounted(async () => {
       </div>
       <div class="uf-backdrop">
         <canvas ref="backdropCanvas" aria-hidden="true" />
-        <span v-if="!front" class="uf-paused">Paused: the window isn’t in front</span>
-      </div>
+        <span v-if="!front" class="uf-paused">Paused: the window isn’t in front</span>      </div>
       <div class="pf-detail" aria-live="polite">
         <strong>{{ scenes[sceneId].label }}</strong> <code>{{ scenes[sceneId].pace }}</code>
         <p>{{ scenes[sceneId].text }}</p>
@@ -744,11 +843,11 @@ onMounted(async () => {
       <textarea id="uf-swap-source" v-model="swapSource" class="inset uf-source" rows="7" spellcheck="false" />
       <div class="pf-pair uf-blocks">
         <div>
-          <h4>parse()</h4>
+          <h4><code>parse()</code> gives</h4>
           <ol><li v-for="(b, i) in parsed" :key="i" :class="b.type">{{ blockLabel(b) }}</li></ol>
         </div>
         <div>
-          <h4>withFigures()</h4>
+          <h4>then <code>withFigures()</code></h4>
           <ol><li v-for="(b, i) in swapped" :key="i" :class="b.type">{{ blockLabel(b) }}</li></ol>
         </div>
       </div>
@@ -774,30 +873,42 @@ onMounted(async () => {
 
 /* ramp */
 .uf-ramp-canvas { aspect-ratio: 16 / 9; cursor: var(--classic-pointer, pointer); }
-.uf-ramp { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0 0; font: bold 15px 'Courier New', monospace; }
-.uf-ramp span { display: grid; place-items: center; width: 22px; height: 24px; background: #15151e; color: #d8d8e8; border: 1px solid var(--d-line, #000); }
+.uf-ramp-canvas:focus-visible { outline: 2px dotted var(--ink); outline-offset: 2px; }
+/* the ramp, dark to bright, in one row at any width */
+.uf-ramp { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
+.uf-ramp ol { flex: 1; display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 2px; max-width: 360px; margin: 0; padding: 0; list-style: none; font: bold 15px 'Courier New', monospace; }
+.uf-ramp li { display: grid; place-items: center; height: 24px; background: #15151e; color: #d8d8e8; border: 1px solid var(--d-line, #000); }
 .uf-ramp .on { background: var(--navy, #000080); color: #fff; outline: 2px solid var(--pf-mark); }
 .uf-ramp .off { opacity: .4; }
+.uf-ramp-end { font-size: 11px; color: var(--muted); }
 .uf-swatch { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; border: 1px solid var(--d-line, #000); }
 .uf-letter { display: inline-grid; place-items: center; min-width: 20px; padding: 0 3px; background: #15151e; color: #fff; font: bold 15px 'Courier New', monospace; }
 
 /* stamp: four little screens you pick between */
-.uf-stamps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.uf-stamps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .uf-stamp { display: flex; flex-direction: column; gap: 5px; padding: 6px; font: 12px 'Pixel MS Sans Serif', Tahoma, sans-serif; color: var(--ink); text-align: left; background: transparent; border: 2px solid transparent; cursor: var(--classic-pointer, pointer); }
+.uf-stamp:hover { border-color: var(--d-rule, #ccc); }
 .uf-stamp.on { border-color: var(--navy, #000080); background: var(--d-page-alt, #fffdf2); }
+.uf-stamp-title { align-self: flex-start; padding: 1px 4px; }
+.uf-stamp.on .uf-stamp-title { background: var(--navy, #000080); color: #fff; }
 .uf-stamp b { font: bold 11px 'Courier New', monospace; color: var(--muted); margin-right: 3px; }
+.uf-stamp.on b { color: #dfe3ff; }
 .uf-stamp canvas { aspect-ratio: 16 / 9; }
-.uf-stamp canvas.uf-strip { aspect-ratio: 14 / 2; margin: auto 0; }
-.uf-timing { font: 12px Tahoma, sans-serif; }
+.uf-stamp small { font: 11px 'Courier New', monospace; color: var(--muted); }
+.uf-stamp:focus-visible { outline: 1px dotted currentColor; outline-offset: -4px; }
+.uf-timing { flex: 1 1 220px; font: 12px/1.45 Tahoma, sans-serif; }
 @container (max-width: 420px) { .uf-stamps { grid-template-columns: minmax(0, 1fr); } }
 
 /* hit */
 .uf-hit-canvas { height: 280px; cursor: crosshair; }
-.uf-legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; }
+.uf-hit-canvas:focus-visible { outline: 2px dotted var(--ink); outline-offset: 2px; }
+.uf-legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; }
+.uf-legend > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .uf-legend i { width: 12px; height: 12px; border: 1px solid var(--d-line, #000); }
 .uf-legend i.core { background: rgba(255, 236, 138, .8); }
 .uf-legend i.edge { background: rgba(95, 208, 200, .8); }
 .uf-legend i.box { border: 1px solid var(--ink); background: transparent; }
+.uf-legend i.gone { border: 1px dashed var(--pf-bad); background: transparent; }
 
 /* backdrop: the window's own background behind the canvas, like a game window */
 .uf-backdrop { position: relative; height: 240px; background: var(--surface); border: 2px solid; border-color: var(--shadow) var(--light) var(--light) var(--shadow); overflow: hidden; }
@@ -805,8 +916,9 @@ onMounted(async () => {
 .uf-paused { position: absolute; left: 8px; bottom: 8px; padding: 2px 6px; font-size: 11px; background: var(--paper); color: var(--ink); border: 1px solid var(--d-line, #000); }
 
 /* swap */
-.uf-source { display: block; width: 100%; box-sizing: border-box; padding: 6px 8px; resize: vertical; background: var(--paper); color: var(--ink); font: 12px/1.5 'Courier New', monospace; }
-.uf-blocks { margin-top: 10px; }
+.uf-source { display: block; width: 100%; box-sizing: border-box; min-height: 9em; max-height: 26em; field-sizing: content; padding: 6px 8px; resize: vertical; background: var(--paper); color: var(--ink); font: 12px/1.5 'Courier New', monospace; }
+.uf-blocks { margin-top: 12px; }
+.uf-blocks h4 code { font: bold 12px 'Courier New', monospace; color: var(--ink); }
 .uf-blocks ol { margin: 0; padding-left: 22px; font: 12px/1.5 'Courier New', monospace; }
 .uf-blocks li { overflow-wrap: anywhere; }
 .uf-blocks li.figure, .uf-blocks li.graphic { background: var(--pf-mark); color: var(--pf-mark-ink); }

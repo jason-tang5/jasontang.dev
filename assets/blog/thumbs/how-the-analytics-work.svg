@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" shape-rendering="crispEdges">
+  <!-- a bar chart that climbs, drawn like the contact post's mail icon -->
+  <rect width="1200" height="630" fill="#1b1840"/>
+  <rect x="494" y="254" width="225" height="165" fill="#999" stroke="#111" stroke-width="10"/>
+  <rect x="478" y="238" width="225" height="165" fill="#fdf5dc" stroke="#111" stroke-width="10"/>
+  <g stroke="#111" stroke-width="8">
+    <rect x="506" y="340" width="32" height="38" fill="#2b3f9e"/>
+    <rect x="552" y="315" width="32" height="63" fill="#2b3f9e"/>
+    <rect x="598" y="290" width="32" height="88" fill="#2b3f9e"/>
+    <rect x="644" y="262" width="32" height="116" fill="#cc3333"/>
+  </g>
+  <rect x="496" y="374" width="190" height="9" fill="#111"/>
+</svg>

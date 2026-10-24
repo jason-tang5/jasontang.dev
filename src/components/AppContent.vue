@@ -25,6 +25,7 @@ import FpgaFigures from './FpgaFigures.vue';
 import ReversiFigures from './ReversiFigures.vue';
 import LiftLensFigures from './LiftLensFigures.vue';
 import MlFigures from './MlFigures.vue';
+import MessengerFigures from './MessengerFigures.vue';
 import { read, save, remove } from '../storage.js';
 import { track } from '../analytics.js';
 import { balloonColors, balloonFrames, balloonString } from '../balloon-sprite.js';
@@ -44,11 +45,12 @@ const Minesweeper = defineAsyncComponent(() => import('./Minesweeper.vue'));
 const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
-const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures };
+const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
 // a project's why i built it, what i built and implementation sections as one list of
 // items: a string is a paragraph, an array a paragraph mixing text with { open, text }
-// links to other windows, then { heading }, { subheading }, { figure } and { list }
-// (numbered, or bulleted with bullets: true). paragraphs and list points can use **bold**
+// links to other windows, then { heading }, { subheading }, { figure }, { list }
+// (numbered, or bulleted with bullets: true) and { table } (rows, the first one the
+// header). paragraphs, list points and table cells can use **bold**
 // and the rest of InlineText. why, contribution and implementation can each be one string
 // or a list of items. the lead figure goes at the top of what i built unless contribution
 // places it itself
@@ -601,6 +603,10 @@ function balloonDone(event, id) {
         <h3 v-else-if="item.subheading">{{ item.subheading }}</h3>
         <component :is="figureFor[item.figure]" v-else-if="item.figure" :figure="item.figure" @open="id => emit('open', id)"/>
         <component :is="item.bullets ? 'ul' : 'ol'" v-else-if="item.list"><li v-for="point in item.list" :key="point"><InlineText :text="point"/></li></component>
+        <div v-else-if="item.table" class="blog-table"><table>
+          <thead><tr><th v-for="cell in item.table[0]" :key="cell" scope="col">{{ cell }}</th></tr></thead>
+          <tbody><tr v-for="(row, r) in item.table.slice(1)" :key="r"><td v-for="(cell, c) in row" :key="c"><InlineText :text="cell"/></td></tr></tbody>
+        </table></div>
         <p v-else-if="Array.isArray(item)"><template v-for="(part, j) in item" :key="j">
           <button v-if="part.open" class="crumb-back" @click="emit('open', part.open)">{{ part.text }}</button><InlineText v-else :text="part"/>
         </template></p>

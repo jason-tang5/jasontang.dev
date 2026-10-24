@@ -47,7 +47,7 @@ const allPosts = computed(() => {
     .sort((a, b) => b.date.localeCompare(a.date));
 });
 const thumbnails = computed(() => Object.fromEntries(allPosts.value.map(entry => {
-  // a post that opens with a figure gets a picture of it, see scripts/blog-thumbnails.mjs
+  // a post that opens with a figure gets an icon card for it, see thumbnail in blog.mjs
   const src = entry.thumbnail || entry.leadImage || (entry.lead?.type === 'image' && entry.lead.src)
     || (entry.source ? parse(entry.source) : entry.blocks || []).find(block => block.type === 'image')?.src || '';
   // a /figures/ line is only a spot for an interactive figure, there's no picture there
