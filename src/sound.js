@@ -22,7 +22,7 @@ const xylophone = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77, 1046.5];
 let note = 0;
 
 // minimum ms between repeats, so sweeping the mouse or dragging doesn't turn into a buzz
-const throttle = { hover: 60, brick: 30, letter: 300, meow: 400, ping: 300 };
+const throttle = { hover: 60, brick: 30, letter: 300, meow: 400, ping: 300, babble: 250 };
 
 export const soundEnabled = () => enabled;
 export const soundLevel = () => level;
@@ -293,6 +293,16 @@ const sounds = {
       blip(ac, { type: 'sine', from: freq, start: i * 0.09, length: 0.28, volume: 0.045 });
       blip(ac, { type: 'sine', from: freq * 2.76, start: i * 0.09, length: 0.06, volume: 0.008 });
     });
+  },
+
+  // clippy talking when he's poked: a run of little syllables that wander around one
+  // pitch, like a cartoon voice reading the line out
+  babble: (ac, syllables = 6) => {
+    let pitch = 420;
+    for (let i = 0; i < syllables; i++) {
+      pitch = Math.min(620, Math.max(300, pitch + (Math.random() - 0.5) * 160));
+      blip(ac, { type: 'triangle', from: pitch, to: pitch * (i === syllables - 1 ? 0.8 : 1.08), start: i * 0.075, length: 0.06, volume: 0.05 });
+    }
   },
 
   // snake eating: a quick upward chirp, the same pitch every time
