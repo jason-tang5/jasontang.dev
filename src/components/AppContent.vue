@@ -465,7 +465,7 @@ function balloonDone(event, id) {
             <section class="about-facts-section" aria-labelledby="about-facts-heading">
               <h2 id="about-facts-heading">About me</h2>
               <nav class="about-links" aria-label="More about me">
-                <button v-for="id in ['projects', 'resume', 'experience']" :key="id" class="about-link raised" @click="emit('open', id)">
+                <button v-for="id in ['projects', 'resume', 'experience', 'terminal']" :key="id" class="about-link raised" @click="emit('open', id)">
                   <RetroIcon :name="registry[id].icon" small/>
                   <span>{{ registry[id].label }}</span>
                 </button>
