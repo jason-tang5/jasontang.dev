@@ -370,3 +370,15 @@ test('Clippy memory keeps only recent messages within both limits and excludes e
   assert.equal(bounded.length, 6);
   assert.ok(bounded.reduce((sum, entry) => sum + [...entry.content].length, 0) <= 6000);
 });
+
+test('messages and Clippy tokens are counted for analytics, and the asker hears their tokens', async () => {
+  const points = [];
+  const s = setup({ run: async () => ({ choices: [{ message: { content: 'Try Games, then Snake.' } }], usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150 } }) });
+  s.room.env.EVENTS = { writeDataPoint: point => points.push(point) };
+  const a = await s.join('Alice'); const b = await s.join('Bob');
+  send(s.room, a.ws, '@Clippy what should I play?');
+  await Promise.all(s.tasks);
+  assert.deepEqual(points.map(p => [p.blobs[0], p.doubles[0]]), [['chat-message', 0], ['clippy-tokens', 150]]);
+  assert.deepEqual(a.ws.events.filter(e => e.type === 'tokens'), [{ type: 'tokens', tokens: 150 }]);
+  assert.equal(b.ws.events.some(e => e.type === 'tokens'), false);
+});

@@ -35,6 +35,9 @@ export const eventNames = [
   'mail-failed',
   'balloon-pop', // popped one of the about window's balloons
 ];
+// written by the chat room itself (worker/chat-room.mjs), never accepted from the page:
+//   chat-message    a visitor's message in msn messenger
+//   clippy-tokens   one of clippy's workers ai replies. value is the tokens it took
 
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
   status,
@@ -154,6 +157,8 @@ export function summarize(rows, daily = []) {
     twenty48HighScore: Math.max(0, ...rows.filter(row => row.name === '2048-score').map(row => Number(row.maximum) || 0)),
     twenty48Wins: n('2048-win'),
     balloonsPopped: n('balloon-pop'),
+    chatMessages: n('chat-message'),
+    tokensBurnt: Math.round(total.get('clippy-tokens') || 0),
     minesweeperWins: n('minesweeper-win'),
     breakoutWins: n('breakout-complete'),
     // reversi-lose is clippy winning, reversi-win is clippy losing

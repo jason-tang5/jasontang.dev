@@ -62,6 +62,8 @@ const cards = computed(() => {
       note: games ? `Clippy wins ${Math.round(s.clippyWins / games * 100)}%` : 'No games yet' },
     { label: 'Highest 2048 score', value: count(s.twenty48HighScore), icon: '2048' },
     { label: 'Balloons popped', value: count(s.balloonsPopped), icon: 'balloon' },
+    { label: 'Messenger messages sent', value: count(s.chatMessages), icon: 'messenger' },
+    { label: 'Tokens burnt by Clippy', value: count(s.tokensBurnt), icon: 'chip', note: 'on Workers AI' },
   ];
 });
 // your own scores, kept in this browser by each game
@@ -83,6 +85,8 @@ const yourCards = computed(() => {
     { label: 'Your 2048 best', value: number(read('2048-best', '0')), icon: '2048' },
     { label: 'Balloons you popped', value: number(read('balloons-popped', '0')), icon: 'balloon' },
     { label: 'You vs Clippy', value: `${you}-${clippy}`, icon: 'reversi', note: you + clippy ? `You win ${Math.round(you / (you + clippy) * 100)}%` : 'No games yet' },
+    { label: 'Messenger messages you sent', value: number(read('chat-sent', '0')), icon: 'messenger' },
+    { label: 'Tokens you burnt', value: number(read('clippy-tokens', '0')), icon: 'chip', note: 'asking Clippy' },
   ];
 });
 // the same kind of cards for the behind the scenes numbers, over the chosen period
@@ -174,7 +178,7 @@ onBeforeUnmount(() => {
         <p v-if="liveError && !live" role="status">{{ liveError }}</p>
         <p v-else-if="!live" role="status">Loading scores...</p>
         <template v-if="cards.length">
-          <div class="score-cards three">
+          <div class="score-cards">
             <section v-for="card in cards" :key="card.label" class="score-card">
               <RetroIcon :name="card.icon"/>
               <strong>{{ card.value }}</strong>
@@ -188,7 +192,7 @@ onBeforeUnmount(() => {
           </div>
         </template>
           <h2>Your scores</h2>
-          <div class="score-cards three-two">
+          <div class="score-cards four-three">
             <section v-for="card in yourCards" :key="card.label" class="score-card">
               <RetroIcon :name="card.icon"/>
               <strong>{{ card.value }}</strong>
@@ -287,10 +291,10 @@ onBeforeUnmount(() => {
 @keyframes online-blink { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .online-dot { animation: none; } }
 .score-cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* three across the top and two wider ones under them */
-.score-cards.three-two { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.score-cards.three-two > * { grid-column: span 2; }
-.score-cards.three-two > :nth-child(n + 4) { grid-column: span 3; }
+/* four across the top and three wider ones under them */
+.score-cards.four-three { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.score-cards.four-three > * { grid-column: span 3; }
+.score-cards.four-three > :nth-child(n + 5) { grid-column: span 4; }
 .level-counts { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; max-width: 150px; font-size: 11px; }
 .level-counts li { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; border-top: 1px dotted var(--d-line, #999); }
 /* visitors by day and boards cleared side by side, stacked on a phone */
@@ -335,8 +339,8 @@ onBeforeUnmount(() => {
 .analytics-table { width: 100%; text-align: left; font-size: 12px; }
 .analytics-table td, .analytics-table th { border-bottom: 1px solid #ddd; }
 @media (max-width: 560px) {
-  .score-cards, .score-cards.three, .score-cards.three-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .score-cards.three-two > :nth-child(n) { grid-column: auto; }
+  .score-cards, .score-cards.three, .score-cards.four-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .score-cards.four-three > :nth-child(n) { grid-column: auto; }
 }
 @media (max-width: 400px) { .analytics-page { padding: 18px 14px; } }
 </style>

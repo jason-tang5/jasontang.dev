@@ -138,9 +138,13 @@ async function connect() {
         }, 25000);
       } else if (data.type === 'message') { add(data); if (data.bot) clippyReplies.value++; }
       else if (data.type === 'clippy') clippy.value = data;
+      else if (data.type === 'tokens') save('clippy-tokens', String((Number(read('clippy-tokens', '0')) || 0) + (Number(data.tokens) || 0)));
       else if (data.type === 'ack') {
         add(data.message);
-        if (pending.value?.clientId === data.clientId) { pending.value = null; cooldown(settings.value.slowModeSeconds); }
+        if (pending.value?.clientId === data.clientId) {
+          pending.value = null; cooldown(settings.value.slowModeSeconds);
+          save('chat-sent', String((Number(read('chat-sent', '0')) || 0) + 1));
+        }
       } else if (data.type === 'system') add({ system: true, text: data.text, id: crypto.randomUUID() });
       else if (data.type === 'presence') online.value = data.online;
       else if (data.type === 'settings') settings.value = data;

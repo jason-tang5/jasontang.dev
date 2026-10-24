@@ -54,6 +54,11 @@ export class ChatRoom {
   send(ws, data) { try { ws.send(JSON.stringify(data)); } catch { try { ws.close(1011, 'Connection lost'); } catch {} } }
   broadcast(data) { for (const ws of this.sockets()) this.send(ws, data); }
   presence() { this.broadcast({ type: 'presence', online: this.online() }); }
+  // chat activity for the analytics scoreboard. these are written here rather than sent by the
+  // page, so nobody can post fake ones to /api/event
+  track(name, value = 0) {
+    this.env.EVENTS?.writeDataPoint({ indexes: ['chat'], blobs: [name, '', '', '', ''], doubles: [value] });
+  }
   message(row) {
     return { id: row.id, seq: row.seq, nickname: row.nickname, admin: Boolean(row.admin), bot: row.session_id === CLIPPY_SESSION,
       text: row.deleted ? removedText : row.text, at: row.at, deleted: Boolean(row.deleted) };
@@ -210,6 +215,7 @@ export class ChatRoom {
     const message = this.message(this.one('SELECT * FROM messages WHERE id=?', id));
     this.broadcast({ type: 'message', ...message });
     this.send(ws, { type: 'ack', clientId, message });
+    this.track('chat-message');
     if (asksClippy(text)) {
       this.broadcast({ type: 'clippy', ...this.clippyState() });
       this.ctx.waitUntil(this.answerClippy(message, session.id));
@@ -259,7 +265,11 @@ export class ChatRoom {
       let text;
       try {
         if (this.statsStale()) await this.loadStats();
-        text = await replyAsClippy(this.env.AI, question.text, this.clippyHistory(question.seq), question.nickname, this.clippyFacts());
+        text = await replyAsClippy(this.env.AI, question.text, this.clippyHistory(question.seq), question.nickname, this.clippyFacts(), tokens => {
+          this.track('clippy-tokens', tokens);
+          // the asker keeps their own running total for the scoreboard
+          for (const ws of this.sockets()) if (ws.deserializeAttachment()?.id === sessionId) this.send(ws, { type: 'tokens', tokens });
+        });
         if (messageError(text, CLIPPY_MAX_CHARACTERS)) throw new Error('filtered');
       } catch (error) {
         // Record a diagnostic code, never the visitor's prompt or model output.

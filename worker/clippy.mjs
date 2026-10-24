@@ -49,7 +49,9 @@ export function siteFacts({ live, recent, chatting, now = Date.now() } = {}) {
   return lines.length ? `\n\nLive site stats:\n- ${lines.join('\n- ')}` : '';
 }
 
-export async function replyAsClippy(ai, text, history = [], speaker = 'Visitor', facts = '') {
+// onTokens hears how many workers ai tokens the reply took, prompt and answer together,
+// even when the reply is then thrown away
+export async function replyAsClippy(ai, text, history = [], speaker = 'Visitor', facts = '', onTokens = () => {}) {
   let timer;
   try {
     const result = await Promise.race([
@@ -64,6 +66,9 @@ export async function replyAsClippy(ai, text, history = [], speaker = 'Visitor',
       }),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 20000); }),
     ]);
+    const usage = result?.usage;
+    const tokens = Number(usage?.total_tokens ?? (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0));
+    if (tokens > 0) onTokens(tokens);
     // llama models fill in response, gemma only answers in the openai style choices
     const reply = result?.response ?? result?.choices?.[0]?.message?.content;
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('empty');

@@ -77,3 +77,14 @@ test('sticky note windows are added together into one row', () => {
   ]);
   assert.deepEqual(result.windows, [{ label: 'sticky notes', count: 4 }, { label: 'about', count: 3 }, { label: 'stickies', count: 1 }]);
 });
+
+test('chat messages and clippy tokens are summarized, but the page cannot send them', () => {
+  const rows = [
+    { name: 'chat-message', detail: '', device: '', referrer: '', count: 4, total: 0, maximum: 0 },
+    { name: 'clippy-tokens', detail: '', device: '', referrer: '', count: 2, total: 310, maximum: 160 },
+  ];
+  const s = summarize(rows);
+  assert.equal(s.chatMessages, 4);
+  assert.equal(s.tokensBurnt, 310);
+  assert.equal(validateEvent({ visit: 'abcdefgh12', name: 'clippy-tokens', value: 1e6 }), null);
+});
