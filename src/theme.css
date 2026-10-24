@@ -2556,69 +2556,70 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   outline: 1px dotted var(--edge);
 }
 
-/* the ms-dos prompt under the quick facts that builds each project in turn
-   (BuildTerminal.vue): a raised grey window with a navy title bar, and a black screen
-   in the dos colours, tall enough for the whole run so nothing moves as it types */
-.build-terminal {
-  margin-top: 24px;
-  padding: 3px;
+/* the terminal in fun stuff (Terminal.vue): a black screen in the dos colours that
+   scrolls as it fills, the prompt as its last line, and a row of commands to tap under it */
+.terminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   background: var(--surface);
 }
 
-/* the title bar is the button that folds the screen down and up, its arrow turning
-   to point down while it's open */
-.build-terminal-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  margin: 0;
-  padding: 3px 5px;
-  border: 0;
-  background: var(--navy);
-  color: #fff;
-  font: bold 11px 'Pixel MS Sans Serif', Tahoma, sans-serif;
-  -webkit-font-smoothing: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.build-terminal-title svg {
-  width: 7px;
-  height: 7px;
-  fill: currentColor;
-}
-
-.build-terminal.open .build-terminal-title svg { rotate: 90deg; }
-
-.build-terminal-title:focus-visible {
-  outline: 1px dotted #fff;
-  outline-offset: -3px;
-}
-
-.build-terminal-screen {
-  box-sizing: content-box;
-  height: calc(var(--rows) * 1.5em);
-  margin-top: 3px;
+.terminal-screen {
+  flex: 1;
+  min-height: 0;
   padding: 8px 10px;
   border: 2px solid;
   border-color: var(--shadow) var(--light) var(--light) var(--shadow);
   background: #000;
   color: #c0c0c0;
   font: 13px/1.5 Consolas, 'Courier New', monospace;
-  white-space: pre;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  cursor: text;
 }
 
-.build-terminal-screen .prompt {
-  color: #ffff55;
+.terminal-line {
+  min-height: 1.5em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.build-terminal-screen .done {
-  color: #55ff55;
+.terminal-input-line {
+  display: flex;
+  gap: 1ch;
+  margin: 0;
 }
 
-.build-terminal-screen .cursor {
+.terminal-input-line label { flex: none; white-space: pre; }
+
+.terminal .terminal-input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  border-radius: 0;
+  appearance: none;
+  background: none;
+  color: #fff;
+  font: inherit;
+  caret-color: #fff;
+}
+
+.terminal .t-prompt, .terminal .t-warn { color: #ffff55; }
+.terminal .t-ok, .terminal .t-user, .terminal .t-exe { color: #55ff55; }
+.terminal .t-path, .terminal .t-dir { color: #5f9fff; }
+.terminal .t-accent { color: #55ffff; }
+.terminal .t-err { color: #ff5555; }
+.terminal .t-dim { color: #808080; }
+.terminal .t-dir, .terminal .t-user { font-weight: bold; }
+
+.terminal-cursor {
   animation: terminal-blink 1s step-end infinite;
 }
 
@@ -2627,7 +2628,20 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .build-terminal-screen .cursor { animation: none; }
+  .terminal-cursor { animation: none; }
+}
+
+.terminal-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 2px 2px;
+}
+
+.terminal-suggestions button {
+  padding: 2px 8px;
+  font: 12px Consolas, 'Courier New', monospace;
+  color: var(--ink);
 }
 
 /* the about page's quick facts (AboutFacts.vue): each label in the pixel font like the

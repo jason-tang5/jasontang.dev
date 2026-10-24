@@ -43,6 +43,7 @@ const Snake = defineAsyncComponent(() => import('./Snake.vue'));
 const Minesweeper = defineAsyncComponent(() => import('./Minesweeper.vue'));
 const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
+const Terminal = defineAsyncComponent(() => import('./Terminal.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
 const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, hips: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
 // a project's why i built it, what i built and implementation sections as one list of
@@ -683,6 +684,7 @@ function balloonDone(event, id) {
   <Analytics v-else-if="win.type === 'analytics'"/>
   <Blog v-else-if="win.type === 'blog'"/>
   <Chat v-else-if="win.type === 'chat'"/>
+  <Terminal v-else-if="win.type === 'terminal'" :visible="visible" :active="active" @open="id => emit('open', id)" @close="id => emit('close', id)"/>
   <!-- the games, fun stuff and all apps folders: a big icon for each app inside -->
   <div v-else-if="folders[win.type]" class="app-layout">
     <div class="address-bar"><span>Address</span><div class="inset">{{ win.type === 'computer' ? 'All Apps' : `Portfolio:\\${win.label}` }}</div></div>

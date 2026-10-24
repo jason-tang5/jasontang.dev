@@ -91,6 +91,17 @@ const [balloonBody, balloonEdge] = balloonColors[0];
         <path fill="#eee" d="M3 26h25v4H3z"/>
         <path stroke="#555" d="M6 28h13M23 28h2"/>
       </g>
+      <!-- an ms-dos prompt window: a navy title bar over a black screen with a yellow
+           prompt and a cursor -->
+      <g v-else-if="name === 'terminal'">
+        <path fill="#888" d="M4 5h27v25H4z"/>
+        <path fill="#c0c0c0" d="M2 3h27v25H2z"/>
+        <path fill="#000080" stroke="none" d="M3 4h26v4H3z"/>
+        <path fill="#fff" stroke="none" d="M25 5h3v2h-3z"/>
+        <path fill="#000" d="M4 10h23v16H4z"/>
+        <path fill="#ffff55" stroke="none" d="M7 13h1v1H7zM8 14h1v1H8zM9 15h1v1H9zM8 16h1v1H8zM7 17h1v1H7z"/>
+        <path fill="#c0c0c0" stroke="none" d="M12 17h4v1h-4z"/>
+      </g>
       <g v-else-if="name === 'notebook'">
         <path fill="#999" d="M6 5h18v26H6z"/>
         <path fill="#fff" d="M3 3h18v26H3z"/>
