@@ -202,6 +202,82 @@ const peakOf = vs => shown.reduce((best, i) => (vs[i] > best.v ? { v: vs[i], i }
 const truePeak = peakOf(truth);
 const estPeak = computed(() => peakOf(estimate.value));
 const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000));
+
+// ---- reps: the clean's bar speed beside a made-up slower rep, in seconds or in percent ----
+// the slower rep is the same clean stretched 30% longer, at a 30% lower speed so the bar
+// still travels as far. lifting off is where speed first shows, the catch where it hits zero
+const repRows = speed.filter(r => r[0] >= -0.05 && r[0] <= 1.09);
+const reps = [1, 1.3].map((stretch, i) => {
+  const rows = repRows.map(r => [(r[0] - repRows[0][0]) * stretch, r[1] / stretch]);
+  return { name: i ? 'A slower rep' : 'This clean', cls: i ? 'b' : 'a', rows, length: rows.at(-1)[0], peak: Math.max(...rows.map(r => r[1])) };
+});
+const RW = 300, RH = 130, RLO = -0.4, RHI = 1.4, RSEC = 1.5;
+const rplot = { x: 26, y: 18, w: RW - 34, h: RH - 38 };
+const ry = v => rplot.y + (RHI - v) / (RHI - RLO) * rplot.h;
+// 0 is seconds, 1 is percent of the rep. switching slides between the two
+const stretched = ref(0);
+const percent = ref(false);
+let morph = 0;
+function setPercent(on) {
+  percent.value = on;
+  cancelAnimationFrame(morph);
+  const from = stretched.value, to = on ? 1 : 0;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { stretched.value = to; return; }
+  const start = performance.now();
+  const step = now => {
+    const k = Math.min(1, (now - start) / 600);
+    stretched.value = from + (to - from) * (k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
+    if (k < 1) morph = requestAnimationFrame(step);
+  };
+  morph = requestAnimationFrame(step);
+}
+onBeforeUnmount(() => cancelAnimationFrame(morph));
+const rx = (t, length) => rplot.x + ((1 - stretched.value) * t / RSEC + stretched.value * t / length) * rplot.w;
+const repLines = computed(() => reps.map(r => ({ ...r, points: r.rows.map(([t, v]) => `${rx(t, r.length).toFixed(1)},${ry(v).toFixed(1)}`).join(' ') })));
+const STEPS = Array.from({ length: 101 }, (_, i) => rplot.x + i / 100 * rplot.w);
+
+// ---- hips: the same clean from the floor to the knee, knee opening against hip opening ----
+// the rows from lift-off until the bar passes the knee. the video follows the slider
+const hipRows = angles.filter(r => r[0] <= 0.39);
+const [hipT0, knee0, hip0] = hipRows[0];
+const hipT1 = hipRows.at(-1)[0];
+const hipVideo = ref(null);
+const hipNow = ref(hipT1);
+const hipPlaying = ref(false);
+const opened = computed(() => ({ knee: sampleAt(angles, 1, hipNow.value) - knee0, hip: sampleAt(angles, 2, hipNow.value) - hip0 }));
+// the chart puts the knee's opening across and the hip's up, the same scale both ways,
+// so opening together would be the dashed diagonal
+const HS = 150, HLO = -5, HHI = 50;
+const hx = d => 22 + (d - HLO) / (HHI - HLO) * (HS - 30);
+const hy = d => HS - 18 - (d - HLO) / (HHI - HLO) * (HS - 30);
+const hipPath = hipRows.map(r => `${hx(r[1] - knee0).toFixed(1)},${hy(r[2] - hip0).toFixed(1)}`).join(' ');
+const hipSoFar = computed(() => [...hipRows.filter(r => r[0] < hipNow.value).map(r => [r[1] - knee0, r[2] - hip0]), [opened.value.knee, opened.value.hip]]
+  .map(([k, h]) => `${hx(k).toFixed(1)},${hy(h).toFixed(1)}`).join(' '));
+let hipFrame = 0;
+function hipShow(t) {
+  hipNow.value = t;
+  if (hipVideo.value) hipVideo.value.currentTime = Math.max(0, t);
+}
+// plays the stretch at quarter speed, from the floor again if it's already at the knee
+function hipPlay() {
+  const v = hipVideo.value;
+  if (!v) return;
+  if (!v.paused) { v.pause(); return; }
+  if (hipNow.value >= hipT1 - 0.01) hipShow(hipT0);
+  v.playbackRate = 0.25;
+  v.play().catch(() => {});
+}
+function hipFollow() {
+  const v = hipVideo.value;
+  if (!v) return;
+  if (v.currentTime >= hipT1) { v.pause(); hipNow.value = hipT1; return; }
+  hipNow.value = Math.max(hipT0, v.currentTime);
+  hipFrame = requestAnimationFrame(hipFollow);
+}
+function hipStarted() { hipPlaying.value = true; cancelAnimationFrame(hipFrame); hipFrame = requestAnimationFrame(hipFollow); }
+function hipStopped() { hipPlaying.value = false; cancelAnimationFrame(hipFrame); }
+function hipSeek(event) { hipVideo.value?.pause(); hipShow(Number(event.target.value)); }
+onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 </script>
 
 <template>
@@ -225,22 +301,28 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
           </div>
         </dl>
         <div class="ll-charts" aria-hidden="true">
-          <svg :viewBox="`0 0 ${CW} ${CH}`">
-            <text x="4" y="9">Joint angles</text>
-            <polyline v-for="l in angleLines" :key="l.name" :points="l.points" :style="{ stroke: l.color }"/>
-            <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4"/>
-          </svg>
-          <svg :viewBox="`0 0 ${CW} ${CH}`">
-            <text x="4" y="9">Bar speed, m/s</text>
-            <line class="ll-zero" x1="4" :x2="CW - 4" :y1="vy(0)" :y2="vy(0)"/>
-            <polyline class="ll-speed" :points="speedLine"/>
-            <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4"/>
-          </svg>
+          <!-- the charts stretch to fill their box, so the titles sit on top in html
+               and the strokes keep their width, or both would squash with them -->
+          <div class="ll-chart-box">
+            <span>Joint angles</span>
+            <svg :viewBox="`0 0 ${CW} ${CH}`" preserveAspectRatio="none">
+              <polyline v-for="l in angleLines" :key="l.name" :points="l.points" :style="{ stroke: l.color }" vector-effect="non-scaling-stroke"/>
+              <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4" vector-effect="non-scaling-stroke"/>
+            </svg>
+          </div>
+          <div class="ll-chart-box">
+            <span>Bar speed, m/s</span>
+            <svg :viewBox="`0 0 ${CW} ${CH}`" preserveAspectRatio="none">
+              <line class="ll-zero" x1="4" :x2="CW - 4" :y1="vy(0)" :y2="vy(0)" vector-effect="non-scaling-stroke"/>
+              <polyline class="ll-speed" :points="speedLine" vector-effect="non-scaling-stroke"/>
+              <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4" vector-effect="non-scaling-stroke"/>
+            </svg>
+          </div>
         </div>
         <div class="ll-transport">
           <button class="raised ll-button" @click="play">{{ playing ? 'Pause' : 'Play' }}</button>
           <input :value="now" class="ll-scrub" type="range" :min="clip.start" :max="clip.end" step="0.01" aria-label="Point in the lift" @input="seek">
-          <code>{{ (now - clip.start).toFixed(1) }} / {{ (clip.end - clip.start).toFixed(1) }} s</code>
+          <code>{{ (Math.min(Math.max(now, clip.start), clip.end) - clip.start).toFixed(1) }} /{{ (clip.end - clip.start).toFixed(1) }} s</code>
         </div>
       </div>
     </div>
@@ -317,6 +399,71 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
       </div>
     </div>
   </figure>
+
+  <figure v-else-if="figure === 'reps'" class="ll-figure">
+    <figcaption><strong>Fig. 4</strong> Bar speed for the clean in Fig. 1 and a made-up rep that’s 30% slower. Switch to percent to stretch both onto the same 101 steps.</figcaption>
+    <div class="ll-panel">
+      <svg class="ll-chart" :viewBox="`0 0 ${RW} ${RH}`" role="img" :aria-label="percent ? 'Both reps stretched to 0 to 100 percent, their curves on top of each other' : 'Both reps in seconds, the slower one longer and lower'">
+        <line v-for="v in [0, 1]" :key="v" class="ll-grid" :class="{ zero: v === 0 }" :x1="rplot.x" :x2="rplot.x + rplot.w" :y1="ry(v)" :y2="ry(v)"/>
+        <text v-for="v in [0, 1]" :key="`l${v}`" class="ll-axis" :x="rplot.x - 5" :y="ry(v) + 3" text-anchor="end">{{ v }}</text>
+        <text class="ll-axis" :x="rplot.x - 5" y="9" text-anchor="end">m/s</text>
+        <g class="ll-steps" :style="{ opacity: stretched }"><line v-for="(x, i) in STEPS" :key="i" :x1="x" :x2="x" :y1="ry(RLO) - (i % 10 ? 2 : 4)" :y2="ry(RLO)"/></g>
+        <template v-if="percent">
+          <text v-for="p in [0, 50, 100]" :key="`p${p}`" class="ll-axis" :x="rplot.x + p / 100 * rplot.w" :y="RH - 6" :text-anchor="p ? (p === 100 ? 'end' : 'middle') : 'start'">{{ p }}%</text>
+        </template>
+        <template v-else>
+          <text v-for="t in [0, 0.5, 1, 1.5]" :key="`s${t}`" class="ll-axis" :x="rplot.x + t / RSEC * rplot.w" :y="RH - 6" :text-anchor="t ? (t === 1.5 ? 'end' : 'middle') : 'start'">{{ t }} s</text>
+        </template>
+        <g class="ll-legend" :transform="`translate(${rplot.x + 6}, 6)`">
+          <line class="ll-rep a" x1="0" x2="14" y1="0" y2="0"/><text x="18" y="3">{{ reps[0].name }}</text>
+          <line class="ll-rep b" x1="70" x2="84" y1="0" y2="0"/><text x="88" y="3">{{ reps[1].name }}</text>
+        </g>
+        <polyline v-for="r in repLines" :key="r.cls" class="ll-rep" :class="r.cls" :points="r.points"/>
+      </svg>
+      <dl class="ll-readout">
+        <div v-for="r in reps" :key="r.cls"><dt>{{ r.name }}</dt><dd>{{ r.length.toFixed(2) }}<small>s, top {{ r.peak.toFixed(2) }} m/s</small></dd></div>
+        <div><dt>On the chart</dt><dd>{{ percent ? '101' : '—' }}<small>{{ percent ? 'steps each' : 'real time' }}</small></dd></div>
+      </dl>
+      <p class="ll-note">{{ percent ? 'Stretched to the same length, every moment lines up, and the only difference left is how fast the bar moved.' : 'In real time the slower rep runs long, so its pull and catch land later and nothing lines up.' }}</p>
+      <span class="ll-toggle" role="group" aria-label="Time axis">
+        <button class="raised ll-button" :class="{ pressed: !percent }" :aria-pressed="!percent" @click="setPercent(false)">Seconds</button>
+        <button class="raised ll-button" :class="{ pressed: percent }" :aria-pressed="percent" @click="setPercent(true)">Percent of the rep</button>
+      </span>
+    </div>
+  </figure>
+
+  <figure v-else-if="figure === 'hips'" class="ll-figure">
+    <figcaption><strong>Fig. 5</strong> The clean in Fig. 1, from the floor until the bar passes the knee. If the knee and hip opened together, the line would follow the dashed diagonal.</figcaption>
+    <div class="ll-panel ll-angles ll-hips">
+      <div class="ll-cam">
+        <video ref="hipVideo" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
+          aria-label="The start of the power clean, from the floor to the knee"
+          @loadedmetadata="hipShow(hipNow)" @play="hipStarted" @pause="hipStopped"/>
+      </div>
+      <div class="ll-side">
+        <dl class="ll-stats" aria-live="polite">
+          <div><dt><i style="background: var(--ll-knee)" aria-hidden="true"/>Knee opened</dt><dd>{{ opened.knee >= 0 ? '+' : '' }}{{ Math.round(opened.knee) }}°</dd></div>
+          <div><dt><i style="background: var(--ll-hip)" aria-hidden="true"/>Hip opened</dt><dd>{{ opened.hip >= 0 ? '+' : '' }}{{ Math.round(opened.hip) }}°</dd></div>
+        </dl>
+        <svg class="ll-opening" :viewBox="`0 0 ${HS} ${HS}`" aria-hidden="true">
+          <line class="ll-zero" :x1="hx(HLO)" :x2="hx(HHI)" :y1="hy(0)" :y2="hy(0)"/>
+          <line class="ll-zero" :x1="hx(0)" :x2="hx(0)" :y1="hy(HLO)" :y2="hy(HHI)"/>
+          <line class="ll-together" :x1="hx(0)" :y1="hy(0)" :x2="hx(HHI)" :y2="hy(HHI)"/>
+          <text class="ll-dim" :x="hx(32)" :y="hy(38)" text-anchor="end">together</text>
+          <text class="ll-dim" :x="hx(HHI)" :y="HS - 4" text-anchor="end">knee opening →</text>
+          <text class="ll-dim" :x="hx(HLO) + 2" :y="hy(HHI) + 6">↑ hip opening</text>
+          <polyline class="ll-path ghost" :points="hipPath"/>
+          <polyline class="ll-path" :points="hipSoFar"/>
+          <circle class="ll-now" :cx="hx(opened.knee)" :cy="hy(opened.hip)" r="3"/>
+        </svg>
+        <div class="ll-transport">
+          <button class="raised ll-button" @click="hipPlay">{{ hipPlaying ? 'Pause' : 'Play' }}</button>
+          <input :value="hipNow" class="ll-scrub" type="range" :min="hipT0" :max="hipT1" step="0.005" aria-label="Point between the floor and the knee" @input="hipSeek">
+          <code>{{ hipNow >= hipT1 - 0.01 ? 'knee' : 'floor →' }}</code>
+        </div>
+      </div>
+    </div>
+  </figure>
 </template>
 
 <style scoped>
@@ -336,24 +483,26 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 .ll-angles {
   --ll-tile: var(--d-page-alt, #fffdf2); --ll-edge: var(--d-line, #999); --ll-text: var(--ink); --ll-dim: var(--muted);
   --ll-knee: #000080; --ll-hip: #8a3fc7; --ll-elbow: #c46a00; --ll-bar: #138a5f;
-  display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 12px; align-items: start;
+  display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 16fr); gap: 12px; align-items: stretch;
 }
 :root[data-theme="dark"] .ll-angles {
   --ll-tile: #1b1c1f; --ll-edge: #303136; --ll-text: #f4f4f5; --ll-dim: #989ba4;
   --ll-knee: #c6f36b; --ll-hip: #b49bff; --ll-elbow: #ffb35c; --ll-bar: #c6f36b;
 }
-.ll-video { display: block; width: 100%; max-height: 460px; aspect-ratio: 9 / 16; object-fit: contain; margin: 0 auto; }
-.ll-side { display: grid; gap: 8px; }
+.ll-cam { position: relative; aspect-ratio: 9 / 16; }
+.ll-video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+.ll-side { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; gap: 8px; }
 .ll-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
-.ll-stats > div { padding: 6px 8px; background: var(--ll-tile); border: 1px solid var(--ll-edge); color: var(--ll-text); }
+.ll-stats > div { min-width: 0; padding: 6px 8px; background: var(--ll-tile); border: 1px solid var(--ll-edge); color: var(--ll-text); }
 .ll-stats dt { display: flex; align-items: center; gap: 5px; font: 11px Tahoma, sans-serif; color: var(--ll-dim); }
 .ll-stats dt i { width: 7px; height: 7px; border-radius: 50%; }
 .ll-stats dt i.bar { background: var(--ll-bar); border-radius: 0; }
 .ll-stats dd { margin: 2px 0 0; font: bold 20px 'Courier New', monospace; }
 .ll-stats dd small { margin-left: 4px; font: 11px Tahoma, sans-serif; color: var(--ll-dim); }
-.ll-charts { display: grid; gap: 6px; }
-.ll-charts svg { display: block; width: 100%; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
-.ll-charts text { font: 7px Tahoma, sans-serif; fill: var(--ll-dim); }
+.ll-charts { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; contain: size; gap: 6px; }
+.ll-chart-box { position: relative; min-height: 0; }
+.ll-chart-box span { position: absolute; top: 3px; left: 5px; font: 10px Tahoma, sans-serif; color: var(--ll-dim); pointer-events: none; }
+.ll-charts svg { display: block; width: 100%; height: 100%; min-height: 0; box-sizing: border-box; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
 .ll-charts polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
 .ll-charts .ll-speed { stroke: var(--ll-bar); }
 .ll-zero { stroke: var(--ll-edge); }
@@ -361,7 +510,14 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 .ll-transport { display: flex; align-items: center; gap: 8px; }
 .ll-transport code { flex: none; font: 11px 'Courier New', monospace; color: var(--muted); }
 .ll-scrub { flex: 1; min-width: 0; margin: 0; }
-@container (max-width: 420px) { .ll-angles { grid-template-columns: minmax(0, 1fr); } .ll-video { max-height: 360px; } }
+@container (max-width: 420px) {
+  .ll-angles { grid-template-columns: minmax(0, 1fr); }
+  .ll-cam { width: 100%; max-width: 202.5px; justify-self: center; }
+  .ll-charts { contain: none; }
+  .ll-charts svg { height: auto; }
+}
+/* too narrow for two readouts side by side */
+@container (max-width: 260px) { .ll-stats { grid-template-columns: minmax(0, 1fr); } }
 
 /* fig 2 */
 /* the lifter sits back in grey so the plates and the candidate circle read first */
@@ -405,4 +561,21 @@ const lag = computed(() => Math.round((estPeak.value.i - truePeak.i) * DT * 1000
 .ll-readout dt { font: 11px Tahoma, sans-serif; color: var(--muted); }
 .ll-readout dd { margin: 2px 0 0; font: bold 17px 'Courier New', monospace; }
 .ll-readout dd small { margin-left: 4px; font: 11px Tahoma, sans-serif; color: var(--muted); }
+
+/* fig 4: the clean in navy like fig 3's estimate, the slower rep in orange */
+.ll-rep { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.ll-rep.a { stroke: var(--navy, #000080); }
+.ll-rep.b { stroke: #c46a00; }
+:root[data-theme="dark"] .ll-rep.a { stroke: #8ca0ff; }
+:root[data-theme="dark"] .ll-rep.b { stroke: #ffb35c; }
+.ll-steps line { stroke: var(--muted); stroke-width: .5; }
+
+/* fig 5: fig 1's layout and colours, with the opening chart under the readouts */
+.ll-opening { display: block; width: 100%; height: 100%; min-height: 0; box-sizing: border-box; contain: size; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
+@container (max-width: 420px) { .ll-opening { contain: none; height: auto; max-width: 260px; justify-self: center; } }
+.ll-dim { font: 7px Tahoma, sans-serif; fill: var(--ll-dim); }
+.ll-together { stroke: var(--ll-dim); stroke-width: 1; stroke-dasharray: 3 2; }
+.ll-path { fill: none; stroke: var(--ll-hip); stroke-width: 2; stroke-linejoin: round; }
+.ll-path.ghost { opacity: .25; }
+.ll-now { fill: var(--ll-knee); stroke: var(--ll-tile); stroke-width: 1; }
 </style>
