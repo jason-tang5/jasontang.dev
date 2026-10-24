@@ -2,7 +2,7 @@
 // the desktop shell: icons, windows, taskbar and start menu.
 // started from don chia's App.vue, AppGrid and windows navbar (mit, see
 // licenses/vuejs-os-template-MIT.txt), then moved to vue 3 and extended a lot.
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import AsciiImage from './components/AsciiImage.vue';
 import DesktopWindow from './components/DesktopWindow.vue';
 import AppContent from './components/AppContent.vue';
@@ -36,7 +36,8 @@ import { addNote, findNote, noteColors } from './stickies.js';
 
 const windows = reactive([]);
 const active = ref(null);
-const selected = ref(null);
+// the selected desktop icons, one from a click or several from a drag box
+const selected = ref([]);
 const startOpen = ref(false);
 const calendar = ref(false);
 const announcement = ref('');
@@ -629,24 +630,27 @@ watch(
 // puts the icon back where it was left
 
 const iconCells = reactive({});
-const dragging = ref(null);
+// the icons being dragged: the one pressed, or the whole selection when it's part of one
+const dragging = ref([]);
 const dragShift = ref({ x: 0, y: 0 });
-// a dropped icon slides from where it was let go into its cell. { id, x, y, still }:
-// the offset from the cell, and still means no transition for that first frame
-const settling = ref(null);
+// dropped icons slide from where they were let go into their cells. { shifts, still }:
+// each icon's offset from its cell, and still means no transition for that first frame.
+// shallow, so the check below compares against the object that was set rather than a proxy
+const settling = shallowRef(null);
 let iconDrag = null;
 let dragEndedAt = 0;
 
 // the grid matches .desktop-grid and .desktop-shortcut in theme.css. on a desktop the
-// icons are 86x83 with 12px and 5px gaps, on a phone 85x90 with 4px and 10px gaps. room
-// is kept at the bottom for the taskbar, or just its sliver when it hides itself
+// icons are 86x83 with 12px and 5px gaps, on a phone 85x90 with 4px and 10px gaps. the
+// desktop already stops above a showing taskbar, so only a little room is kept at the
+// bottom, enough for the sliver of a hidden one
 const gridSize = computed(() => (compact.value
   ? { width: 85, height: 90, x: 89, y: 100, left: 12, top: 12 }
   : { width: 86, height: 83, x: 98, y: 88, left: 14, top: 16 }));
 
 const gridFits = () => {
   const g = gridSize.value;
-  const bottom = autoHide.value ? 4 : 50;
+  const bottom = 4;
   return {
     cols: Math.max(1, Math.floor((area.width - g.left - g.width) / g.x) + 1),
     rows: Math.max(1, Math.floor((area.height - g.top - bottom - g.height) / g.y) + 1),
@@ -687,9 +691,9 @@ const iconLayout = computed(() => {
     while (taken.has(`${Math.floor(next / fits.rows)},${next % fits.rows}`)) next++;
     out[app.id] = { col: Math.floor(next / fits.rows), row: next % fits.rows };
     next++;
-    // the gap only fits if everything still fits in one column. if not, the next
-    // group starts at the top of a new column instead, which splits them just as well
-    if (app.gapAfter && next % fits.rows) next = shortcuts.length < fits.rows ? next + 1 : Math.ceil(next / fits.rows) * fits.rows;
+    // the gap only fits if everything still fits in one column. if not, the icons
+    // just keep flowing, so only the ones that don't fit move to the next column
+    if (app.gapAfter && shortcuts.length < fits.rows) next++;
   }
   return out;
 });
@@ -721,59 +725,86 @@ function iconMove(event) {
   if (!iconDrag || event.pointerId !== iconDrag.pointer) return;
   if (!(event.buttons & 1)) return iconUp();
 
-  const { rect, bounds } = iconDrag;
+  const { bounds } = iconDrag;
   let dx = event.clientX - iconDrag.x;
   let dy = event.clientY - iconDrag.y;
 
   // small dead zone so a sloppy click (or a tap on a phone) doesn't count as a drag
-  if (!dragging.value) {
+  if (!dragging.value.length) {
     if (Math.hypot(dx, dy) < (event.pointerType === 'touch' ? 10 : 5)) return;
-    dragging.value = iconDrag.id;
-    selected.value = iconDrag.id;
+    // grabbing one of several selected icons moves them all, anything else moves just it
+    if (!selected.value.includes(iconDrag.id)) selected.value = [iconDrag.id];
+    dragging.value = [...selected.value];
+    // the group's outline, so none of them can leave the desktop
+    const rects = [...desktop.value.querySelectorAll('.desktop-shortcut')]
+      .filter(el => dragging.value.includes(el.dataset.id))
+      .map(el => el.getBoundingClientRect());
+    iconDrag.rect = {
+      left: Math.min(...rects.map(r => r.left)),
+      top: Math.min(...rects.map(r => r.top)),
+      right: Math.max(...rects.map(r => r.right)),
+      bottom: Math.max(...rects.map(r => r.bottom)),
+    };
   }
 
   // don't let icons leave the desktop
+  const { rect } = iconDrag;
   dx = Math.max(bounds.left - rect.left, Math.min(bounds.right - rect.right, dx));
   dy = Math.max(bounds.top - rect.top, Math.min(bounds.bottom - rect.bottom, dy));
   dragShift.value = { x: dx, y: dy };
 }
 
-// drops the icon into the nearest free grid cell
-function snapIcon({ id }) {
+// drops the dragged icons into the nearest free grid cells, keeping their shape
+// where they can
+function snapIcons(ids) {
   // the first drag pins every icon where it is, so the others don't close the gap
   for (const [other, cell] of Object.entries(iconLayout.value)) iconCells[other] ??= { ...cell };
-  const from = iconLayout.value[id];
   const { x, y } = gridSize.value;
-  const want = {
-    col: Math.max(0, Math.round((from.col * x + dragShift.value.x) / x)),
-    row: Math.max(0, Math.round((from.row * y + dragShift.value.y) / y)),
-  };
+  const fits = gridFits();
   const taken = new Set(
-    Object.entries(iconLayout.value).filter(([other]) => other !== id).map(([, c]) => `${c.col},${c.row}`),
+    Object.entries(iconLayout.value).filter(([other]) => !ids.includes(other)).map(([, c]) => `${c.col},${c.row}`),
   );
-  iconCells[id] = nearestFree(taken, want, gridFits());
+  const wants = ids.map(id => {
+    const from = iconLayout.value[id];
+    return {
+      id,
+      col: Math.max(0, Math.round((from.col * x + dragShift.value.x) / x)),
+      row: Math.max(0, Math.round((from.row * y + dragShift.value.y) / y)),
+    };
+  });
+  // icons that can land exactly where they were dropped go first, so one bumped
+  // icon doesn't take another's spot
+  const fitsAt = want => want.col < fits.cols && want.row < fits.rows && !taken.has(`${want.col},${want.row}`);
+  wants.sort((a, b) => fitsAt(b) - fitsAt(a));
+  for (const want of wants) {
+    const cell = nearestFree(taken, want, fits);
+    taken.add(`${cell.col},${cell.row}`);
+    iconCells[want.id] = cell;
+  }
 }
 
 function iconUp() {
-  if (dragging.value) {
-    const id = dragging.value;
-    const from = { ...iconLayout.value[id] };
-    snapIcon(iconDrag);
-    const to = iconLayout.value[id];
-    // start the icon exactly where it was dropped, then let it slide into the cell
-    settling.value = {
-      id,
-      x: (from.col - to.col) * gridSize.value.x + dragShift.value.x,
-      y: (from.row - to.row) * gridSize.value.y + dragShift.value.y,
-      still: true,
-    };
+  const ids = dragging.value;
+  if (ids.length) {
+    const from = Object.fromEntries(ids.map(id => [id, { ...iconLayout.value[id] }]));
+    snapIcons(ids);
+    // start each icon exactly where it was dropped, then let it slide into its cell
+    const shifts = Object.fromEntries(ids.map(id => {
+      const to = iconLayout.value[id];
+      return [id, {
+        x: (from[id].col - to.col) * gridSize.value.x + dragShift.value.x,
+        y: (from[id].row - to.row) * gridSize.value.y + dragShift.value.y,
+      }];
+    }));
+    const settle = { shifts, still: true };
+    settling.value = settle;
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (settling.value?.id === id) settling.value = { id, x: 0, y: 0, still: false };
+      if (settling.value === settle) settling.value = { shifts: {}, still: false };
     }));
     dragEndedAt = performance.now();
   }
   iconDrag = null;
-  dragging.value = null;
+  dragging.value = [];
   dragShift.value = { x: 0, y: 0 };
 }
 
@@ -781,23 +812,76 @@ function iconUp() {
 function iconStyle(id) {
   const cell = iconLayout.value[id];
   const { x, y } = gridSize.value;
-  const settle = settling.value?.id === id ? settling.value : null;
-  const shift = dragging.value === id ? dragShift.value : settle || { x: 0, y: 0 };
+  const settle = settling.value?.shifts[id];
+  const shift = dragging.value.includes(id) ? dragShift.value : settle || { x: 0, y: 0 };
   return {
     position: 'absolute',
     left: `${cell.col * x}px`,
     top: `${cell.row * y}px`,
     transform: shift.x || shift.y ? `translate(${shift.x}px, ${shift.y}px)` : null,
-    transition: settle?.still ? 'none' : null,
+    transition: settle && settling.value.still ? 'none' : null,
   };
 }
 
 function selectShortcut(event, id) {
   // the click that fires right after a drag shouldn't count
   if (performance.now() - dragEndedAt < 150) return;
-  selected.value = id;
+  selected.value = [id];
   // touch and pen open on a single tap, detail 0 means it came from the keyboard
   if (iconPointer === 'touch' || iconPointer === 'pen' || event.detail === 0) open(id);
+}
+
+// ---- drag selection ----
+// dragging across the empty desktop draws a blue box and selects every icon it
+// touches. a finger on a phone is left alone, it swipes the taskbar instead
+const marquee = ref(null);
+let marqueeFrom = null;
+
+const marqueeStyle = computed(() => {
+  const { x, y, width, height } = marquee.value;
+  return { left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` };
+});
+
+function marqueeDown(event) {
+  selected.value = [];
+  if (event.button !== 0 || event.pointerType === 'touch') return;
+  const bounds = desktop.value.getBoundingClientRect();
+  marqueeFrom = { x: event.clientX - bounds.left, y: event.clientY - bounds.top, bounds, pointer: event.pointerId };
+  // stops the drag from highlighting text on the way
+  event.preventDefault();
+  window.addEventListener('pointermove', marqueeMove);
+  window.addEventListener('pointerup', marqueeUp);
+  window.addEventListener('pointercancel', marqueeUp);
+}
+
+function marqueeMove(event) {
+  if (event.pointerId !== marqueeFrom.pointer) return;
+  const { bounds } = marqueeFrom;
+  const x = Math.max(0, Math.min(bounds.width, event.clientX - bounds.left));
+  const y = Math.max(0, Math.min(bounds.height, event.clientY - bounds.top));
+  const box = {
+    x: Math.min(x, marqueeFrom.x),
+    y: Math.min(y, marqueeFrom.y),
+    width: Math.abs(x - marqueeFrom.x),
+    height: Math.abs(y - marqueeFrom.y),
+  };
+  // same dead zone as an icon, so a click on the wallpaper doesn't flash a box
+  if (!marquee.value && Math.hypot(box.width, box.height) < 5) return;
+  marquee.value = box;
+  selected.value = [...desktop.value.querySelectorAll('.desktop-shortcut')].filter(el => {
+    const r = el.getBoundingClientRect();
+    return r.right - bounds.left > box.x && r.left - bounds.left < box.x + box.width
+      && r.bottom - bounds.top > box.y && r.top - bounds.top < box.y + box.height;
+  }).map(el => el.dataset.id);
+}
+
+function marqueeUp(event) {
+  if (event.pointerId !== marqueeFrom.pointer) return;
+  marquee.value = null;
+  marqueeFrom = null;
+  window.removeEventListener('pointermove', marqueeMove);
+  window.removeEventListener('pointerup', marqueeUp);
+  window.removeEventListener('pointercancel', marqueeUp);
 }
 
 // ---- settings ----
@@ -845,7 +929,7 @@ function dismissTip() {
 
 function reset() {
   windows.splice(0);
-  selected.value = null;
+  selected.value = [];
   wallpaper.value = defaultWallpaper;
   remove('wallpaper');
   savedLayout = {};
@@ -1170,7 +1254,7 @@ onBeforeUnmount(() => {
     :class="[`taskbar-${edge}`, { resting, 'taskbar-autohide': autoHide, 'taskbar-shown': taskbarShown }]"
     :style="{ '--desktop': wallpaper }"
   >
-    <main ref="desktop" class="desktop" aria-label="Jason Tang’s desktop" @pointerdown.self="selected = null" @contextmenu="desktopContext">
+    <main ref="desktop" class="desktop" aria-label="Jason Tang’s desktop" @pointerdown.self="marqueeDown" @contextmenu="desktopContext">
       <AsciiImage
         class="desktop-wallpaper"
         :style="{ filter: wallpaperFilter(wallpaper) }"
@@ -1181,14 +1265,15 @@ onBeforeUnmount(() => {
         description="Animated vaporwave sunset from the selected Tenor GIF, rendered as colored ASCII"
         :enabled="true"
         :visible="true"
-        @pointerdown="selected = null"
+        @pointerdown="marqueeDown"
       />
 
       <nav class="desktop-grid" aria-label="Desktop shortcuts">
         <button
           v-for="app in shortcuts"
           :key="app.id"
-          :class="['desktop-shortcut', { selected: selected === app.id, dragging: dragging === app.id }]"
+          :class="['desktop-shortcut', { selected: selected.includes(app.id), dragging: dragging.includes(app.id) }]"
+          :data-id="app.id"
           :style="iconStyle(app.id)"
           @pointerdown="iconDown($event, app.id)"
           @pointermove="iconMove"
@@ -1201,10 +1286,12 @@ onBeforeUnmount(() => {
           <RetroIcon :name="app.icon"/>
           <span>{{ app.label }}</span>
         </button>
-        <span v-if="projectsArrow && !dragging" class="start-here" :style="iconStyle('projects')" aria-hidden="true">
+        <span v-if="projectsArrow && !dragging.length" class="start-here" :style="iconStyle('projects')" aria-hidden="true">
           <svg viewBox="0 0 8 7"><path d="M0 3h1V2h1V1h1V0h1v2h4v3H4v2H3V6H2V5H1V4H0z"/></svg>
         </span>
       </nav>
+
+      <div v-if="marquee" class="desktop-marquee" :style="marqueeStyle" aria-hidden="true"></div>
 
       <div class="desktop-signature" aria-hidden="true"><span>JASON TANG</span></div>
 

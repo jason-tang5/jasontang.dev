@@ -57,14 +57,19 @@ watch(line, text => {
   if (!text || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed.value = text?.length || 0; return; }
   typeTimer = setInterval(() => { if (++typed.value >= text.length) clearInterval(typeTimer); }, 28);
 }, { immediate: true });
-const talking = computed(() => typed.value < (line.value?.length || 0));
+// x-ing out the balloon keeps him quiet until he has something new to say: a poke, a question being worked on,
+// or an answer. drifting back to his idle or away line doesn't reopen it
+const closed = ref(false);
+watch(() => [state.value, poked.value?.id], ([now]) => { if (now !== 'idle' && now !== 'offline') closed.value = false; });
+const talking = computed(() => !closed.value && typed.value < (line.value?.length || 0));
 const mood = computed(() => state.value === 'poked' ? poked.value.mood : state.value === 'idle' || state.value === 'offline' ? 'neutral' : state.value);
 </script>
 
 <template>
   <div class="msn-clippy" :data-state="state" :data-move="state === 'poked' ? poked.move : undefined" :data-talking="talking || undefined">
     <button :key="poked?.id" type="button" class="msn-clippy-poke" aria-label="Poke Clippy" title="Poke Clippy" @click="poke"><ClippyArt class="msn-clippy-art" :mood="mood"/></button>
-    <div class="msn-clippy-balloon">
+    <div v-if="!closed" class="msn-clippy-balloon">
+      <button type="button" class="msn-clippy-close" aria-label="Close Clippy’s message" title="Close" @click="closed = true">×</button>
       <p><strong>Clippy</strong> <span class="msn-clippy-said" role="status">{{ line }}</span><span aria-hidden="true">{{ line.slice(0, typed) }}<span class="msn-clippy-unsaid">{{ line.slice(typed) }}</span></span><span v-if="thinking" class="msn-clippy-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
       <span class="msn-clippy-hint">Ask with <button type="button" :disabled="!available || !connected || thinking" @click="$emit('ask')">@Clippy</button></span>
     </div>
@@ -77,8 +82,9 @@ const mood = computed(() => state.value === 'poked' ? poked.value.mood : state.v
 .msn-clippy{display:flex;justify-content:flex-end;margin-top:auto;padding:10px 12px 8px;flex-shrink:0}
 .msn-clippy-poke{padding:0;border:0;background:none;cursor:pointer;line-height:0}.msn-clippy-poke:focus-visible{outline:1px dotted currentColor;outline-offset:2px}
 .msn-clippy-art{width:44px;height:80px;flex-shrink:0;transform-origin:50% 94%;animation:clippy-idle 6s ease-in-out infinite}
-.msn-clippy-balloon{position:absolute;z-index:2;right:18px;bottom:100px;width:min(280px,calc(100% - 80px));box-sizing:border-box;display:grid;gap:4px;padding:7px 10px;background:#fffde5;border:1px solid #b8ad74;border-radius:5px;color:#4d482d;box-shadow:1px 2px 6px #0002}
+.msn-clippy-balloon{position:absolute;z-index:2;right:18px;bottom:100px;width:min(210px,calc(100% - 80px));box-sizing:border-box;display:grid;gap:4px;padding:7px 22px 7px 10px;background:#fffde5;border:1px solid #b8ad74;border-radius:5px;color:#4d482d;box-shadow:1px 2px 6px #0002}
 .msn-clippy-balloon::before{content:'';position:absolute;right:12px;bottom:-5px;width:7px;height:7px;background:inherit;border-right:1px solid #b8ad74;border-bottom:1px solid #b8ad74;transform:rotate(45deg)}
+.msn-clippy-close{position:absolute;top:3px;right:4px;width:15px;height:15px;padding:0;border:0;border-radius:2px;background:none;font:13px/1 Tahoma,Arial,sans-serif;color:#80774f;cursor:pointer}.msn-clippy-close:hover{background:#0000001a;color:#4d482d}.msn-clippy-close:focus-visible{outline:1px dotted currentColor}
 .msn-clippy-hint button{border:0;border-radius:3px;padding:1px 4px;background:#f3e79e;font:inherit;font-weight:bold;color:#315e91;cursor:pointer}.msn-clippy-hint button:hover{background:#ecdb79}.msn-clippy-hint button:disabled{opacity:.5;cursor:default}
 .msn-clippy-said{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.msn-clippy-unsaid{visibility:hidden}
 .msn-clippy-balloon p{margin:0;font-size:11px;line-height:1.4}.msn-clippy-balloon strong{margin-right:4px}.msn-clippy-hint{font-size:10px;color:#80774f}
@@ -94,7 +100,7 @@ const mood = computed(() => state.value === 'poked' ? poked.value.mood : state.v
 @keyframes clippy-lean{20%,80%{transform:rotate(-14deg) translateX(-3px)}}
 @keyframes clippy-talk{50%{transform:scaleY(.94) translateY(1px) rotate(-2deg)}}
 @keyframes clippy-dot{50%{opacity:.3;transform:translateY(-2px)}}
-:root[data-theme="dark"] .msn-clippy-balloon{background:#38341f;border-color:#766b40;color:#eee6bc}:root[data-theme="dark"] .msn-clippy-balloon::before{border-color:#766b40}:root[data-theme="dark"] .msn-clippy-hint{color:#bcb184}:root[data-theme="dark"] .msn-clippy-hint button{background:#5a5230;color:#cfe3fa}:root[data-theme="dark"] .msn-clippy-hint button:hover{background:#6b6238}
+:root[data-theme="dark"] .msn-clippy-balloon{background:#38341f;border-color:#766b40;color:#eee6bc}:root[data-theme="dark"] .msn-clippy-balloon::before{border-color:#766b40}:root[data-theme="dark"] .msn-clippy-hint,:root[data-theme="dark"] .msn-clippy-close{color:#bcb184}:root[data-theme="dark"] .msn-clippy-close:hover{background:#ffffff1a;color:#eee6bc}:root[data-theme="dark"] .msn-clippy-hint button{background:#5a5230;color:#cfe3fa}:root[data-theme="dark"] .msn-clippy-hint button:hover{background:#6b6238}
 @container (max-width:520px){.msn-clippy{padding:8px 6px 6px}.msn-clippy-art{width:36px;height:65px}.msn-clippy-balloon{right:8px;bottom:80px}.msn-clippy-hint{font-size:9px}}
 @media(prefers-reduced-motion:reduce){.msn-clippy-art,.msn-clippy-dots i{animation:none!important}}
 </style>

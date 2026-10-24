@@ -243,7 +243,7 @@ export class ChatRoom {
     const [live, recent] = await Promise.all([
       this.env.LIVE_STATS && settle(liveStats(this.env).fetch(new Request('https://stats/')).then(r => r.json())),
       accountId && token && settle((async () => {
-        const q = queries(30);
+        const q = queries(90);
         const [rows, daily] = await Promise.all([sql(q.events, { accountId, token }), sql(q.daily, { accountId, token })]);
         return summarize(rows, daily);
       })()),

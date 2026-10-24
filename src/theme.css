@@ -605,6 +605,14 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   }
 }
 
+/* the box drawn while dragging across the desktop to select icons */
+.desktop-marquee {
+  position: absolute;
+  border: 1px solid #3399ff;
+  background: rgb(51 153 255 / 25%);
+  pointer-events: none;
+}
+
 .desktop-signature {
   position: absolute;
   right: 36px;
