@@ -124,8 +124,13 @@ existing blog admin router, so blog administration continues to use its own path
   are trimmed to the last complete sentence, with a clarification fallback if
   none fits. This is
   a request cap, not a guaranteed neuron budget; account-wide AI usage also counts.
-  The Workers AI binding runs `@cf/meta/llama-3.2-3b-instruct`. The previous
-  Llama 3.1 8B identifier returns deprecation error 5028 through the binding.
+  The Workers AI binding runs `@cf/google/gemma-4-26b-a4b-it` with thinking
+  turned off (`chat_template_kwargs.enable_thinking: false`); with thinking on it
+  spends the whole token budget reasoning and returns an empty reply. Gemma only
+  answers in `choices[0].message.content`, not `response`. It replaced
+  `@cf/meta/llama-3.2-3b-instruct`, which still works if the cost ever matters.
+  The previous Llama 3.1 8B identifier returns deprecation error 5028 through
+  the binding.
   Each question includes up to 20 preceding public messages, capped at 6,000
   characters of context. This includes other visitors and Clippy's replies, with
   speaker labels. Deleted and expired messages are excluded. Context comes from

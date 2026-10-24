@@ -1,5 +1,7 @@
 import { DAY, RETENTION, removedText, json, failure, nicknameError, messageError } from './chat-rules.mjs';
-import { asksClippy, CLIPPY_SESSION, CLIPPY_MAX_CHARACTERS, replyAsClippy } from './clippy.mjs';
+import { asksClippy, CLIPPY_SESSION, CLIPPY_MAX_CHARACTERS, replyAsClippy, siteFacts } from './clippy.mjs';
+import { liveStats } from './live-stats.mjs';
+import { queries, sql, summarize } from './analytics.mjs';
 
 // One room, separate from the portfolio's analytics object. Every mutation below
 // is synchronous SQL, so a send cannot interleave with a mute or another send.
@@ -229,12 +231,35 @@ export class ChatRoom {
     }
     return history.reverse();
   }
+  // site stats for clippy's prompt. the counters and analytics are loaded at most every five minutes,
+  // and a source that is missing, fails or takes over three seconds is just left out
+  statsStale() {
+    const { LIVE_STATS, CLOUDFLARE_ACCOUNT_ID, ANALYTICS_TOKEN } = this.env;
+    return Boolean(LIVE_STATS || (CLOUDFLARE_ACCOUNT_ID && ANALYTICS_TOKEN)) && !(this.stats && Date.now() - this.stats.at < 300000);
+  }
+  async loadStats() {
+    const settle = promise => Promise.race([promise, new Promise(resolve => setTimeout(resolve, 3000))]).catch(() => undefined);
+    const { CLOUDFLARE_ACCOUNT_ID: accountId, ANALYTICS_TOKEN: token } = this.env;
+    const [live, recent] = await Promise.all([
+      this.env.LIVE_STATS && settle(liveStats(this.env).fetch(new Request('https://stats/')).then(r => r.json())),
+      accountId && token && settle((async () => {
+        const q = queries(30);
+        const [rows, daily] = await Promise.all([sql(q.events, { accountId, token }), sql(q.daily, { accountId, token })]);
+        return summarize(rows, daily);
+      })()),
+    ]);
+    this.stats = { at: Date.now(), live: live || undefined, recent: recent || undefined };
+  }
+  clippyFacts() {
+    return siteFacts({ ...this.stats, chatting: this.online().map(person => person.nickname) });
+  }
   async answerClippy(question, sessionId) {
     let failed = false;
     try {
       let text;
       try {
-        text = await replyAsClippy(this.env.AI, question.text, this.clippyHistory(question.seq), question.nickname);
+        if (this.statsStale()) await this.loadStats();
+        text = await replyAsClippy(this.env.AI, question.text, this.clippyHistory(question.seq), question.nickname, this.clippyFacts());
         if (messageError(text, CLIPPY_MAX_CHARACTERS)) throw new Error('filtered');
       } catch (error) {
         // Record a diagnostic code, never the visitor's prompt or model output.

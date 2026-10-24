@@ -336,6 +336,24 @@ test('Clippy receives public-room history with speaker identity and no duplicate
   assert.equal(s.room.clippyHistory(99999).some(entry => entry.content.includes('I enjoy board games.')), false);
 });
 
+test('Clippy gets live site stats in his prompt, loaded once per five minutes', async () => {
+  const prompts = []; let loads = 0;
+  const s = setup({ run: async (_, input) => { prompts.push(input.messages[0].content); return { response: 'Lots!' }; } });
+  s.room.env.LIVE_STATS = { idFromName: name => name, get: () => ({ fetch: async () => { loads++; return Response.json({ visitors: 4321, online: 2, clippyWins: 9, clippyLosses: 3, leaderboard: [{ player: 'ALICE', score: 77 }] }); } }) };
+  const alice = await s.join('Alice');
+  send(s.room, alice.ws, '@Clippy how many visitors?');
+  await Promise.all(s.tasks);
+  assert.match(prompts[0], /4,321 visits/);
+  assert.match(prompts[0], /Clippy has won 9 games and lost 3/);
+  assert.match(prompts[0], /Snake all-time high score: 77 by ALICE/);
+  assert.match(prompts[0], /In MSN Messenger right now: Alice/);
+  s.room.sql.exec("UPDATE sessions SET sent='[]'");
+  s.room.sql.exec('UPDATE clippy_usage SET last_at=0');
+  send(s.room, alice.ws, '@Clippy and now?');
+  await Promise.all(s.tasks);
+  assert.equal(loads, 1);
+});
+
 test('Clippy memory keeps only recent messages within both limits and excludes expired content', () => {
   const s = setup();
   const insert = (index, text, at = Date.now()) => s.room.sql.exec('INSERT INTO messages (id, session_id, client_id, nickname, admin, text, at) VALUES (?, ?, ?, ?, 0, ?, ?)', String(index), 'bot:clippy', String(index), 'Clippy', text, at);
