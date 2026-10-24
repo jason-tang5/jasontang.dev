@@ -590,6 +590,11 @@ function balloonDone(event, id) {
         <RetroIcon :name="registry[win.project.game].icon"/>
         <span>Play it</span>
       </button>
+      <!-- projects that are an app on this desktop -->
+      <button v-if="win.project.app" class="ie-button" :title="`Open ${registry[win.project.app].label} on the desktop`" @click="emit('open', win.project.app)">
+        <RetroIcon :name="registry[win.project.app].icon"/>
+        <span>Try it</span>
+      </button>
     </div>
     <article class="content-scroll document pixel-headings">
       <!-- a breadcrumb back up to the folder, so the way back is in the page too -->

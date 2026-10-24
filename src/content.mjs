@@ -132,13 +132,15 @@ export const projects = [
     kind: 'Real-time web',
     date: 'October 2026',
     icon: 'messenger',
+    // opens the chat itself on the desktop
+    app: 'chat',
     tech: ['JavaScript', 'Vue', 'Cloudflare Workers', 'Durable Objects', 'WebSockets', 'SQLite', 'Turnstile', 'Playwright'],
     // interactive figures, see MessengerFigures.vue. the lead is an animation, and
     // implementation places the rest
     figures: { lead: 'lobby' },
     summary: 'A public chat room for everyone visiting this site, styled after MSN Messenger.',
     why: [
-      'The Analytics window shows how many people are on the site right now. If it says 3 online, there’s no way to say hi to any of them. A desktop from the early 2000s felt like it was missing the one app everybody had open back then, so I built it.',
+      'The Analytics window tells you who’s here. I wanted a way to say hi. And what’s an early-2000s desktop without a messenger?',
     ],
     contribution: [
       ['Open ', { open: 'chat', text: 'MSN Messenger' }, ' on the desktop, pick a nickname, and you’re in one shared lobby with everyone else on the site. Messages show up for everyone the moment they’re sent. You can see who’s online, your draft survives a dropped connection, and I can moderate the room from the same window.'],
