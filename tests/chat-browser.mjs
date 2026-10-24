@@ -71,10 +71,29 @@ try {
   await expect(alice.app.getByRole('log')).toContainText(html);
   assert.equal(await alice.page.evaluate(() => window.chatXss), undefined);
   await expect(alice.app.getByRole('log').locator('img')).toHaveCount(0);
-  await send(bob, 'A little too fast');
-  await expect(bob.app.getByRole('alert')).toContainText('Slow down');
-  await expect(bob.app.locator('.msn-pending')).toContainText('not sent');
-  await bob.app.getByRole('button', { name: 'Edit message' }).click();
+  // right after sending, send counts down and what's typed waits in the box
+  await bob.app.getByLabel('Your message').fill('A little too fast');
+  await expect(bob.app.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(bob.app.locator('.msn-compose')).toContainText('you can send again');
+  await expect(bob.app.getByRole('button', { name: 'Send', exact: true })).toBeEnabled({ timeout: 10000 });
+  await expect(bob.app.getByLabel('Your message')).toHaveValue('A little too fast');
+  // if the room still says too soon, the message comes back to the box with no banner
+  await bob.page.evaluate(() => {
+    const ws = window.__chatSockets.at(-1);
+    const send = ws.send.bind(ws);
+    ws.send = body => {
+      const data = JSON.parse(body);
+      if (data.type !== 'send') return send(body);
+      ws.send = send;
+      ws.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'error', code: 'rate-limited', clientId: data.clientId, retryAfter: 2 }) }));
+    };
+  });
+  await bob.app.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(bob.app.locator('.msn-pending')).toHaveCount(0);
+  await expect(bob.app.getByRole('alert')).toHaveCount(0);
+  await expect(bob.app.getByLabel('Your message')).toHaveValue('A little too fast');
+  await expect(bob.app.getByRole('button', { name: 'Send', exact: true })).toHaveText(/\ds/);
+  await expect(bob.app.getByRole('button', { name: 'Send', exact: true })).toBeEnabled({ timeout: 10000 });
   await bob.app.getByLabel('Your message').fill('An unfinished thought');
   await bob.page.evaluate(() => window.__chatSockets.at(-1).close());
   await expect(bob.app.locator('.msn-identity')).toContainText('Reconnecting');
@@ -93,6 +112,11 @@ try {
   const botEvent = data => alice.page.evaluate(data => window.__chatSockets.at(-1).dispatchEvent(new MessageEvent('message', { data: JSON.stringify(data) })), data);
   await botEvent({ type: 'clippy', available: true, thinking: false });
   await expect(alice.app.locator('.msn-clippy')).toHaveAttribute('data-state', 'idle');
+  await expect(alice.app.locator('.msn-people')).toContainText('Clippy');
+  await alice.app.getByRole('button', { name: 'Poke Clippy' }).click();
+  await expect(alice.app.locator('.msn-clippy')).toHaveAttribute('data-state', 'poked');
+  await alice.app.locator('.msn-clippy').screenshot({ path: `${output}/clippy-poked.png` });
+  await expect(alice.app.locator('.msn-clippy')).toHaveAttribute('data-state', 'idle', { timeout: 6000 });
   await alice.app.getByRole('button', { name: 'Ask Clippy', exact: true }).click();
   await expect(alice.app.getByLabel('Your message')).toHaveValue('@Clippy ');
   await expect(alice.app.getByLabel('Your message')).toBeFocused();
