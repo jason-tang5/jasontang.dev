@@ -16,7 +16,6 @@ import Stickies from './Stickies.vue';
 import StickyNote from './StickyNote.vue';
 import RetroIcon from './RetroIcon.vue';
 import InlineText from './InlineText.vue';
-import BuildTerminal from './BuildTerminal.vue';
 import AboutFacts from './AboutFacts.vue';
 import TypedRoles from './TypedRoles.vue';
 import TechList from './TechList.vue';
@@ -471,7 +470,10 @@ function balloonDone(event, id) {
                 </button>
               </nav>
               <AboutFacts :facts="profile.facts"/>
-              <BuildTerminal :visible="visible"/>
+              <!-- what i'm building right now, the clean from the liftlens writeup -->
+              <LiftLensFigures figure="angles" compact>
+                <template #caption><strong>Currently building</strong> <button class="crumb-back" @click="emit('open', 'liftlens')">LiftLens</button> · 100kg @ 1.3m/s</template>
+              </LiftLensFigures>
             </section>
           </div>
         </div>

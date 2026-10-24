@@ -21,7 +21,7 @@ export const profile = {
       awards: ['Edward S Rogers Sr. Scholarship', 'Faculty of Applied Science and Engineering Scholarship'],
     },
     { label: 'Previously', text: '16-month SWE intern @ AMD, building tooling for 1,000+ engineers' },
-    { label: 'Currently building', text: 'LiftLens, a computer vision app that analyzes Olympic lifts and gives technique feedback' },
+    { label: 'Currently building', text: '[LiftLens](/#app=liftlens), a computer vision app that analyzes Olympic lifts and gives technique feedback' },
     { label: 'Sports', text: 'volleyball (captain), ultimate frisbee, badminton' },
     // best lifts in lb, each weight in the pixel font after the lift's name
     { label: 'Lifts (lb)', lifts: [['Power clean', '265'], ['Squat', '405'], ['Bench', '265'], ['Pull-up', '+100']] },

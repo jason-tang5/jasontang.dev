@@ -6,7 +6,9 @@
 // plate_tracking.py), drawn at 140 px a metre
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { angles, clip, speed } from '../liftlens-clip.mjs';
-defineProps({ figure: { type: String, required: true } });
+// compact is the about page's fig 1: when it's narrow it keeps the video beside the
+// readouts and leaves out the charts, so it doesn't run down the whole page
+defineProps({ figure: { type: String, required: true }, compact: Boolean });
 
 // ---- angles: a real clean on video, with liftlens's numbers for it alongside ----
 // the video already has the app's skeleton and bar path drawn on. the charts and readouts
@@ -281,8 +283,9 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 </script>
 
 <template>
-  <figure v-if="figure === 'angles'" class="ll-figure">
-    <figcaption><strong>Fig. 1</strong> A power clean, filmed from the side. Each angle comes from three keypoints, and the graphs follow the video.</figcaption>
+  <figure v-if="figure === 'angles'" class="ll-figure" :class="{ 'll-compact': compact }">
+    <!-- the about page puts its own caption here -->
+    <figcaption><slot name="caption"><strong>Fig. 1</strong> A power clean, filmed from the side. Each angle comes from three keypoints, and the graphs follow the video.</slot></figcaption>
     <div class="ll-panel ll-angles">
       <div class="ll-cam">
         <video ref="video" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
@@ -518,6 +521,16 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 }
 /* too narrow for two readouts side by side */
 @container (max-width: 260px) { .ll-stats { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 420px) {
+  .ll-compact .ll-angles { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  /* the video stretches to the readouts' height and fills it, cropping a little off
+     its sides, so the two columns end level */
+  .ll-compact .ll-cam { max-width: none; aspect-ratio: auto; min-height: 200px; }
+  .ll-compact .ll-video { object-fit: cover; }
+  .ll-compact .ll-side { grid-template-rows: none; align-content: start; }
+  .ll-compact .ll-stats { grid-template-columns: minmax(0, 1fr); }
+  .ll-compact .ll-charts, .ll-compact .ll-transport code { display: none; }
+}
 
 /* fig 2 */
 /* the lifter sits back in grey so the plates and the candidate circle read first */
