@@ -530,6 +530,11 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 /* the about page's copy cuts most of the floor off the bottom of the video, so it's
    less tall */
 .ll-compact .ll-cam { aspect-ratio: 27 / 40; }
+/* the video's height comes first and its width follows, with the graphs taking what's
+   left. --ll-extra is the about page's leftover height (AppContent.vue), so the video
+   grows to fill the page rather than leave a blank strip under it */
+.ll-compact .ll-angles { grid-template-columns: auto minmax(0, 1fr); }
+.ll-compact .ll-cam { height: calc(200px + var(--ll-extra, 0px)); max-width: 50cqi; }
 .ll-compact .ll-video { object-fit: cover; object-position: top; }
 /* and shows just the two graphs beside it, without the readouts */
 .ll-compact .ll-stats { display: none; }
@@ -576,7 +581,7 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
   /* the video comes first: a fixed height at its own shape, so none of the lift is
      cropped off the sides, and the graphs take what width is left and stretch to the
      same height, so the two columns end level */
-  .ll-compact .ll-cam { width: auto; max-width: none; height: 200px; }
+  .ll-compact .ll-cam { width: auto; max-width: 55cqi; height: calc(200px + var(--ll-extra, 0px)); }
   .ll-compact .ll-charts { contain: size; }
   .ll-compact .ll-charts svg { height: 100%; }
   .ll-compact .ll-transport code { display: none; }

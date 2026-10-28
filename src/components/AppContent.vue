@@ -303,6 +303,29 @@ watch(portraitFrame, (frame, old) => {
 watch(portraitControls, controls => controls && hintObserver.observe(controls));
 onBeforeUnmount(() => hintObserver.disconnect());
 
+// when the text sheet is taller than everything on it, the liftlens video grows by the
+// leftover height, so the page ends on the figure instead of a blank strip
+const aboutCopy = ref(null);
+function growFigure() {
+  const copy = aboutCopy.value;
+  if (!copy) return;
+  copy.style.removeProperty('--ll-extra');
+  // a sheet shorter than its box reports the box's height, so measure to the end of
+  // what's on it instead
+  const style = getComputedStyle(copy);
+  const end = copy.lastElementChild?.getBoundingClientRect().bottom ?? 0;
+  const used = end - copy.getBoundingClientRect().top - copy.clientTop + copy.scrollTop + parseFloat(style.paddingBottom);
+  const spare = Math.floor(copy.clientHeight - used);
+  if (spare > 0) copy.style.setProperty('--ll-extra', `${spare}px`);
+}
+watch(aboutCopy, (copy, _, onCleanup) => {
+  if (!copy) return;
+  const observer = new ResizeObserver(growFigure);
+  observer.observe(copy);
+  document.fonts?.ready.then(growFigure);
+  onCleanup(() => observer.disconnect());
+}, { flush: 'post' });
+
 
 function setPortraitAscii(value) {
   portraitHint.value = false;
@@ -506,7 +529,7 @@ function balloonDone(event, id) {
               @update:enabled="setPortraitAscii"
             />
           </div>
-          <div class="about-copy">
+          <div ref="aboutCopy" class="about-copy">
             <h1>{{ profile.name }}</h1>
             <TypedRoles :words="profile.roles" :visible="visible"/>
             <p class="intro">{{ profile.intro }}</p>

@@ -2581,18 +2581,17 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 
 /* the haikyuu quote as the liftlens figure's header, with the same blinking underscore
-   as the typed line under my name. it's sized to fill the figure's width on one line
-   (.ll-figure is a size container, and the line is about 34.6 times its font size
-   wide), but never below 14px: a narrower figure breaks it between its two halves */
+   as the typed line under my name. always two lines, one half of it each */
 .about-quote {
   display: block;
-  margin: 18px 0 4px;
-  font-size: clamp(14px, 100cqi / 34.8, 20px);
-  line-height: 1.5;
+  margin: 20px 0 10px;
+  font-size: 13px;
+  line-height: 1.7;
   color: var(--ink);
 }
 
 .about-quote > span {
+  display: block;
   white-space: nowrap;
 }
 
