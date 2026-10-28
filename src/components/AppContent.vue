@@ -208,6 +208,8 @@ const hoveredPlace = ref(null);
 const resumeUrl =`${import.meta.env.BASE_URL}assets/Jason_Tang_Resume.pdf`;
 const portraitUrl = new URL('../../assets/profile.jpg', import.meta.url).href;
 const portraitHint = ref(true);
+// a finger taps the portrait, a mouse clicks it
+const flipVerb = matchMedia('(pointer: coarse)').matches ? 'Tap' : 'Click';
 const portraitAscii = imageAscii;
 // the portrait's ascii / normal buttons, sliders and reset sit in a toolbar over it,
 // like my pictures' toolbar, instead of on the photo
@@ -425,7 +427,7 @@ function balloonDone(event, id) {
         <div class="about-grid">
           <div ref="portraitFrame" class="portrait-frame inset" @pointerdown.capture="portraitHint = false">
             <div ref="portraitControls" class="pictures-controls portrait-toolbar"/>
-            <span v-if="portraitHint" class="portrait-hint" :class="{ pointing: hintAt }" :style="hintAt">Tap to flip me!</span>
+            <span v-if="portraitHint" class="portrait-hint" :class="{ pointing: hintAt }" :style="hintAt">{{ flipVerb }} to flip me!</span>
             <AsciiImage
               class="portrait-ascii"
               :source="portraitUrl"
@@ -448,7 +450,7 @@ function balloonDone(event, id) {
               <AboutFacts :facts="profile.facts"/>
               <!-- what i'm building right now, the clean from the liftlens writeup -->
               <LiftLensFigures figure="angles" compact>
-                <template #caption><button class="crumb-back" @click="emit('open', 'liftlens')">LiftLens</button> · 100kg @ 1.3m/s</template>
+                <template #caption><span class="about-quote"><span>{{ profile.quote[0] }}</span> <span>{{ profile.quote[1] }}<span class="typed-cursor" aria-hidden="true">_</span></span></span></template>
               </LiftLensFigures>
             </section>
           </div>
@@ -457,7 +459,6 @@ function balloonDone(event, id) {
     </div>
     <footer class="status-bar">
       <span>{{ hoveredPlace ? registry[hoveredPlace.id].label : 'About Me' }}</span>
-      <span>{{ projects.length }} projects</span>
     </footer>
   </div>
 

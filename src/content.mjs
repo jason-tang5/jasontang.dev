@@ -5,7 +5,7 @@ export const profile = {
   subtitle: 'Computer Engineering @ UofT',
   // typed out one at a time under my name on the about page
   roles: ['Software Engineer', 'Autodidact', 'Problem Solver', 'Tinkerer', 'Get-It-Done Guy', 'Builder', 'Student Athlete', 'Gym Rat?'],
-  intro: 'Hi, I’m Jason, a third-year Computer Engineering student at UofT and former software engineering intern at AMD. I like building useful tools, learning new technologies, and digging into complex problems.',
+  intro: 'Hi, I’m Jason, a third-year Computer Engineering student at UofT. I like building useful tools, learning new technologies, and digging into complex problems.',
   links: {
     linkedin: 'https://www.linkedin.com/in/jason-tang-uoft/',
     github: 'https://github.com/jason-tang5',
@@ -13,21 +13,20 @@ export const profile = {
   bio: 'When I’m not building, I’m usually playing some sport, at the gym, or learning some random skill.',
   // the quick facts under the divider on the about page (AboutFacts.vue): work first, then
   // for fun. the text takes *italic* and **bold** like the blog. awards each get a ribbon
-  // medal under the fact, and books sets the links in the pixel font with a little book
+  // medal on their own line, and books sets the links in the pixel font with a little book
   facts: [
-    {
-      label: 'Studying',
-      text: 'Comp Eng @ UofT ’28',
-      awards: ['Edward S Rogers Sr. Scholarship', 'Faculty of Applied Science and Engineering Scholarship'],
-    },
-    { label: 'Previously', text: '16-month SWE intern @ AMD, building tooling for 1,000+ engineers' },
-    { label: 'Sports', text: 'volleyball (captain), ultimate frisbee, badminton' },
+    { label: 'Awards', awards: ['Edward S Rogers Sr. Scholarship', 'FASE Scholarship'] },
+    { label: 'Previously', text: '16-month SWE intern @ AMD' },
+    { label: 'Sports', text: 'volleyball (captain), ultimate, badminton' },
     // best lifts in lb, each weight in the pixel font after the lift's name
-    { label: 'Lifts (lb)', lifts: [['power clean', '265'], ['squat', '405'], ['bench', '265'], ['pull-up', '+100']] },
+    { label: 'Lifts (lb)', lifts: [['clean', '265'], ['squat', '405'], ['bench', '265'], ['pull-up', '+100']] },
     { label: 'Peak league rank', text: '**grandmaster** 528 LP (tft **master**)' },
     // opens the cd player on JANE DOE, from the chainsaw man movie
     { label: 'Favorite manga', text: '[Chainsaw Man](/#app=music&track=jane-doe)', books: true },
   ],
+  // from haikyuu, over the liftlens figure at the bottom of the about page. one line
+  // when it fits, otherwise it breaks between the two halves
+  quote: ['talent is something you make bloom,', 'instinct is something you polish'],
   education: 'BASc, Computer Engineering · September 2023 – May 2028',
   skills: ['Python', 'TypeScript', 'JavaScript', 'Rust', 'C++', 'Ruby', 'SQL', 'Vue.js', 'Node.js', 'PostgreSQL', 'CUDA', 'Verilog'],
 };

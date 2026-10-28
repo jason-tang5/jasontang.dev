@@ -2568,6 +2568,22 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   color: var(--ink);
 }
 
+/* the haikyuu quote as the liftlens figure's header, with the same blinking underscore
+   as the typed line under my name. it's sized to fill the figure's width on one line
+   (.ll-figure is a size container, and the line is about 34.6 times its font size
+   wide), but never below 14px: a narrower figure breaks it between its two halves */
+.about-quote {
+  display: block;
+  margin: 18px 0 4px;
+  font-size: clamp(14px, 100cqi / 34.8, 20px);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.about-quote > span {
+  white-space: nowrap;
+}
+
 /* the terminal in fun stuff (Terminal.vue): a black screen in the dos colours that
    scrolls as it fills, the prompt as its last line, and a row of commands to tap under it */
 .terminal {
@@ -2704,21 +2720,22 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   color: var(--d-link, #000080);
 }
 
-/* each scholarship on its own line under the school, with a little ribbon medal */
+/* each scholarship on its own line, the same size as the other facts, with a little
+   ribbon medal in front */
 .fact-award {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
+}
+
+.fact-award + .fact-award {
   margin-top: 2px;
-  font-size: 13px;
-  line-height: 1.3;
 }
 
 .fact-award svg {
   flex: none;
   width: 12px;
   height: 16px;
-  margin-top: 1px;
 }
 
 /* the favourite books in the pixel font, each with a little book in front, in the link
@@ -3241,11 +3258,22 @@ fieldset {
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
-      padding: 84px 22px 22px;
+      padding: 22px;
       background: var(--paper);
       border: 2px solid;
       border-color: var(--shadow) var(--light) var(--light) var(--shadow);
       box-shadow: inset 1px 1px var(--edge);
+    }
+
+    /* the shortcuts box's spot, kept clear at the top of the sheet so my name starts
+       right at the top beside it, or drops under it when there isn't room. it's the
+       box's 274 by 66, which starts 14px above and right of the text, plus a gap */
+    .about-copy::before {
+      content: '';
+      float: right;
+      width: 274px;
+      height: 60px;
+      margin: 0 -14px 0 10px;
     }
 
     /* the shortcuts box pinned in the sheet's top right corner, 8px in from its

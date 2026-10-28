@@ -1,6 +1,6 @@
 <script setup>
 // the about page's quick facts: a label column and the fact beside it, with each
-// scholarship on its own line under the school, next to a little ribbon medal, and the
+// scholarship on its own line next to a little ribbon medal, and the
 // favourite books as pixel font links, each with a tiny book in front, and the lifts
 // with their weights in the pixel font
 import InlineText from './InlineText.vue';
@@ -16,7 +16,7 @@ defineProps({ facts: { type: Array, required: true } });
         <span v-if="fact.lifts" class="fact-lifts">
           <span v-for="[lift, weight] in fact.lifts" :key="lift">{{ lift }} <b>{{ weight }}</b></span>
         </span>
-        <InlineText v-else :text="fact.text"/>
+        <InlineText v-else-if="fact.text" :text="fact.text"/>
         <span v-for="award in fact.awards" :key="award" class="fact-award">
           <svg viewBox="0 0 9 12" aria-hidden="true" shape-rendering="crispEdges">
             <path fill="#c43b33" d="M1 6h3v6L2.5 10.5 1 12zM5 6h3v6l-1.5-1.5L5 12z"/>
