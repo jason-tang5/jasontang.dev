@@ -1,10 +1,12 @@
 <script setup>
-// my pictures: one big photo with arrows and a strip of thumbnails underneath. when
-// the window (or the phone) is too small for the ascii controls to sit on the photo,
-// they and the arrows move up into a toolbar over it. dragging the photo sideways
+// the gallery: one big photo with dots under it, like a phone's photos app. swipe or
+// drag (or use the arrow keys) to move along, tap the photo to flip it between ascii
+// and the real thing, and the grid button shows every thumbnail. the photo tools wait
+// behind a ⋯ button. when the window (or the phone) is too small for them to sit on the
+// photo, they move up into a toolbar over it. dragging the photo sideways
 // slides it along with the next or previous one coming in beside it, like a phone's
 // photo gallery
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import AsciiImage from './AsciiImage.vue';
 import { photos } from '../photos.mjs';
 import { imageAscii } from '../ascii-density.js';
@@ -12,11 +14,10 @@ import { imageAscii } from '../ascii-density.js';
 defineProps({ visible: Boolean });
 
 const selected = ref(0);
+const showThumbnails = ref(false);
 const ascii = imageAscii;
 const photo = computed(() => photos[selected.value]);
 
-// the arrows are the scrollbar's pixel triangles
-const arrows = { prev: 'M4 0h1v7H4zM3 1h1v5H3zM2 2h1v3H2zM1 3h1v1H1z', next: 'M2 0h1v7H2zM3 1h1v5H3zM4 2h1v3H4zM5 3h1v1H5z' };
 
 // once the photo area is 620px wide or 340px tall or less, the sliders coming down
 // from the top of the photo and up from the bottom run into each other, and on a
@@ -42,7 +43,7 @@ onBeforeUnmount(() => observer.disconnect());
 // following a gap behind. letting go past a third of the way, or with a flick, slides
 // the rest of the way over and switches to it; otherwise both slide back. a mouse
 // drags it the same way. the ascii letters let unarmed presses through to here
-// (KnockoffAscii.vue), an armed hammer keeps them, and the arrows are just clicked
+// (KnockoffAscii.vue), an armed hammer keeps them; a drag still never counts as a tap
 const gap = 20;
 const offset = ref(0);
 const settling = ref(false);
@@ -138,26 +139,35 @@ function step(delta) {
   selected.value = (selected.value + delta + photos.length) % photos.length;
 }
 
-function setMode(value) {
+// flipping to the photo removes the letters' canvas, and focus with it, so it comes
+// back here to keep the arrow keys working
+const root = ref(null);
+async function setMode(value) {
   ascii.value = value;
+  await nextTick();
+  if (document.activeElement === document.body) root.value?.focus({ preventScroll: true });
 }
 
+// the arrow keys work while focus is anywhere in this window, its frame included,
+// which is where a click on the window often leaves it
 function keys(event) {
-  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' || event.defaultPrevented) return;
+  const frame = root.value?.closest('.window') ?? root.value;
+  if (!frame?.contains(document.activeElement) || document.activeElement.closest('input, textarea, [role="slider"]')) return;
   event.preventDefault();
   step(event.key === 'ArrowLeft' ? -1 : 1);
 }
+addEventListener('keydown', keys);
+onBeforeUnmount(() => removeEventListener('keydown', keys));
 </script>
 
 <template>
-  <div class="app-layout pictures-app" :class="{ compact }" @keydown="keys">
+  <!-- tabindex so a tap on the photo keeps the arrow keys working -->
+  <div ref="root" class="app-layout pictures-app" :class="{ compact }" tabindex="-1">
     <div v-if="compact" ref="toolbar" class="pictures-toolbar">
-      <button class="raised picture-arrow" aria-label="Previous photo" @click="step(-1)"><svg viewBox="0 0 7 7" aria-hidden="true" shape-rendering="crispEdges"><path :d="arrows.prev"/></svg></button>
       <div ref="controlsHost" class="pictures-controls"/>
-      <button class="raised picture-arrow" aria-label="Next photo" @click="step(1)"><svg viewBox="0 0 7 7" aria-hidden="true" shape-rendering="crispEdges"><path :d="arrows.next"/></svg></button>
     </div>
     <div ref="stage" :class="['pictures-stage', { swiping: offset || dragging, settling }]" @pointerdown="swipeDown" @pointermove="swipeMove" @pointerup="swipeEnd" @pointercancel="swipeEnd" @click.capture="swallowClick" @dragstart.prevent>
-      <button v-if="!compact" class="raised picture-arrow picture-arrow-prev" aria-label="Previous photo" @click="step(-1)"><svg viewBox="0 0 7 7" aria-hidden="true" shape-rendering="crispEdges"><path :d="arrows.prev"/></svg></button>
       <!-- the photo and, while it's being dragged, the neighbour coming in beside it.
            the neighbour is only made once a drag starts, then carries on as the photo
            after the swap, so its letters are already drawn and nothing reloads -->
@@ -174,6 +184,7 @@ function keys(event) {
           :media-type="slide.photo.mediaType || 'image'"
           :poster="slide.photo.poster"
           show-controls
+          tidy
           :description="slide.photo.description"
           :enabled="ascii"
           :visible="visible"
@@ -185,10 +196,20 @@ function keys(event) {
           <span>{{ slide.photo.caption }}</span> <strong>{{ slide.photo.name }}</strong>
         </figcaption>
       </figure>
-      <button v-if="!compact" class="raised picture-arrow picture-arrow-next" aria-label="Next photo" @click="step(1)"><svg viewBox="0 0 7 7" aria-hidden="true" shape-rendering="crispEdges"><path :d="arrows.next"/></svg></button>
     </div>
 
-    <nav class="picture-thumbnails" aria-label="Photos">
+    <nav class="picture-dots" aria-label="Photos">
+      <button
+        v-for="(entry, index) in photos"
+        :key="entry.id"
+        :aria-label="`Photo ${index + 1}: ${entry.description}`"
+        :aria-current="selected === index ? 'true' : null"
+        :class="{ on: selected === index }"
+        @click="selected = index"
+      />
+    </nav>
+
+    <nav v-if="showThumbnails" class="picture-thumbnails" aria-label="All photos">
       <button
         v-for="(entry, index) in photos"
         :key="entry.id"
@@ -203,6 +224,9 @@ function keys(event) {
 
     <footer class="status-bar" aria-live="polite">
       <span>{{ selected + 1 }} / {{ photos.length }}</span>
+      <button class="raised picture-grid" :class="{ pressed: showThumbnails }" :aria-pressed="showThumbnails" aria-label="Show all photos" title="Show all photos" @click="showThumbnails = !showThumbnails">
+        <svg viewBox="0 0 11 11" width="11" height="11" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M0 0h3v3H0zm4 0h3v3H4zm4 0h3v3H8zM0 4h3v3H0zm4 0h3v3H4zm4 0h3v3H8zM0 8h3v3H0zm4 0h3v3H4zm4 0h3v3H8z"/></svg>
+      </button>
       <span v-if="photo.date" class="picture-date">
         <time :datetime="photo.date">{{ formatDate(photo.date) }}</time>
       </span>

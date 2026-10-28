@@ -21,8 +21,10 @@ const props = defineProps({
   reducedMotion: Boolean,
   resetVersion: Number,
   controlsTo: { type: Object, default: null },
+  // false hides the hammer and its slider (AsciiImage's tidy mode)
+  showTools: { type: Boolean, default: true },
 });
-const emit = defineEmits(['error']);
+const emit = defineEmits(['error', 'tap']);
 
 // dark to bright
 const characters = ' .,:;i1tfLCG08@';
@@ -421,6 +423,8 @@ function move(event) {
 // and other assistive "clicks" still do something
 function click(event) {
   if (event.detail === 0 && !event.pointerType) keyboard();
+  // without the hammer a click is just a tap on the photo
+  else if (!armed.value) emit('tap');
 }
 
 function startDrag(event) {
@@ -599,12 +603,8 @@ function layout() {
 
 function load() {
   stop();
+  // no letters to hit until the new photo is laid out
   cells = [];
-  backing = null;
-  glyphs = null;
-  glow = null;
-  remaining.value = 0;
-  draw();
 
   // ignore late loads if the photo changed again in the meantime
   const next = new Image();
@@ -616,6 +616,11 @@ function load() {
     if (!disposed && picture === next) emit('error');
   };
   next.src = props.source;
+  // a photo already in the cache is laid out right away, with no blank frame.
+  // otherwise the last photo's letters stay up until this one is ready, and only
+  // the very first photo starts on the plain dark background
+  if (next.complete && next.naturalWidth) layout();
+  else if (!backing) draw();
 }
 
 function visibility() {
@@ -703,6 +708,7 @@ onBeforeUnmount(() => {
   <!-- touchscreens only: pressed in, a drag over the photo smashes letters instead of
        scrolling. a pixel sledgehammer on a slant, head up top left, left of its size slider -->
   <button
+    v-if="showTools"
     v-show="visible"
     class="hammer-toggle raised"
     :class="{ pressed: armed }"
@@ -718,7 +724,7 @@ onBeforeUnmount(() => {
       <path v-for="[fill, d] in hammerSprite" :key="fill" :fill="fill" :d="d"/>
     </svg>
   </button>
-  <div v-show="visible" class="ascii-hammer raised" title="Hammer size" @click.stop @pointerdown.stop @pointermove.stop @keydown.stop>
+  <div v-if="showTools" v-show="visible" class="ascii-hammer raised" title="Hammer size" @click.stop @pointerdown.stop @pointermove.stop @keydown.stop>
     <svg width="11" height="11" viewBox="0 0 11 11" shape-rendering="crispEdges" aria-hidden="true">
       <path fill="currentColor" d="M3 0h5v1H3zM1 1h9v2H1zM0 3h11v5H0zM1 8h9v2H1zM3 10h5v1H3z"/>
     </svg>

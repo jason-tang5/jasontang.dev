@@ -9,7 +9,7 @@ import { createElement, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { VideoAscii } from 'react-video-ascii';
 import KnockoffAscii from './KnockoffAscii.vue';
-import { imageDetail } from '../ascii-density.js';
+import { hammerArmed, imageDetail } from '../ascii-density.js';
 
 const props = defineProps({
   source: String,
@@ -24,8 +24,23 @@ const props = defineProps({
   // an element to move the controls into (my pictures' toolbar on a phone) instead of
   // floating them over the photo
   controlsTo: { type: Object, default: null },
+  // fewer buttons: a tap on the photo flips between ascii and the photo, and the
+  // mode buttons, sliders, hammer and reset wait behind a small ⋯ button
+  tidy: Boolean,
 });
 const emit = defineEmits(['update:enabled']);
+
+const toolsOpen = ref(false);
+const toolsShown = computed(() => !props.tidy || toolsOpen.value);
+// which mode it just switched to, shown for a moment as a pill on the photo
+const flipped = ref(null);
+function tapPhoto() {
+  if (!props.tidy || props.mediaType !== 'image' || hammerArmed.value || failed.value) return;
+  emit('update:enabled', !props.enabled);
+  flipped.value = { text: props.enabled ? 'Photo' : 'ASCII', key: Date.now() };
+}
+// putting the tools away puts the hammer down too
+watch(toolsShown, shown => { if (!shown) hammerArmed.value = false; });
 
 const host = ref(null);
 const fallbackVideo = ref(null);
@@ -274,6 +289,8 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="ascii-image"
+    :class="{ 'ascii-tidy': tidy }"
+    @click="tapPhoto"
     :role="mediaType === 'image' || showControls ? 'group' : 'img'"
     :aria-label="description"
   >
@@ -310,11 +327,14 @@ onBeforeUnmount(() => {
       :visible="visible"
       :reduced-motion="reducedMotion"
       :controls-to="controlsTo"
+      :show-tools="toolsShown"
       @error="failed = true"
+      @tap="tapPhoto"
     />
+    <span v-if="flipped" :key="flipped.key" class="ascii-flip-pill" aria-hidden="true" @animationend="flipped = null">{{ flipped.text }}</span>
     <Teleport :to="controlsTo || 'body'" :disabled="!controlsTo">
     <button
-      v-if="mediaType === 'image' && enabled && !failed"
+      v-if="mediaType === 'image' && enabled && !failed && toolsShown"
       class="ascii-reset raised"
       :class="{ spinning }"
       title="Restore canvas"
@@ -334,7 +354,7 @@ onBeforeUnmount(() => {
     <!-- stop events here so clicking the toggle doesn't also poke the image or drag the window -->
     <Teleport :to="controlsTo || 'body'" :disabled="!controlsTo">
     <div
-      v-if="mediaType === 'image' || showControls"
+      v-if="(mediaType === 'image' || showControls) && toolsShown"
       class="ascii-mode-controls"
 
       role="group"
@@ -380,5 +400,17 @@ onBeforeUnmount(() => {
       </div>
     </div>
     </Teleport>
+    <button
+      v-if="tidy && mediaType === 'image' && !failed"
+      class="ascii-more raised"
+      :class="{ pressed: toolsOpen }"
+      :aria-pressed="toolsOpen"
+      :title="toolsOpen ? 'Hide photo tools' : 'More photo tools'"
+      aria-label="Photo tools"
+      @click.stop="toolsOpen = !toolsOpen"
+      @pointerdown.stop
+      @pointermove.stop
+      @keydown.stop
+    >⋯</button>
   </div>
 </template>

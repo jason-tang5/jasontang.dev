@@ -445,7 +445,7 @@ function balloonDone(event, id) {
         <div class="about-grid">
           <div ref="portraitFrame" class="portrait-frame inset" @pointerdown.capture="portraitHint = false">
             <div ref="portraitControls" class="pictures-controls portrait-toolbar"/>
-            <span v-if="portraitHint" class="portrait-hint" :class="{ pointing: hintAt }" :style="hintAt">Try clicking me!</span>
+            <span v-if="portraitHint" class="portrait-hint" :class="{ pointing: hintAt }" :style="hintAt">Tap to flip me!</span>
             <AsciiImage
               class="portrait-ascii"
               :source="portraitUrl"
@@ -453,6 +453,7 @@ function balloonDone(event, id) {
               :enabled="portraitAscii"
               :visible="visible"
               :controls-to="portraitControls"
+              tidy
               @update:enabled="setPortraitAscii"
             />
           </div>

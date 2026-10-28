@@ -84,17 +84,22 @@ try {
   await expect(wallpaper.locator('video')).toHaveCount(1);
   await expect.poll(() => wallpaper.locator('video').evaluate(v => v.currentTime)).toBeGreaterThan(0);
 
-  // the portrait's normal/ascii choice should survive a reload
-  const portraitButtons = page.locator('.portrait-frame').getByRole('group', { name: 'Photo rendering' });
+  // a tap flips the portrait between ascii and the photo, and the choice survives a reload
   await expect(page.locator('.portrait-ascii canvas')).toHaveCount(1);
-  await portraitButtons.getByRole('button', { name: 'Normal', exact: true }).click();
+  await page.locator('.portrait-ascii').click({ position: { x: 30, y: 30 } });
   await expect(page.locator('.portrait-ascii canvas')).toHaveCount(0);
   await expect(wallpaper.locator('canvas')).toHaveCount(1);
-  await expect(portraitButtons.getByRole('button', { name: 'Normal', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
+  await expect(page.locator('.portrait-ascii canvas')).toHaveCount(0);
+  // the mode buttons, sliders and hammer wait behind the ⋯ button
+  const portraitButtons = page.locator('.portrait-frame').getByRole('group', { name: 'Photo rendering' });
+  await expect(portraitButtons).toHaveCount(0);
+  await page.locator('.portrait-frame').getByRole('button', { name: 'Photo tools' }).click();
   await expect(portraitButtons.getByRole('button', { name: 'Normal', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await portraitButtons.getByRole('button', { name: 'ASCII', exact: true }).click();
   await expect(page.locator('.portrait-ascii canvas')).toHaveCount(1);
+  await page.locator('.portrait-frame').getByRole('button', { name: 'Photo tools' }).click();
+  await expect(portraitButtons).toHaveCount(0);
 
   assert.match(await page.locator('.desktop').evaluate(el => getComputedStyle(el).cursor), /data:image\/x-icon;base64/);
   await page.screenshot({ path: 'tmp/qa/desktop.png' });
@@ -447,23 +452,26 @@ try {
 
   // empty desktop to the right of the about window
   assert.ok(await soundsFrom(() => noisy.mouse.click(1330, 450)) > 0, 'background click makes a sound');
+  await noisy.locator('[data-window="about"]').getByRole('button', { name: 'Photo tools' }).click();
   await noisy.locator('[data-window="about"] .hammer-toggle').click();
   assert.ok(await soundsFrom(() => noisy.locator('.portrait-ascii canvas').click()) > 0, 'breaking ascii letters makes a sound');
-  assert.ok(await soundsFrom(() => noisy.locator('[data-window="about"]').getByRole('button', { name: 'Experience', exact: true }).click()) > 0, 'button click makes a sound');
+  assert.ok(await soundsFrom(() => noisy.locator('[data-window="about"] .ll-button').click()) > 0, 'button click makes a sound');
 
   // hovering buttons is silent, hovering a technology ticks
   await noisy.mouse.move(1330, 450);
   assert.equal(await soundsFrom(() => noisy.getByRole('button', { name: 'Start', exact: true }).hover()), 0, 'button hover is silent');
-  const tool = noisy.locator('[data-window="experience"] .tech-tag').first();
+  await noisy.locator('.desktop-shortcut', { hasText: 'Projects' }).dblclick();
+  const tool = noisy.locator('[data-window="projects"] .tech-tag').first();
   await tool.scrollIntoViewIfNeeded();
   assert.ok(await soundsFrom(() => tool.hover()) > 0, 'hovering a tool ticks');
+  await noisy.getByRole('button', { name: 'Close Projects', exact: true }).click();
 
   assert.ok(await soundsFrom(() => noisy.getByRole('button', { name: 'Close About Me', exact: true }).click()) > 0, 'closing makes a sound');
 
   // play breakout until the first brick breaks, which should make a sound on its own
   await noisy.locator('.desktop-shortcut', { hasText: 'Contact' }).dblclick();
   const contact = noisy.locator('[data-window="contact"]');
-  await contact.locator('#breakout-start').click();
+  await contact.getByRole('button', { name: 'Insert coin to start' }).click();
   await noisy.waitForTimeout(150);
   const beforeBrick = await tones();
   await expect(contact.locator('#breakout-status')).not.toHaveText('15 bricks to go.', { timeout: 10000 });

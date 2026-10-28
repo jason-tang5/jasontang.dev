@@ -284,6 +284,39 @@ input[type="checkbox"]:focus-visible {
   outline-offset: -4px;
 }
 
+/* tidy photos: the ⋯ that brings out the photo tools, bottom right, and the pill
+   that names the mode for a moment after a tap flips it */
+.ascii-tidy { cursor: pointer; }
+.ascii-more.raised {
+  position: absolute;
+  z-index: 2;
+  right: 6px;
+  bottom: 6px;
+  width: 30px;
+  height: 26px;
+  min-height: 0;
+  padding: 0 0 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: bold 16px/1 Tahoma, sans-serif;
+}
+.ascii-flip-pill {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 50%;
+  translate: -50% 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / .6);
+  color: #fff;
+  font: 11px 'Pixel MS Sans Serif', Tahoma, sans-serif;
+  pointer-events: none;
+  animation: ascii-pill 1.2s ease-out forwards;
+}
+@keyframes ascii-pill { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ascii-flip-pill { animation-duration: 1.2s; animation-timing-function: steps(1, end); } }
+
 /* normal / ascii toggle in the bottom left */
 .ascii-mode-controls {
   position: absolute;
@@ -4597,6 +4630,40 @@ label.mail-label {
   display: block;
 }
 
+.pictures-app:focus { outline: none; }
+
+/* a dot per photo under it, the current one filled in, like a phone's photo viewer */
+.picture-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 8px 8px;
+  flex-shrink: 0;
+}
+.picture-dots button {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.picture-dots button::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: .45;
+  transition: opacity .2s, transform .2s;
+}
+.picture-dots button.on::before { opacity: 1; transform: scale(1.35); background: var(--ink); }
+.picture-dots button:focus-visible { outline: 1px dotted var(--ink); }
+.picture-grid.raised { min-height: 0; padding: 1px 5px; line-height: 0; }
+
 
 /* ---- minesweeper ----
    squares are 24px on a desktop, where the window opens wrapped around the board and
@@ -6187,6 +6254,9 @@ label.mail-label {
 .pictures-controls .hammer-toggle.raised { position: static; order: 2; width: 32px; height: 32px; }
 .pictures-controls .ascii-hammer { order: 2; }
 .pictures-controls .ascii-reset.raised { order: 3; width: 32px; }
+/* with the photo tools put away (tidy photos) their toolbar has nothing in it, so it goes */
+.pictures-toolbar:not(:has(.pictures-controls > *)),
+.portrait-toolbar:not(:has(> *)) { display: none; }
 
 /* the sliders lie flat in the toolbar, small end on the left */
 .pictures-controls .ascii-mode-controls {
@@ -6321,11 +6391,12 @@ label.mail-label {
   margin-bottom: 5px;
 }
 
-/* the toolbar can wrap to two rows, so the hint sits at the bottom of the photo */
+/* the toolbar can wrap to two rows, so the hint sits at the bottom of the photo,
+   left of the ⋯ button */
 .portrait-frame .portrait-hint {
   top: auto;
   bottom: 15px;
-  right: 15px;
+  right: 48px;
   left: auto;
 }
 
