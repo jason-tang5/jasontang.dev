@@ -22,13 +22,14 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // the smallest turn from angle a to angle b, between -π and π
 const turnTo = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
-export function createPond({ width, height, count = 5, random = Math.random } = {}) {
+// scale shrinks every koi, for a pond in a smaller space
+export function createPond({ width, height, count = 5, scale = 1, random = Math.random } = {}) {
   const koi = Array.from({ length: count }, (_, i) => {
     const x = random() * width;
     const y = random() * height;
     const heading = random() * Math.PI * 2;
     // sizes spread evenly from little to big, give or take, so there's always a mix
-    const size = 0.36 + 0.52 * (i + 0.2 + random() * 0.6) / count;
+    const size = (0.36 + 0.52 * (i + 0.2 + random() * 0.6) / count) * scale;
     return {
       x, y, heading, size,
       speed: 28 + random() * 14,
@@ -284,6 +285,39 @@ const palettes = {
     ripple: '#96918a',
     glow: '#8a8680',
   },
+  // msn messenger's: the white of its chat with pale blue koi that stay out of the
+  // way of the messages, their patches a soft orange
+  msnLight: {
+    water: '#ffffff',
+    body: '#c9d8ea',
+    ink: '#a3b8d2',
+    patch: ['#f5b77a', '#f9cfa2'],
+    red: ['#eb9a92', '#f4bcb4'],
+    fin: '#e3ecf6',
+    outline: '#e3ecf6',
+    ring: [0.8, 0.35],
+    eye: '#6d8bb0',
+    line: '#b4c7de',
+    food: '#e0a050',
+    ripple: '#b7cce4',
+    glow: '#d6e4f4',
+  },
+  // and its night blues
+  msnDark: {
+    water: '#131922',
+    body: '#34445a',
+    ink: '#4b5f7c',
+    patch: ['#7d5534', '#986a42'],
+    red: ['#6e3136', '#8c4447'],
+    fin: '#1d2633',
+    outline: '#1d2633',
+    ring: [0.8, 0.35],
+    eye: '#0a0e14',
+    line: '#44597a',
+    food: '#c8914a',
+    ripple: '#34496a',
+    glow: '#223148',
+  },
 };
 
 const mix = (a, b, t) => {
@@ -299,12 +333,14 @@ const mix = (a, b, t) => {
 // veils, if given, returns boxes ({ x, y, width, height } on the canvas) to dim the
 // squares under, so the desktop icons and their labels can be read over the fish.
 // a hollow box (a window, which hides the pond under it anyway) only washes the
-// squares around its edge
-export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
+// squares around its edge. look 'msn' swaps in msn messenger's colours, and count and
+// scale, if given, set how many koi there are and how big
+export function createKoiPond(canvas, { dark = false, veils = () => [], look = '', count, scale = 1 } = {}) {
   const ctx = canvas.getContext('2d');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const CELL = 11; // px per grid square
-  let palette = dark ? palettes.dark : palettes.light;
+  const paletteFor = isDark => palettes[look ? `${look}${isDark ? 'Dark' : 'Light'}` : isDark ? 'dark' : 'light'];
+  let palette = paletteFor(dark);
   let width = 0;
   let height = 0;
   let pond = null;
@@ -323,7 +359,7 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!pond) pond = createPond({ width, height, count: clamp(Math.round(width * height / 260000) + 3, 6, 10) });
+    if (!pond) pond = createPond({ width, height, scale, count: count ?? clamp(Math.round(width * height / 260000) + 3, 6, 10) });
     else resizePond(pond, width, height);
   }
 
@@ -620,7 +656,7 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
       if (trail.length > 14) trail.shift();
     },
     setDark(value) {
-      palette = value ? palettes.dark : palettes.light;
+      palette = paletteFor(value);
       draw();
     },
     destroy() {
