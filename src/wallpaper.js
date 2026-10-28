@@ -1,9 +1,8 @@
-// the desktop is the animated sunset, and each colour choice re-tints it with a css
-// filter. the hex values are what earlier visits saved, so they stay the keys. the
-// koi pond swaps the sunset for a pond you can feed (KoiPond.vue).
+// the desktop is the animated sunset, or the koi pond, a pond you can feed
+// (KoiPond.vue). the hex values are what earlier visits saved, so they stay the keys,
+// and a saved colour that's no longer listed falls back to the sunset.
 export const wallpapers = [
   { label: 'Sunset', color: '#008080', filter: 'none' },
-  { label: 'Slate', color: '#576575', filter: 'grayscale(.85) brightness(.95)' },
   { label: 'Koi pond', color: '#1c1b19', filter: 'none', pond: true },
 ];
 

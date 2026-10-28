@@ -84,12 +84,12 @@ try {
   await page.locator('[data-window="settings"]').getByRole('button', { name: 'Light' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.goto('http://localhost:5192/#app=settings');
-  await page.getByRole('button', { name: 'Slate', exact: true }).click();
-  // the colours re-tint the animated sunset rather than replacing it
+  await page.getByRole('button', { name: 'Koi pond', exact: true }).click();
+  // the koi pond takes the sunset's place, and stays picked after a reload
   await expect(page.locator('.desktop-wallpaper')).toHaveCount(1);
-  await expect(page.locator('.desktop-wallpaper')).toHaveCSS('filter', /grayscale\(0\.85\)/);
+  await expect(page.locator('.koi-pond.desktop-wallpaper')).toHaveCount(1);
   await page.reload();
-  await expect(page.locator('.desktop-wallpaper')).toHaveCSS('filter', /grayscale\(0\.85\)/);
+  await expect(page.locator('.koi-pond.desktop-wallpaper')).toHaveCount(1);
   await page.route('**/api/stats', r => r.fulfill({ json: { visitors: 123, online: 2, minesweeperWins: 4, breakoutWins: 8, snakeHighScore: 9, leaderboard: [{ rank: 1, player: 'Player ABC123', score: 9 }] } }));
   await page.goto('http://localhost:5192/#app=snake');
   await expect(page.getByText('#ABC123')).toHaveCount(1);
