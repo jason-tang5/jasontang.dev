@@ -1,12 +1,12 @@
 <script setup>
-// the gallery: one big photo with dots under it, like a phone's photos app. swipe or
-// drag (or use the arrow keys) to move along, tap the photo to flip it between ascii
+// the gallery: one big photo with dots under it, like a phone's photos app. swipe,
+// drag or scroll (or use the arrow keys) to move along, tap the photo to flip it between ascii
 // and the real thing, and the grid button shows every thumbnail. the photo tools wait
 // behind a ⋯ button. when the window (or the phone) is too small for them to sit on the
 // photo, they move up into a toolbar over it. dragging the photo sideways
 // slides it along with the next or previous one coming in beside it, like a phone's
 // photo gallery
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AsciiImage from './AsciiImage.vue';
 import { photos } from '../photos.mjs';
 import { imageAscii } from '../ascii-density.js';
@@ -112,6 +112,100 @@ function swipeEnd(event) {
     offset.value = 0;
   });
 }
+// scrolling moves along too. a trackpad's sideways swipe drags the photo like a finger
+// would and lets go once it stops. each notch of a mouse wheel glides over one photo,
+// and notches that come while it's still gliding wait their turn, so a quick spin
+// goes photo by photo instead of skipping. a trackpad's up and down is a stream of
+// small deltas with momentum on the end, so that moves one photo per swipe. either
+// way, momentum still coming in after a photo has moved is ignored until it dies down
+let wheelTotal = 0;
+let wheelIdle = 0;
+let wheelLocked = false;
+let queued = 0;
+const lockWheel = () => {
+  wheelLocked = true;
+  clearTimeout(wheelIdle);
+  wheelIdle = setTimeout(() => { wheelLocked = false; }, 150);
+};
+function wheel(event) {
+  if (dragging.value || showThumbnails.value) return;
+  event.preventDefault();
+  const scale = event.deltaMode ? 40 : 1;
+  const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+  // a mouse wheel's notches come as big round steps, a trackpad's as a stream of small ones
+  const notch = !sideways && Math.abs(event.deltaY * scale) >= 50;
+  if (notch) {
+    const direction = Math.sign(event.deltaY);
+    // up to two more can wait, and turning back cancels the rest
+    if (settling.value) queued = Math.sign(queued) === -direction ? 0 : Math.max(-2, Math.min(2, queued + direction));
+    else slide(direction);
+    return;
+  }
+  if (wheelLocked || settling.value) {
+    lockWheel();
+    return;
+  }
+  clearTimeout(wheelIdle);
+  if (sideways) {
+    const width = pageWidth();
+    offset.value = Math.max(-width, Math.min(width, offset.value - event.deltaX * scale));
+    wheelIdle = setTimeout(() => {
+      const go = Math.abs(offset.value) > width / 5;
+      const direction = offset.value < 0 ? 1 : -1;
+      lockWheel();
+      settle(go ? -direction * width : 0, () => {
+        if (go) step(direction);
+        offset.value = 0;
+      });
+    }, 120);
+    return;
+  }
+  const delta = event.deltaY * scale;
+  if (Math.sign(delta) !== Math.sign(wheelTotal)) wheelTotal = 0;
+  wheelTotal += delta;
+  if (Math.abs(wheelTotal) < 60) return;
+  wheelTotal = 0;
+  lockWheel();
+  slide(Math.sign(delta));
+}
+// glides the next (1) or previous (-1) photo in. the neighbour is put beside the photo
+// and given its decoded picture and a frame to draw its letters before anything moves.
+// the glide is stepped here a frame at a time rather than left to a css transition,
+// so both photos move from the one offset and stay a gap apart the whole way. it eases
+// in and out since it starts from a standstill
+const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+const easeInOut = p => (p < 0.5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2);
+const gliding = ref(false);
+let glideFrame = 0;
+async function slide(direction) {
+  settling.value = true;
+  gliding.value = true;
+  offset.value = -direction;
+  const next = photos[(selected.value + direction + photos.length) % photos.length];
+  if (next.mediaType !== 'video') {
+    const picture = new Image();
+    picture.src = next.source;
+    await picture.decode().catch(() => {});
+  }
+  await frame();
+  const from = offset.value;
+  const to = -direction * pageWidth();
+  const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 340;
+  const start = performance.now();
+  const tick = now => {
+    const p = duration ? Math.min(1, (now - start) / duration) : 1;
+    offset.value = from + (to - from) * easeInOut(p);
+    if (p < 1) { glideFrame = requestAnimationFrame(tick); return; }
+    step(direction);
+    offset.value = 0;
+    gliding.value = false;
+    settled();
+  };
+  glideFrame = requestAnimationFrame(tick);
+}
+onBeforeUnmount(() => cancelAnimationFrame(glideFrame));
+onBeforeUnmount(() => clearTimeout(wheelIdle));
+
 // slides to `target`, then lets `done` swap the photos without a jump
 function settle(target, done) {
   if (offset.value === target) { done(); return; }
@@ -120,10 +214,26 @@ function settle(target, done) {
   clearTimeout(settleTimer);
   settleTimer = setTimeout(() => {
     done();
-    settling.value = false;
+    settled();
   }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 260);
 }
+// once a photo has moved, a wheel notch that came in on the way goes next
+function settled() {
+  settling.value = false;
+  if (!queued) return;
+  const direction = Math.sign(queued);
+  queued -= direction;
+  nextTick(() => slide(direction));
+}
 onBeforeUnmount(() => clearTimeout(settleTimer));
+
+// the photos either side are fetched ahead, so one sliding in already has its picture
+watch(selected, index => {
+  for (const shift of [-1, 1]) {
+    const next = photos[(index + shift + photos.length) % photos.length];
+    if (next.mediaType !== 'video') new Image().src = next.source;
+  }
+}, { immediate: true });
 
 // dates are "YYYY-MM-DD" or just "YYYY-MM", shown in the reader's locale
 function formatDate(date) {
@@ -167,7 +277,7 @@ onBeforeUnmount(() => removeEventListener('keydown', keys));
     <div v-if="compact" ref="toolbar" class="pictures-toolbar">
       <div ref="controlsHost" class="pictures-controls"/>
     </div>
-    <div ref="stage" :class="['pictures-stage', { swiping: offset || dragging, settling }]" @pointerdown="swipeDown" @pointermove="swipeMove" @pointerup="swipeEnd" @pointercancel="swipeEnd" @click.capture="swallowClick" @dragstart.prevent>
+    <div ref="stage" :class="['pictures-stage', { swiping: offset || dragging, settling: settling && !gliding }]" @pointerdown="swipeDown" @pointermove="swipeMove" @pointerup="swipeEnd" @pointercancel="swipeEnd" @wheel="wheel" @click.capture="swallowClick" @dragstart.prevent>
       <!-- the photo and, while it's being dragged, the neighbour coming in beside it.
            the neighbour is only made once a drag starts, then carries on as the photo
            after the swap, so its letters are already drawn and nothing reloads -->
