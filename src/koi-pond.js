@@ -266,6 +266,7 @@ const palettes = {
     line: '#8e8b85',
     food: '#c8914a',
     ripple: '#6f6c66',
+    glow: '#3e3b37', // screened over the squares the mouse trail passes
   },
   // pale water with mid grey koi, their outline a paler grey that melts into it
   light: {
@@ -281,6 +282,7 @@ const palettes = {
     line: '#8a857e',
     food: '#a8702e',
     ripple: '#96918a',
+    glow: '#8a8680',
   },
 };
 
@@ -291,7 +293,9 @@ const mix = (a, b, t) => {
   return `#${[ch(16), ch(8), ch(0)].map(c => c.toString(16).padStart(2, '0')).join('')}`;
 };
 
-// draws the pond on a canvas and runs it. returns { feed, setDark, destroy }.
+// draws the pond on a canvas and runs it. returns { feed, touch, setDark, destroy }.
+// touch(x, y) adds to the mouse trail, a line of bright spots that shrink over a second
+// like the sunset wallpaper's.
 // veils, if given, returns boxes ({ x, y, width, height } on the canvas) to dim the
 // squares under, so the desktop icons and their labels can be read over the fish.
 // a hollow box (a window, which hides the pond under it anyway) only washes the
@@ -306,6 +310,8 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
   let pond = null;
   let frame = 0;
   let last = 0;
+  const trail = [];
+  const TRAIL_LIFE = 1000;
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -513,6 +519,37 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
       }
     }
 
+    // the mouse trail: squares near each recent point are screened brighter, the spots
+    // shrinking steeply as they age and easing off toward their edge
+    const now = performance.now();
+    while (trail.length && now - trail[0].time >= TRAIL_LIFE) trail.shift();
+    if (trail.length) {
+      const lit = new Map();
+      const reach = Math.max(24, Math.max(width, height) * 0.04);
+      for (const p of trail) {
+        const radius = reach * (1 - (now - p.time) / TRAIL_LIFE) ** 6;
+        if (radius < CELL / 2) continue;
+        const c0 = Math.max(0, Math.floor((p.x - radius) / CELL)), c1 = Math.floor((p.x + radius) / CELL);
+        const r0 = Math.max(0, Math.floor((p.y - radius) / CELL)), r1 = Math.floor((p.y + radius) / CELL);
+        for (let row = r0; row <= r1; row++) {
+          for (let col = c0; col <= c1; col++) {
+            const d = Math.hypot((col + 0.5) * CELL - p.x, (row + 0.5) * CELL - p.y) / radius;
+            if (d >= 1) continue;
+            const key = row * 10000 + col;
+            const alpha = 1 - d * d;
+            if (alpha > (lit.get(key) ?? 0)) lit.set(key, alpha);
+          }
+        }
+      }
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = palette.glow;
+      for (const [key, alpha] of lit) {
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(key % 10000 * CELL, Math.floor(key / 10000) * CELL, CELL, CELL);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
     // wash each square under a veil back toward the water, fully in the middle of the
     // box and easing off toward its edges and a few squares past them
     const washed = new Map();
@@ -576,6 +613,11 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
     feed(x, y) {
       feedPond(pond, x, y);
       if (reduced.matches) draw();
+    },
+    touch(x, y) {
+      if (reduced.matches) return;
+      trail.push({ x, y, time: performance.now() });
+      if (trail.length > 14) trail.shift();
     },
     setDark(value) {
       palette = value ? palettes.dark : palettes.light;
