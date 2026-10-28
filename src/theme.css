@@ -576,6 +576,23 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   opacity: .88;
 }
 
+/* the koi pond wallpaper fills the desktop at full strength */
+.koi-pond.desktop-wallpaper {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+/* the koi pond app: the same pond filling its window above the status bar */
+.pond-water {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  cursor: var(--classic-pointer, pointer);
+}
+
 /* icons fill top to bottom, then wrap to the next column like real windows.
    App.vue snaps dragged icons to this same grid, so keep the sizes in sync */
 .desktop-grid {
@@ -2949,6 +2966,12 @@ fieldset {
   background: url(../assets/wallpaper-preview.png) center / cover no-repeat;
   opacity: .88;
   filter: var(--tone-filter, none);
+}
+
+/* the koi pond's swatch: a frame of the real pond, at full strength like the desktop */
+.wallpaper-tone.pond::before {
+  background: url(../assets/koi-pond-preview.png) center / cover no-repeat #1c1b19;
+  opacity: 1;
 }
 
 .swatch > span:not(.wallpaper-tone),

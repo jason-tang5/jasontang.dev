@@ -6,6 +6,7 @@ import { profile, projects } from '../content.mjs';
 import { folders, registry } from '../registry.js';
 import { isUnlocked } from '../unlocks.js';
 import AsciiImage from './AsciiImage.vue';
+import KoiPond from './KoiPond.vue';
 import { imageAscii } from '../ascii-density.js';
 import Analytics from './Analytics.vue';
 import Blog from './Blog.vue';
@@ -30,7 +31,7 @@ import { track } from '../analytics.js';
 import { balloonColors, balloonFrames, balloonString } from '../balloon-sprite.js';
 import { play, setSoundEnabled, setSoundLevel, soundEnabled, soundLevel } from '../sound.js';
 import { theme, setTheme } from '../theme.js';
-import { defaultWallpaper, wallpaperFilter, wallpapers } from '../wallpaper.js';
+import { defaultWallpaper, isPond, wallpaperFilter, wallpapers } from '../wallpaper.js';
 import { autoHide, edges, setAutoHide, setTaskbarEdge, taskbarEdge } from '../taskbar.js';
 
 // a folder's apps, leaving out locked ones (mail) until they're earned
@@ -570,6 +571,11 @@ function balloonDone(event, id) {
   <Blog v-else-if="win.type === 'blog'"/>
   <Chat v-else-if="win.type === 'chat'"/>
   <Terminal v-else-if="win.type === 'terminal'" :visible="visible" :active="active" @open="id => emit('open', id)" @close="id => emit('close', id)"/>
+  <!-- the koi pond wallpaper in a window of its own -->
+  <div v-else-if="win.type === 'pond'" class="app-layout pond-app">
+    <KoiPond windowed class="pond-water"/>
+    <footer class="status-bar"><span>Click the water to feed the koi</span></footer>
+  </div>
   <!-- the games, fun stuff and all apps folders: a big icon for each app inside -->
   <div v-else-if="folders[win.type]" class="app-layout">
     <div class="address-bar"><span>Address</span><div class="inset">{{ win.type === 'computer' ? 'All Apps' : `Portfolio:\\${win.label}` }}</div></div>
@@ -590,7 +596,7 @@ function balloonDone(event, id) {
     <div class="content-scroll settings-content">
       <h1>Desktop Settings</h1>
       <div class="monitor-preview inset">
-        <span class="wallpaper-tone" :style="{ '--tone-filter': wallpaperFilter(wallpaper), backgroundColor: wallpaper }"/>
+        <span class="wallpaper-tone" :class="{ pond: isPond(wallpaper) }" :style="{ '--tone-filter': wallpaperFilter(wallpaper), backgroundColor: wallpaper }"/>
         <RetroIcon name="computer"/>
         <span>Jason’s desktop</span>
       </div>
@@ -614,7 +620,7 @@ function balloonDone(event, id) {
         <legend>Desktop color</legend>
         <div class="swatches">
           <button
-            v-for="{ label, color, filter } in wallpapers"
+            v-for="{ label, color, filter, pond } in wallpapers"
             :key="color"
             class="swatch raised"
             :aria-label="label"
@@ -622,7 +628,7 @@ function balloonDone(event, id) {
             :title="label"
             @click="emit('wallpaper', color)"
           >
-            <span class="wallpaper-tone" :style="{ '--tone-filter': filter, backgroundColor: color }"/>
+            <span class="wallpaper-tone" :class="{ pond }" :style="{ '--tone-filter': filter, backgroundColor: color }"/>
             <span v-if="wallpaper === color">✓</span>
           </button>
         </div>

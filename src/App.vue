@@ -29,7 +29,8 @@ import { isUnlocked } from './unlocks.js';
 import { trackOnce } from './analytics.js';
 import { cueTrack } from './cd-cue.js';
 import { theme, setTheme } from './theme.js';
-import { defaultWallpaper, wallpaperFilter, wallpapers } from './wallpaper.js';
+import { defaultWallpaper, isPond, wallpaperFilter, wallpapers } from './wallpaper.js';
+import KoiPond from './components/KoiPond.vue';
 import { useResting } from './resting.js';
 import { autoHide, edgeNotices, setAutoHide, taskbarEdge } from './taskbar.js';
 import { addNote, findNote, noteColors } from './stickies.js';
@@ -1264,7 +1265,9 @@ onBeforeUnmount(() => {
     :style="{ '--desktop': wallpaper }"
   >
     <main ref="desktop" class="desktop" aria-label="Jason Tang’s desktop" @pointerdown.self="marqueeDown" @contextmenu="desktopContext">
+      <KoiPond v-if="isPond(wallpaper)" class="desktop-wallpaper" @pointerdown="marqueeDown"/>
       <AsciiImage
+        v-else
         class="desktop-wallpaper"
         :style="{ filter: wallpaperFilter(wallpaper) }"
         :columns="350"
