@@ -37,3 +37,12 @@ test('uneaten pellets sink away and ripples fade', () => {
   assert.equal(pond.eaten, 0);
   assert.equal(pond.ripples.length, 0);
 });
+
+test('pellets ease apart so no two share a square', () => {
+  const pond = createPond({ width: 2000, height: 2000, count: 1, random: seeded(5) });
+  pond.koi[0].x = 100; pond.koi[0].y = 100; pond.koi[0].speed = 0;
+  feedPond(pond, 1500, 1500, 8);
+  for (let i = 0; i < 40; i++) stepPond(pond, 0.05);
+  const cells = new Set(pond.food.map(f => `${Math.floor(f.x / 11)},${Math.floor(f.y / 11)}`));
+  assert.equal(cells.size, pond.food.length);
+});

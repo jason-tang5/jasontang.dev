@@ -14,7 +14,10 @@ const BODY = 51; // of those, the ones under the body. the rest carry the tail f
 const SEE_FOOD = 640; // px a koi notices pellets from
 const BITE = 18; // px from the mouth close enough to eat
 const PELLET_LIFE = 14; // seconds before an uneaten pellet sinks out of sight
-const RIPPLE_LIFE = 2.2; // seconds a ripple takes to fade
+const SPREAD = 75; // px/s a pellet starts spreading outward at, so it ends up about SPREAD * SPREAD_TIME / 3 px out
+const SPREAD_TIME = 1; // seconds until a pellet stops moving
+const FOOD_GAP = 16; // px kept between pellets, more than a grid square's diagonal
+const RIPPLE_LIFE = 3.2; // seconds a ripple takes to fade
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // the smallest turn from angle a to angle b, between -π and π
 const turnTo = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -67,12 +70,17 @@ export function resizePond(pond, width, height) {
   pond.height = height;
 }
 
-// a handful of pellets scattered around the click, and a ripple where they land
+// a handful of pellets scattered around the click, and a ripple where they land. each
+// one spreads outward from the click, slowing to a stop as it settles on the water
 export function feedPond(pond, x, y, count = 4) {
   for (let i = 0; i < count; i++) {
     const angle = pond.random() * Math.PI * 2;
     const reach = pond.random() * 18;
-    pond.food.push({ x: x + Math.cos(angle) * reach, y: y + Math.sin(angle) * reach, age: 0, driftPhase: angle });
+    const push = SPREAD * (0.6 + pond.random() * 0.4);
+    pond.food.push({
+      x: x + Math.cos(angle) * reach, y: y + Math.sin(angle) * reach, age: 0, driftPhase: angle,
+      vx: Math.cos(angle) * push, vy: Math.sin(angle) * push,
+    });
   }
   pond.ripples.push({ x, y, age: 0, size: 1 });
 }
@@ -134,10 +142,13 @@ export function stepPond(pond, dt) {
     // forward on each stroke
     k.excite = clamp(k.excite + (target ? dt * 2.5 : -dt * 0.5), 0, 1);
     const stroke = 1 + 0.5 * k.excite * Math.max(0, Math.sin(k.phase));
-    const speed = k.speed * (1 + 1.2 * k.excite) * stroke;
-    // never tighter than a circle about 40% of its length across, so even an
-    // excited koi swings round in a wide arc instead of folding back on itself
-    const turnRate = Math.min(0.7 + 1.8 * k.excite, speed / (90 * k.size));
+    // closing in on a pellet it slows down and turns tighter, nibbling its way between
+    // the scattered food instead of looping wide round each one
+    const near = target ? clamp(1 - best / 150, 0, 1) : 0;
+    const speed = k.speed * (1 + 1.2 * k.excite) * stroke * (1 - 0.6 * near);
+    // away from food, never tighter than a circle about 40% of its length across, so
+    // even an excited koi swings round in a wide arc instead of folding back on itself
+    const turnRate = Math.min(0.7 + 1.8 * k.excite, speed / (90 * k.size * (1 - 0.8 * near)));
     k.heading += clamp(turnTo(k.heading, want), -turnRate * dt, turnRate * dt);
     k.x += Math.cos(k.heading) * speed * dt;
     k.y += Math.sin(k.heading) * speed * dt;
@@ -170,18 +181,37 @@ export function stepPond(pond, dt) {
       });
     }
 
-    if (target && best < BITE) {
-      pond.food.splice(pond.food.indexOf(target), 1);
-      pond.ripples.push({ x: target.x, y: target.y, age: 0, size: 0.6 });
+    // it eats every pellet its mouth passes over, not just the one it's after
+    for (const f of pond.food.filter(f => Math.hypot(f.x - k.x, f.y - k.y) < BITE)) {
+      pond.food.splice(pond.food.indexOf(f), 1);
+      pond.ripples.push({ x: f.x, y: f.y, age: 0, size: 0.6 });
       pond.eaten++;
     }
   }
 
+  // a pellet spreads outward from where it landed, fast at first and easing to a dead
+  // stop SPREAD_TIME seconds in, then stays put
   for (const f of pond.food) {
+    const left = Math.max(0, 1 - f.age / SPREAD_TIME);
+    f.x = clamp(f.x + f.vx * left * left * dt, 0, width);
+    f.y = clamp(f.y + f.vy * left * left * dt, 0, height);
     f.age += dt;
-    // A slow shared current with a little independent bobbing per pellet.
-    f.x = clamp(f.x + (1.8 + Math.sin(f.age * 1.2 + f.driftPhase) * 2.2) * dt, 0, width);
-    f.y = clamp(f.y + (0.6 + Math.cos(f.age + f.driftPhase) * 1.8) * dt, 0, height);
+  }
+  // pellets still spreading ease away from any too close, so no two ever sit in the
+  // same square. a settled pellet holds still and the new one does the moving
+  for (let i = 0; i < pond.food.length; i++) {
+    for (let j = i + 1; j < pond.food.length; j++) {
+      const a = pond.food[i], b = pond.food[j];
+      const moveA = a.age < SPREAD_TIME, moveB = b.age < SPREAD_TIME;
+      if (!moveA && !moveB) continue;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let d = Math.hypot(dx, dy);
+      if (!(d < FOOD_GAP)) continue;
+      if (!d) { dx = Math.cos(b.driftPhase); dy = Math.sin(b.driftPhase); d = 1; }
+      const push = (FOOD_GAP - d) / (moveA && moveB ? 2 : 1) * Math.min(1, dt * 8);
+      if (moveA) { a.x = clamp(a.x - dx / d * push, 0, width); a.y = clamp(a.y - dy / d * push, 0, height); }
+      if (moveB) { b.x = clamp(b.x + dx / d * push, 0, width); b.y = clamp(b.y + dy / d * push, 0, height); }
+    }
   }
   pond.food = pond.food.filter(f => f.age < PELLET_LIFE);
   for (const r of pond.ripples) r.age += dt;
@@ -250,7 +280,7 @@ const palettes = {
     eye: '#050505',
     line: '#8a857e',
     food: '#a8702e',
-    ripple: '#b3afa8',
+    ripple: '#96918a',
   },
 };
 
@@ -459,19 +489,15 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
 
     for (const k of pond.koi) drawKoi(k);
 
-    // each pellet is a little o floating on top of the fish, free of the grid
+    // each pellet is a little o floating on top of the fish, snapped to the grid
     ctx.font = `bold ${CELL}px 'Courier New', monospace`;
-    ctx.fillStyle = palette.food;
-    for (const f of pond.food) {
-      ctx.globalAlpha = Math.max(0, 1 - f.age / PELLET_LIFE);
-      ctx.fillText('o', f.x, f.y);
-    }
+    for (const f of pond.food) mark(f.x, f.y, 'o', palette.food, Math.max(0, 1 - f.age / PELLET_LIFE));
 
     // ripples: rings of letters spreading out and fading
     ctx.font = `bold ${CELL - 3}px 'Courier New', monospace`;
     for (const r of pond.ripples) {
       const progress = r.age / RIPPLE_LIFE;
-      const radius = 8 + progress * 90 * r.size;
+      const radius = 8 + progress * 150 * r.size;
       const dots = Math.max(12, Math.ceil(2 * Math.PI * radius / CELL));
       const occupied = new Set();
       for (let i = 0; i < dots; i++) {
@@ -483,7 +509,7 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
         occupied.add(key);
         // Tangential strokes follow the circle: horizontal at top/bottom, vertical at the sides.
         const glyph = Math.abs(Math.sin(a)) > 0.85 ? '-' : Math.abs(Math.cos(a)) > 0.85 ? '|' : Math.sin(2 * a) > 0 ? '/' : '\\';
-        mark(x, y, glyph, palette.ripple, (1 - progress) * (r.wake ? 0.5 : 0.9));
+        mark(x, y, glyph, palette.ripple, (1 - progress) * (r.wake ? 0.65 : 1));
       }
     }
 
