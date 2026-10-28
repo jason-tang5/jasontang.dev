@@ -262,7 +262,7 @@ const places = [
   {
     title: 'Other places',
     items: [
-      { id: 'chat', path: 'Portfolio:\\MSN Messenger' },
+      { id: 'chat', path: 'Portfolio:\\Fishbowl' },
       { id: 'analytics', path: 'Portfolio:\\Analytics' },
       { id: 'funstuff', path: 'Portfolio:\\Fun Stuff' },
       { id: 'games', path: 'Portfolio:\\Games' },

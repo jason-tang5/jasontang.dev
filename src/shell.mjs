@@ -33,7 +33,7 @@ const binaries = { 'resume.pdf': 'resume' };
 
 // other names people might reach for
 const aliases = {
-  msn: 'chat', messenger: 'chat', breakout: 'contact', notes: 'stickies', cdplayer: 'music',
+  msn: 'chat', messenger: 'chat', fishbowl: 'chat', breakout: 'contact', notes: 'stickies', cdplayer: 'music',
   photos: 'pictures', mypictures: 'pictures', mines: 'minesweeper', othello: 'reversi', cv: 'resume', explorer: 'computer',
   cmd: 'terminal', bash: 'terminal',
 };

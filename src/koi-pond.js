@@ -285,7 +285,7 @@ const palettes = {
     ripple: '#96918a',
     glow: '#8a8680',
   },
-  // msn messenger's: the white of its chat with pale blue koi that stay out of the
+  // the fishbowl's, in msn messenger's colours: the white of its chat with pale blue koi that stay out of the
   // way of the messages, their patches a soft orange
   msnLight: {
     water: '#ffffff',
@@ -333,7 +333,7 @@ const mix = (a, b, t) => {
 // veils, if given, returns boxes ({ x, y, width, height } on the canvas) to dim the
 // squares under, so the desktop icons and their labels can be read over the fish.
 // a hollow box (a window, which hides the pond under it anyway) only washes the
-// squares around its edge. look 'msn' swaps in msn messenger's colours, and count and
+// squares around its edge. look 'msn' swaps in the fishbowl's msn colours, and count and
 // scale, if given, set how many koi there are and how big
 export function createKoiPond(canvas, { dark = false, veils = () => [], look = '', count, scale = 1 } = {}) {
   const ctx = canvas.getContext('2d');

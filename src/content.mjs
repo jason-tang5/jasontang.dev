@@ -131,7 +131,7 @@ export const projects = [
       'The Analytics window tells you who’s here. I wanted a way to say hi. And what’s an early-2000s desktop without a messenger?',
     ],
     contribution: [
-      ['Open ', { open: 'chat', text: 'MSN Messenger' }, ', pick a nickname, and you’re in one lobby with everyone else on the site. Messages show up for everyone instantly, and I can moderate the room from the same window.'],
+      ['Open ', { open: 'chat', text: 'Fishbowl' }, ', pick a nickname, and you’re in one lobby with everyone else on the site. Messages show up for everyone instantly, and I can moderate the room from the same window.'],
     ],
     implementationTitle: 'How it works',
     implementation: [

@@ -346,7 +346,7 @@ test('Clippy gets live site stats in his prompt, loaded once per five minutes', 
   assert.match(prompts[0], /4,321 visits/);
   assert.match(prompts[0], /Clippy has won 9 games and lost 3/);
   assert.match(prompts[0], /Snake all-time high score: 77 by ALICE/);
-  assert.match(prompts[0], /In MSN Messenger right now: Alice/);
+  assert.match(prompts[0], /In Fishbowl right now: Alice/);
   s.room.sql.exec("UPDATE sessions SET sent='[]'");
   s.room.sql.exec('UPDATE clippy_usage SET last_at=0');
   send(s.room, alice.ws, '@Clippy and now?');

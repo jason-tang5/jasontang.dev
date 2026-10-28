@@ -62,7 +62,7 @@ const cards = computed(() => {
       note: games ? `Clippy wins ${Math.round(s.clippyWins / games * 100)}%` : 'No games yet' },
     { label: 'Highest 2048 score', value: count(s.twenty48HighScore), icon: '2048' },
     { label: 'Balloons popped', value: count(s.balloonsPopped), icon: 'balloon' },
-    { label: 'Messenger messages sent', value: count(s.chatMessages), icon: 'messenger' },
+    { label: 'Fishbowl messages sent', value: count(s.chatMessages), icon: 'koi' },
     { label: 'Tokens burnt by Clippy', value: count(s.tokensBurnt), icon: 'chip', note: 'on Workers AI' },
   ];
 });
@@ -85,7 +85,7 @@ const yourCards = computed(() => {
     { label: 'Your 2048 best', value: number(read('2048-best', '0')), icon: '2048' },
     { label: 'Balloons you popped', value: number(read('balloons-popped', '0')), icon: 'balloon' },
     { label: 'You vs Clippy', value: `${you}-${clippy}`, icon: 'reversi', note: you + clippy ? `You win ${Math.round(you / (you + clippy) * 100)}%` : 'No games yet' },
-    { label: 'Messenger messages you sent', value: number(read('chat-sent', '0')), icon: 'messenger' },
+    { label: 'Fishbowl messages you sent', value: number(read('chat-sent', '0')), icon: 'koi' },
     { label: 'Tokens you burnt', value: number(read('clippy-tokens', '0')), icon: 'chip', note: 'asking Clippy' },
   ];
 });

@@ -36,7 +36,7 @@ export const eventNames = [
   'balloon-pop', // popped one of the about window's balloons
 ];
 // written by the chat room itself (worker/chat-room.mjs), never accepted from the page:
-//   chat-message    a visitor's message in msn messenger
+//   chat-message    a visitor's message in the fishbowl
 //   clippy-tokens   one of clippy's workers ai replies. value is the tokens it took
 
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {

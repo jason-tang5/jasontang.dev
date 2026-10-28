@@ -2,7 +2,7 @@
 // the koi pond (koi-pond.js), as the desktop wallpaper or in its own window in fun stuff.
 // a click on the water drops food where it lands. on the desktop a drag is the
 // selection box instead, so only a press that barely moves counts as a click. the press
-// still carries on to App.vue's marquee. as a background (behind msn messenger's chat)
+// still carries on to App.vue's marquee. as a background (behind the fishbowl's chat)
 // it takes no clicks itself: whatever is over it passes them on with feedAt and touchAt
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { createKoiPond } from '../koi-pond.js';
@@ -11,7 +11,7 @@ import { theme } from '../theme.js';
 const props = defineProps({
   windowed: Boolean,
   background: Boolean,
-  // passed on to createKoiPond: 'msn' for msn messenger's colours, and how many koi
+  // passed on to createKoiPond: 'msn' for the fishbowl's msn colours, and how many koi
   // there are and how big
   look: { type: String, default: '' },
   count: { type: Number, default: undefined },

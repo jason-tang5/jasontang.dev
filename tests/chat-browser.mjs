@@ -43,7 +43,7 @@ try {
     const page = await context.newPage(); page.on('pageerror', err => errors.push(err.message));
     await page.goto(`${base}/#app=chat`);
     const app = page.locator('[data-window="chat"]');
-    await expect(app.getByRole('heading', { name: 'Good to see you.' })).toBeVisible();
+    await expect(app.getByLabel('Your display name')).toBeVisible();
     return { context, page, app };
   }
   const alice = await visitor();
@@ -164,7 +164,7 @@ try {
   assert.equal(overflow, false);
   await alice.app.screenshot({ path: `${output}/mobile.png` });
   await alice.app.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(alice.app.getByRole('heading', { name: 'Good to see you.' })).toBeVisible();
+  await expect(alice.app.getByLabel('Your display name')).toBeVisible();
   await alice.app.screenshot({ path: `${output}/mobile-sign-in.png` });
   assert.deepEqual(errors, []);
   console.log('PASS: real WebSocket delivery, history, sessions, reconnect, text safety, rate limits, deletion, mute, ban, kill switch, admin auth, origin checks, mobile layout and sign-out.');

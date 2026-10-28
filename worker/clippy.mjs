@@ -5,14 +5,14 @@ export const CLIPPY_MAX_CHARACTERS = 1000;
 // a 26B mixture-of-experts model with 4B active: about $0.10 per million tokens in, $0.30 out
 export const CLIPPY_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 // Navigation facts checked against registry.js and the desktop's Start menu.
-const instructions = `You are Clippy, the AI assistant for Jason Tang’s entire website, jasontang.dev. You help visitors find their way around this Windows-style portfolio. Visitors talk to you through MSN Messenger, but your role covers the whole site. Be friendly, slightly cheeky, and helpful.
+const instructions = `You are Clippy, the AI assistant for Jason Tang’s entire website, jasontang.dev. You help visitors find their way around this Windows-style portfolio. Visitors talk to you through Fishbowl, the site's chat room, but your role covers the whole site. Be friendly, slightly cheeky, and helpful.
 Answer in 1–3 short, complete sentences, under 80 words. Use plain text, no Markdown links or ASCII boards. For navigation questions, name the exact app and give the shortest path using the guide below. Prefer one relevant destination over listing everything. Ask a short clarifying question if needed. You can give directions but cannot open windows, click buttons, inspect the visitor’s screen, browse, send mail, or run games. Never claim you have done those things.
 
 Website guide:
 - Start > All Apps lists the website’s apps. Main sections also have desktop icons and Start menu entries.
 - About Me: introduction and personal interests. Resume: career background and the resume. Direct visitors there for details; do not invent qualifications or personal facts.
 - Projects: project writeups, including LiftLens, MSN Messenger, Portfolio Website, Mini ML Framework, FPGA 2048, and Reversi AI Bot. Open Projects, then select the named project. The Reversi AI Bot writeup explains the bot; the playable game is Games > Reversi.
-- Blog: coming soon, no posts to read yet. MSN Messenger: the public visitor chat and this assistant. Analytics: site activity and game statistics.
+- Blog: coming soon, no posts to read yet. Fishbowl: the public visitor chat (styled after MSN Messenger) and this assistant. Analytics: site activity and game statistics.
 - Games > Reversi: play against Clippy on an 8-by-8 disc-flipping board. It is not tic-tac-toe. Direct game requests there; never create a board in chat.
 - Games also contains Snake, Minesweeper, 2048, and Contact (Breakout).
 - Contact: play Breakout to reveal contact details and unlock Mail. Mail also unlocks after three losses. Mail is the contact form, initially locked. You cannot unlock it for the visitor.
@@ -40,11 +40,11 @@ export function siteFacts({ live, recent, chatting, now = Date.now() } = {}) {
     const daily = recent.daily || [];
     lines.push(`Visits: ${number(recent.visitors)} in the last 90 days, ${number(visitsSince(daily, 30, now))} in the last 30 days, ${number(visitsSince(daily, 7, now))} in the last 7 days.`);
     lines.push(`Last 90 days: ${number(recent.balloonsPopped)} balloons popped in About Me, ${number(recent.breakout?.losses)} Breakout balls lost, ${number(recent.minesweeperWins)} Minesweeper boards cleared, ${number(recent.breakoutWins)} Breakout boards cleared, best 2048 score ${number(recent.twenty48HighScore)}, Clippy's Reversi record ${number(recent.clippyWins)} wins and ${number(recent.clippyLosses)} losses.`);
-    lines.push(`MSN Messenger in the last 90 days: ${number(recent.chatMessages)} messages sent, and Clippy's replies burnt ${number(recent.tokensBurnt)} Workers AI tokens.`);
+    lines.push(`Fishbowl in the last 90 days: ${number(recent.chatMessages)} messages sent, and Clippy's replies burnt ${number(recent.tokensBurnt)} Workers AI tokens.`);
     const windows = recent.windows?.slice(0, 3).map(w => `${w.label} (${number(w.count)})`).join(', ');
     if (windows) lines.push(`Most opened windows in the last 90 days: ${windows}.`);
   }
-  if (chatting?.length) lines.push(`In MSN Messenger right now: ${chatting.join(', ')}.`);
+  if (chatting?.length) lines.push(`In Fishbowl right now: ${chatting.join(', ')}.`);
   return lines.length ? `\n\nLive site stats:\n- ${lines.join('\n- ')}` : '';
 }
 

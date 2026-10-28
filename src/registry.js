@@ -19,7 +19,7 @@ export const apps = [
   app('projects', 'Projects', 'folder', 840, 580, 430, 310),
   app('resume', 'Resume', 'document', 740, 650),
   app('blog', 'Blog', 'notebook', 720, 580),
-  app('chat', 'MSN Messenger', 'messenger', 760, 640, 340, 440),
+  app('chat', 'Fishbowl', 'koi', 760, 640, 340, 440),
   app('analytics', 'Analytics', 'chart', 720, 640),
   app('games', 'Games', 'games', 440, 350, 300, 270),
   app('funstuff', 'Fun Stuff', 'funstuff', 440, 350, 300, 270),
