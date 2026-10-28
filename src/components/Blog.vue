@@ -9,6 +9,7 @@ import { parse, slugify, safeSrc } from '../blog-markup.mjs';
 import { pastedTable } from '../blog-paste.mjs';
 import { withFigures } from '../blog-figures.mjs';
 import InlineText from './InlineText.vue';
+import RetroIcon from './RetroIcon.vue';
 import ContactFigures from './ContactFigures.vue';
 import BlogCode from './BlogCode.vue';
 import BlogGraphic from './BlogGraphic.vue';
@@ -28,6 +29,9 @@ const figureSets = {
 
 const props = defineProps({
   posts: { type: Array, default: () => localPosts },
+  // the blog is on hold, so visitors get a coming soon page. signed in i still see
+  // everything and can keep writing. false brings the posts back
+  comingSoon: { type: Boolean, default: true },
 });
 
 const slug = ref(null);
@@ -36,6 +40,7 @@ const reading = ref(null);
 const written = ref([]);
 // my email once access says i'm signed in
 const admin = ref(null);
+const soon = computed(() => props.comingSoon && !admin.value);
 const draft = ref(null);
 const previewing = ref(false);
 const saving = ref(false);
@@ -274,7 +279,7 @@ async function destroy() {
 <template>
   <div class="app-layout">
     <!-- signed out, the list's toolbar would only say "Blog", so it's left off -->
-    <div v-if="draft || post || admin" class="toolbar">
+    <div v-if="!soon && (draft || post || admin)" class="toolbar">
       <template v-if="draft">
         <button class="raised" :disabled="saving" @click="publish">Publish</button>
         <button class="raised" :class="{ pressed: previewing }" @click="previewing = !previewing">Preview</button>
@@ -335,6 +340,11 @@ async function destroy() {
       />
     </form>
 
+    <div v-else-if="soon" class="content-scroll blog-reading blog-soon">
+      <RetroIcon name="notebook"/>
+      <h1>Coming soon…</h1>
+    </div>
+
     <div v-else ref="reading" class="content-scroll blog-reading">
       <template v-if="!post">
         <h1>Blog</h1>
@@ -392,7 +402,7 @@ async function destroy() {
     </div>
 
     <footer class="status-bar" role="status">
-      <span>{{ status || (draft ? (previewing ? 'Previewing. Press Preview again to keep writing.' : 'Writing a post.') : `${allPosts.length} posts`) }}</span>
+      <span>{{ soon ? 'Coming soon' : status || (draft ? (previewing ? 'Previewing. Press Preview again to keep writing.' : 'Writing a post.') : `${allPosts.length} posts`) }}</span>
       <span v-if="admin">Signed in</span>
     </footer>
   </div>

@@ -676,7 +676,7 @@ onMounted(async () => {
         :visible="visible"
         @update:enabled="asciiOn = $event"
       />
-      <p class="pf-note">This is the same component as My Pictures. Pick up the hammer in the top left, then click or hold on Pocky. ↻ puts the letters back.</p>
+      <p class="pf-note">This is the same component as the Gallery. Pick up the hammer in the top left, then click or hold on Pocky. ↻ puts the letters back.</p>
     </div>
 
     <!-- ramp: pixels to letters -->

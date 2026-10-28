@@ -26,7 +26,7 @@ test('an app opens by name, with open, start or an alias', () => {
   assert.equal(run('./breakout', state).open, 'contact');
   assert.equal(run('open liftlens', state).open, 'liftlens');
   assert.equal(run('open games', state).open, 'games');
-  assert.equal(appFor('CD Player'), 'music');
+  assert.equal(appFor('Music'), 'music');
   assert.equal(run('open nothing', state).open, undefined);
 });
 

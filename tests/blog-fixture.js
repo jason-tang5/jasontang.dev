@@ -22,7 +22,7 @@ export function mountFixture() {
     ],
   };
 
-  createApp(Blog, { posts: [post] }).mount(host);
+  createApp(Blog, { posts: [post], comingSoon: false }).mount(host);
 }
 
 // the published contact form post (fixtures/contact-post.json, a copy of /api/blog),
@@ -33,7 +33,7 @@ export async function mountContactFixture() {
   host.id = 'blog-fixture';
   host.style = 'position:fixed;inset:0;z-index:999999;background:white;display:flex';
   document.body.append(host);
-  createApp(Blog, { posts: [{ ...post, lead: { type: 'image', src: post.leadImage, alt: post.title } }] }).mount(host);
+  createApp(Blog, { posts: [{ ...post, lead: { type: 'image', src: post.leadImage, alt: post.title } }], comingSoon: false }).mount(host);
 }
 
 export function mountGalleryFixture() {
@@ -41,5 +41,5 @@ export function mountGalleryFixture() {
   host.id = 'blog-fixture';
   host.style = 'position:fixed;inset:0;z-index:999999;display:flex';
   document.body.append(host);
-  createApp(Blog, { posts: [{ slug: 'test-blog', title: 'test blog', date: '2026-09-27', source: 'hello world\n\nJason was here' }] }).mount(host);
+  createApp(Blog, { posts: [{ slug: 'test-blog', title: 'test blog', date: '2026-09-27', source: 'hello world\n\nJason was here' }], comingSoon: false }).mount(host);
 }

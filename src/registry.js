@@ -16,7 +16,6 @@ export const apps = [
   // the desktop icons and start menu follow this order. the desktop leaves an empty
   // cell after resume, so the work stuff reads as its own group above the rest
   app('about', 'About Me', 'person', 900, 740, 430, 350),
-  app('experience', 'Experience', 'case', 680, 570, 410, 310),
   app('projects', 'Projects', 'folder', 840, 580, 430, 310),
   app('resume', 'Resume', 'document', 740, 650),
   app('blog', 'Blog', 'notebook', 720, 580),
@@ -27,10 +26,10 @@ export const apps = [
   app('contact', 'Contact', 'contact', 460, 680, 340, 520),
   // opened from the start menu, shows every app in one folder view
   app('computer', 'All Apps', 'computer', 480, 440, 300, 270),
-  app('pictures', 'My Pictures', 'pictures', 760, 720, 340, 400),
+  app('pictures', 'Gallery', 'pictures', 760, 720, 340, 400),
   app('settings', 'Desktop Settings', 'settings', 470, 730),
   app('stickies', 'Sticky Notes', 'sticky', 340, 520, 280, 300),
-  app('music', 'CD Player', 'music', 360, 490, 335, 200),
+  app('music', 'Music', 'music', 360, 490, 335, 200),
   app('terminal', 'Terminal', 'terminal', 600, 420, 300, 260),
   app('snake', 'Snake', 'snake', 400, 700, 340, 560),
   app('minesweeper', 'Minesweeper', 'mine', 300, 400, 250, 330),
@@ -51,7 +50,7 @@ const tucked = ['settings', 'mail', 'computer', ...Object.values(folders).flat()
 folders.computer = apps.map(a => a.id).filter(id => id !== 'computer');
 
 for (const a of apps) {
-  a.desktop = !tucked.includes(a.id); // gets a desktop icon
+  a.desktop = !tucked.includes(a.id) && a.id !== 'blog'; // gets a desktop icon. the blog is only in the start menu and all apps
   a.menu = !tucked.includes(a.id); // shows up in the start menu
   a.fixedSize = false;
   a.locked = a.id === 'mail'; // can't be opened until something unlocks it
@@ -59,8 +58,8 @@ for (const a of apps) {
   a.gapAfter = a.id === 'resume'; // an empty desktop cell follows its icon
 }
 
-// old links used #app=breakout, the game lives in contact now
-export const canonicalApp = id => (id === 'breakout' ? 'contact' : id);
+// #app=breakout opens contact, where the game is, and #app=experience opens the resume
+export const canonicalApp = id => ({ breakout: 'contact', experience: 'resume' })[id] ?? id;
 
 // each project also opens as its own window from the projects folder
 export const projectApps = projects.map(p => ({

@@ -2,7 +2,7 @@
 // picks what goes inside each window based on its type. the small apps live
 // right here, the bigger ones have their own components.
 import { defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
-import { profile, projects, roles } from '../content.mjs';
+import { profile, projects } from '../content.mjs';
 import { folders, registry } from '../registry.js';
 import { isUnlocked } from '../unlocks.js';
 import AsciiImage from './AsciiImage.vue';
@@ -189,16 +189,14 @@ const places = [
     items: [
       { id: 'projects', path: 'Portfolio:\\Projects' },
       { id: 'resume', path: 'Portfolio:\\Jason_Tang_Resume.pdf' },
-      { id: 'experience', path: 'Portfolio:\\Experience.txt' },
-      { id: 'blog', path: 'Portfolio:\\Blog' },
     ],
   },
   {
     title: 'Other places',
     items: [
       { id: 'games', path: 'Portfolio:\\Games' },
-      { id: 'music', path: 'Portfolio:\\Fun Stuff\\CD Player' },
-      { id: 'pictures', path: 'Portfolio:\\Fun Stuff\\My Pictures' },
+      { id: 'music', path: 'Portfolio:\\Fun Stuff\\Music' },
+      { id: 'pictures', path: 'Portfolio:\\Fun Stuff\\Gallery' },
       { id: 'chat', path: 'Portfolio:\\MSN Messenger' },
       { id: 'analytics', path: 'Portfolio:\\Analytics' },
     ],
@@ -446,16 +444,10 @@ function balloonDone(event, id) {
             <!-- a few quick facts under an etched line -->
             <section class="about-facts-section" aria-labelledby="about-facts-heading">
               <h2 id="about-facts-heading">About me</h2>
-              <nav class="about-links" aria-label="More about me">
-                <button v-for="id in ['projects', 'resume', 'experience', 'terminal']" :key="id" class="about-link raised" @click="emit('open', id)">
-                  <RetroIcon :name="registry[id].icon" small/>
-                  <span>{{ registry[id].label }}</span>
-                </button>
-              </nav>
               <AboutFacts :facts="profile.facts"/>
               <!-- what i'm building right now, the clean from the liftlens writeup -->
               <LiftLensFigures figure="angles" compact>
-                <template #caption><strong>Currently building</strong> <button class="crumb-back" @click="emit('open', 'liftlens')">LiftLens</button> · 100kg @ 1.3m/s</template>
+                <template #caption><button class="crumb-back" @click="emit('open', 'liftlens')">LiftLens</button> · 100kg @ 1.3m/s</template>
               </LiftLensFigures>
             </section>
           </div>
@@ -551,30 +543,6 @@ function balloonDone(event, id) {
       <aside v-if="win.project.funFact" class="fun-fact"><strong>Fun fact</strong><p>{{ win.project.funFact }}</p></aside>
     </article>
     <footer class="status-bar"><span>Project information</span><span>{{ win.project.tech[0] }}</span></footer>
-  </div>
-
-  <!-- experience -->
-  <div v-else-if="win.type === 'experience'" class="app-layout">
-    <div class="toolbar"><RetroIcon name="document" small/><span>Experience.txt</span></div>
-    <article class="content-scroll document pixel-headings">
-      <p class="eyebrow">WORK & EDUCATION</p>
-      <h1>Experience</h1>
-      <section v-for="role in roles" :key="role.company" class="role">
-        <p class="role-date">{{ role.dates }} · {{ role.location }}</p>
-        <h2>{{ role.company }}</h2>
-        <strong>{{ role.role }}</strong>
-        <ul>
-          <li v-for="bullet in role.bullets" :key="bullet"><InlineText :text="bullet" /></li>
-        </ul>
-      </section>
-      <section class="role">
-        <h2>University of Toronto</h2>
-        <p>{{ profile.education }}</p>
-        <h3>Tools I’ve worked with</h3>
-        <p><TechList :items="profile.skills" chips/></p>
-      </section>
-    </article>
-    <footer class="status-bar"><span>{{ roles.length }} roles</span><span>Jason Tang</span></footer>
   </div>
 
   <!-- resume pdf -->

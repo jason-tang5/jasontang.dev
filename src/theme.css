@@ -2285,31 +2285,6 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   color: var(--ink);
 }
 
-.role {
-  border-bottom: 1px solid var(--d-rule, #ccc);
-  padding-bottom: 12px;
-  margin-bottom: 25px;
-}
-
-.role:last-child {
-  border: none;
-}
-
-.role .role-date {
-  font: 11px/1.5 'Courier New', monospace;
-  color: var(--muted);
-  margin-bottom: 7px;
-}
-
-.role h2 {
-  margin-top: 0;
-}
-
-.role > strong {
-  font-size: 14px;
-}
-
-
 /* ---- resume ---- */
 
 .resume-viewer {
@@ -2322,6 +2297,17 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 
 
 /* ---- blog ---- */
+
+/* the coming soon page visitors see while the blog is on hold */
+.blog-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+.blog-soon h1 { margin: 6px 0 0; }
 
 /* same warm off-white as the about window */
 .blog-reading {
@@ -2563,28 +2549,6 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   font: bold 21px/1.3 'Pixel MS Sans Serif', Tahoma, sans-serif;
   -webkit-font-smoothing: none;
   color: var(--ink);
-}
-
-/* projects, resume and experience as a row of raised buttons under the heading */
-.about-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.about-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 6px;
-  font: inherit;
-  color: var(--ink);
-  cursor: var(--classic-pointer);
-}
-
-.about-link:focus-visible span {
-  outline: 1px dotted var(--edge);
 }
 
 /* the terminal in fun stuff (Terminal.vue): a black screen in the dos colours that

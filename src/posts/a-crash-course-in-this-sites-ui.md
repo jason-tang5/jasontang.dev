@@ -2,7 +2,7 @@ This site is a Windows 95 desktop I built in about 180 commits over five days. M
 
 # Photos made of letters
 
-The About photo and everything in My Pictures are coloured ASCII art. Pick up the hammer and you can knock the letters off to reveal the photo. The one at the top of this post is the real component, so feel free to smash Pocky.
+The About photo and everything in the Gallery are coloured ASCII art. Pick up the hammer and you can knock the letters off to reveal the photo. The one at the top of this post is the real component, so feel free to smash Pocky.
 
 The animated wallpaper uses [react-video-ascii](https://www.npmjs.com/package/react-video-ascii), which runs in its own corner since it's built for React, not Vue. For photos I wrote my own canvas version (`KnockoffAscii.vue`), mostly because I wanted the hammer.
 

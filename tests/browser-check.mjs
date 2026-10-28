@@ -176,36 +176,44 @@ try {
   await page.getByRole('button', { name: 'Close About Me', exact: true }).click();
   await expect(page.locator('.portrait-ascii canvas')).toHaveCount(0);
 
-  // ---- my pictures ----
+  // ---- gallery ----
 
   await open('pictures');
   const pictures = page.locator('[data-window="pictures"]');
-  await expect(pictures.locator('.picture-thumbnails button')).toHaveCount(photos.length);
+  await expect(pictures.locator('.picture-dots button')).toHaveCount(photos.length);
+  await expect(pictures.locator('.picture-thumbnails')).toHaveCount(0);
   await expect(pictures.locator('.pictures-hero canvas')).toHaveCount(1);
+  await expect(pictures.getByRole('group', { name: 'Photo rendering' })).toHaveCount(0);
   await pictures.screenshot({ path: 'tmp/qa/pictures-desktop.png' });
 
-  // every photo should load in normal mode
-  const modes = pictures.getByRole('group', { name: 'Photo rendering' });
-  await modes.getByRole('button', { name: 'Normal', exact: true }).click();
+  // every photo should load in normal mode. a tap on the photo flips it, the dots pick one
+  const hero = pictures.locator('.pictures-hero .ascii-image');
+  await hero.click({ position: { x: 30, y: 30 } });
   await expect(pictures.locator('canvas')).toHaveCount(0);
   for (let i = 0; i < photos.length; i++) {
-    await pictures.locator('.picture-thumbnails button').nth(i).click();
+    await pictures.locator('.picture-dots button').nth(i).click();
     await expect(pictures.locator('.status-bar > span:first-child')).toHaveText(`${i + 1} / ${photos.length}`);
     await expect.poll(() => pictures.locator('.pictures-hero img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
   }
 
-  await modes.getByRole('button', { name: 'ASCII', exact: true }).click();
+  await hero.click({ position: { x: 30, y: 30 } });
   await expect(pictures.locator('canvas')).toHaveCount(1);
-  await pictures.getByRole('button', { name: 'Previous photo' }).click();
+  await pictures.locator('.picture-dots button').last().focus();
+  await page.keyboard.press('ArrowLeft');
   await expect(pictures.locator('.status-bar > span:first-child')).toHaveText(`${photos.length - 1} / ${photos.length}`);
   await page.keyboard.press('ArrowRight');
   await expect(pictures.locator('.status-bar > span:first-child')).toHaveText(`${photos.length} / ${photos.length}`);
+  // the grid button shows every thumbnail
+  await pictures.getByRole('button', { name: 'Show all photos' }).click();
+  await expect(pictures.locator('.picture-thumbnails button')).toHaveCount(photos.length);
+  await pictures.locator('.picture-thumbnails button').first().click();
+  await expect(pictures.locator('.status-bar > span:first-child')).toHaveText(`1 / ${photos.length}`);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await pictures.screenshot({ path: 'tmp/qa/pictures-mobile.png' });
   assert.equal(await pictures.evaluate(el => el.scrollWidth <= el.clientWidth), true);
   await page.setViewportSize({ width: 1100, height: 750 });
-  await page.getByRole('button', { name: 'Close My Pictures', exact: true }).click();
+  await page.getByRole('button', { name: 'Close Gallery', exact: true }).click();
   await expect(page.locator('.pictures-hero canvas')).toHaveCount(0);
 
   // ---- contact / breakout ----
@@ -218,20 +226,21 @@ try {
   const startButton = game.locator('#breakout-start');
   await expect(game.locator('#breakout')).toBeVisible();
 
-  // switching to another window pauses the game
-  await startButton.click();
+  // a coin in the cabinet's slot starts a game, and switching to another window pauses it
+  const coin = game.getByRole('button', { name: 'Insert coin to start' });
+  await coin.click();
   await expect(startButton).toHaveText('Pause');
   await open('blog');
   await expect(startButton).toHaveText('Resume');
-  await expect(page.getByText('No posts published yet.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Coming soon…' })).toBeVisible();
 
   // keyboard controls
   await open('contact');
   await game.locator('#breakout-restart').click();
   await expect(startButton).toHaveText('Play');
-  await game.locator('#breakout').focus();
-  await page.keyboard.press('Space');
+  await coin.click();
   await expect(startButton).toHaveText('Pause');
+  await game.locator('#breakout').focus();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Space');
   await expect(startButton).toHaveText('Resume');
@@ -242,7 +251,6 @@ try {
   await expect(startButton).toHaveText('Resume');
   await game.screenshot({ path: 'tmp/qa/contact-desktop.png' });
 
-  await expect(game.locator('.contact-invitation')).toHaveText('Want to get my email? Beat the game :)');
   await expect(game.locator('#breakout-add-ball')).toHaveCount(0);
   await expect(game.locator('.status-bar a')).toHaveCount(0);
 
@@ -349,9 +357,9 @@ try {
   await cd.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(cd.getByRole('button', { name: 'Pause', exact: true })).toBeEnabled();
   await cd.getByRole('button', { name: 'Next track' }).click();
-  await expect(track).toHaveValue('1');
+  await expect(track).toHaveText(/^2 of /);
   await cd.getByRole('button', { name: 'Previous track' }).click();
-  await expect(track).toHaveValue('0');
+  await expect(track).toHaveText(/^1 of /);
 
   await cd.getByRole('slider').fill('30000');
   await cd.getByRole('slider').dispatchEvent('change');
@@ -373,7 +381,7 @@ try {
   await page.keyboard.press('Escape');
 
   // minimizing keeps the player alive, closing destroys it
-  await page.getByRole('button', { name: 'Minimize CD Player', exact: true }).click();
+  await page.getByRole('button', { name: 'Minimize Music', exact: true }).click();
   await expect(cd.locator('iframe')).toHaveCount(1);
   await open('music');
   assert.equal(loads, 1);
@@ -382,17 +390,52 @@ try {
   await open('music');
   await expect(cd.getByRole('button', { name: 'Hide Spotify player', exact: true })).toBeVisible();
   await expect(cd.getByRole('link', { name: 'Open in Spotify' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close CD Player', exact: true }).click();
+  await page.getByRole('button', { name: 'Close Music', exact: true }).click();
   assert.ok((await page.evaluate(() => window.__cdCalls)).includes('destroy'));
   await expect(page.locator('[data-window="music"] iframe')).toHaveCount(0);
 
   // if spotify is blocked, we should still offer the album link
   const blocked = await browser.newPage();
+  // the first visit's tips note would sit over the player
+  await blocked.addInitScript(() => localStorage.setItem('jt-desktop:starter-note', 'done'));
   await blocked.route('https://open.spotify.com/embed/iframe-api/v1', route => route.abort());
   await blocked.goto(base + '#app=music');
   await blocked.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(blocked.getByRole('link', { name: 'Open in Spotify' })).toBeVisible();
   await blocked.close();
+
+  // ---- projects folder ----
+
+  // one row of cards, all the same size, each with its figure, a short tagline and its tech
+  await open('projects');
+  const folder = page.locator('[data-window="projects"]');
+  const cards = folder.locator('.hero-card');
+  await expect(cards).toHaveCount(projects.length);
+  const cardSizes = await cards.evaluateAll(all => all.map(c => `${Math.round(c.offsetWidth)}x${Math.round(c.offsetHeight)}`));
+  assert.equal(new Set(cardSizes).size, 1, `cards are one size (${cardSizes})`);
+  for (const p of projects) {
+    const words = p.tagline.split(/\s+/).length;
+    assert.ok(words >= 5 && words <= 10, `${p.id} tagline is 5-10 words`);
+    await expect(cards.filter({ hasText: p.tagline })).toHaveCount(1);
+  }
+  await expect(cards.first().locator('.hero-figure figure')).toHaveCount(1);
+  await expect(cards.first().locator('.tech-chips')).toBeVisible();
+  await folder.screenshot({ path: 'tmp/qa/projects-hero.png' });
+  await cards.nth(1).locator('.hero-card-open').click({ force: true });
+  await expect(page.locator(`[data-window="${projects[1].id}"]`)).toBeVisible();
+  await page.getByRole('button', { name: `Close ${projects[1].name}`, exact: true }).click();
+  await page.getByRole('button', { name: 'Close Projects', exact: true }).click();
+
+  // ---- koi pond wallpaper ----
+
+  await open('settings');
+  await page.locator('[data-window="settings"]').getByRole('button', { name: 'Koi pond' }).evaluate(b => b.click());
+  await expect(page.locator('canvas.koi-pond')).toHaveCount(1);
+  await expect(page.locator('.desktop-wallpaper .ascii-layer')).toHaveCount(0);
+  await page.screenshot({ path: 'tmp/qa/koi-pond.png' });
+  await page.locator('[data-window="settings"]').getByRole('button', { name: 'Reset wallpaper' }).evaluate(b => b.click());
+  await expect(page.locator('canvas.koi-pond')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close Desktop Settings', exact: true }).click();
 
   // ---- resume and old urls ----
 
@@ -430,6 +473,8 @@ try {
   // count every tone and noise burst web audio starts, so we can tell if sounds are playing
   const noisy = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await noisy.addInitScript(() => {
+    // the first visit's tips note would sit on the empty desktop clicked below
+    localStorage.setItem('jt-desktop:starter-note', 'done');
     window.__tones = 0;
     for (const Node of [OscillatorNode, AudioBufferSourceNode]) {
       const start = Node.prototype.start;
@@ -579,7 +624,7 @@ try {
   await expect(blogPage.locator('#blog-fixture code')).toHaveText('const safe = "<script>";');
 
   await blogPage.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-  await blogPage.getByRole('button', { name: 'Copy', exact: true }).click();
+  await blogPage.getByRole('button', { name: /^Copy .* code$/ }).click();
   await expect(blogPage.getByText('Code copied.')).toBeVisible();
   assert.equal(await blogPage.evaluate(() => navigator.clipboard.readText()), 'const safe = "<script>";');
   await blogPage.screenshot({ path: 'tmp/qa/blog-fixture.png' });
