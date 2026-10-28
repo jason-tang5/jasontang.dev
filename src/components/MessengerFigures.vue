@@ -4,9 +4,12 @@
 // the checks a message runs through on its way in, and a resend after a dropped
 // connection. the rules follow worker/chat-room.mjs and worker/chat-rules.mjs, and fig 3
 // uses the real profanity filter from names.mjs
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { profane } from '../names.mjs';
-const props = defineProps({ figure: { type: String, required: true } });
+import { reducedMotion, useInView } from '../in-view.js';
+// preview is the projects folder's card: fig 1 alone in a 600 × 375 frame, no buttons,
+// playing only while the card is on screen
+const props = defineProps({ figure: { type: String, required: true }, preview: Boolean });
 
 // every figure here is an animation on one clock in ms. it loops, pauses, and with
 // reduced motion it opens on a finished frame and only moves if you press play
@@ -26,9 +29,12 @@ function pause() { playing.value = false; cancelAnimationFrame(raf); }
 function toggle() { if (playing.value) pause(); else play(); }
 function restart() { clock.value = 0; if (!playing.value) play(); }
 const still = {};
+const root = ref(null);
+const inView = props.preview ? useInView(root) : null;
+if (inView) watch(inView, on => { if (reducedMotion()) return; if (on) play(); else pause(); });
 onMounted(() => {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) clock.value = still[props.figure] ?? 0;
-  else play();
+  if (reducedMotion()) clock.value = still[props.figure] ?? 0;
+  else if (!props.preview) play();
 });
 onBeforeUnmount(() => cancelAnimationFrame(raf));
 const ease = p => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
@@ -110,6 +116,10 @@ function packetX({ from, to, p }) {
   return a + (b - a) * ease(clamp01(p));
 }
 const windows = [{ who: 'alice', name: 'Alice', x: 4 }, { who: 'bob', name: 'Bob', x: 244 }];
+// the preview's frame is squarer than the writeup's column, so its chat windows run
+// taller by this much, with the wires and the room staying halfway down them
+const grow = props.preview ? 56 : 0;
+const mid = grow / 2;
 const caret = computed(() => Math.floor(clock.value / 450) % 2 === 0);
 const short = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -256,29 +266,29 @@ const arrowEnd = a => {
 </script>
 
 <template>
-  <figure v-if="figure === 'lobby'" class="mf-figure">
+  <figure v-if="figure === 'lobby'" ref="root" class="mf-figure" :class="{ 'mf-preview': preview }">
     <figcaption><strong>Fig. 1</strong> Alice and Bob in the lobby. Every message goes up to the room, gets checked and saved, then comes back down to everyone connected.</figcaption>
     <div class="mf-panel">
-      <svg class="mf-scene" viewBox="0 0 360 150" role="img" :aria-label="lobby.stage">
+      <svg class="mf-scene" :viewBox="`0 0 360 ${150 + grow}`" role="img" :aria-label="lobby.stage">
         <g v-for="w in windows" :key="w.who" :transform="`translate(${w.x}, 4)`">
-          <rect class="mf-win" width="112" height="142"/>
+          <rect class="mf-win" width="112" :height="142 + grow"/>
           <rect class="mf-title" width="112" height="13"/>
           <text class="mf-title-text" x="5" y="9.5">{{ w.name }} · Messenger</text>
-          <rect class="mf-log" x="4" y="17" width="104" height="84"/>
+          <rect class="mf-log" x="4" y="17" width="104" :height="84 + grow"/>
           <g v-for="(m, i) in lobby[w.who].log" :key="m.start" :transform="`translate(8, ${27 + i * 19})`">
             <text class="mf-who" :class="{ own: m.who === w.who }">{{ m.who === 'alice' ? 'Alice' : 'Bob' }} says:</text>
             <text class="mf-said" y="9">{{ short(m.text, 24) }}</text>
           </g>
-          <rect class="mf-box" :class="{ bad: lobby[w.who].error }" x="4" y="105" width="104" height="18"/>
-          <text class="mf-said" x="8" y="117">{{ short(lobby[w.who].box, 22) }}<tspan v-if="caret && !lobby[w.who].error && lobby[w.who].box" class="mf-caret">|</tspan></text>
-          <g v-if="lobby[w.who].error">
+          <rect class="mf-box" :class="{ bad: lobby[w.who].error }" x="4" :y="105 + grow" width="104" height="18"/>
+          <text class="mf-said" x="8" :y="117 + grow">{{ short(lobby[w.who].box, 22) }}<tspan v-if="caret && !lobby[w.who].error && lobby[w.who].box" class="mf-caret">|</tspan></text>
+          <g v-if="lobby[w.who].error" :transform="`translate(0, ${grow})`">
             <rect class="mf-warn" x="4" y="126" width="104" height="12"/>
             <text class="mf-warn-text" x="8" y="134.5">Keep it friendly!</text>
           </g>
         </g>
-        <line class="mf-wire" x1="116" x2="150" y1="74" y2="74"/>
-        <line class="mf-wire" x1="210" x2="244" y1="74" y2="74"/>
-        <g class="mf-room" :class="lobby.room">
+        <line class="mf-wire" x1="116" x2="150" :y1="74 + mid" :y2="74 + mid"/>
+        <line class="mf-wire" x1="210" x2="244" :y1="74 + mid" :y2="74 + mid"/>
+        <g class="mf-room" :class="lobby.room" :transform="`translate(0, ${mid})`">
           <rect x="150" y="38" width="60" height="72" rx="2"/>
           <text class="mf-room-name" x="180" y="52" text-anchor="middle">lobby</text>
           <text class="mf-room-sub" x="180" y="61" text-anchor="middle">Durable Object</text>
@@ -286,7 +296,7 @@ const arrowEnd = a => {
           <text class="mf-room-sub" x="180" y="86" text-anchor="middle">{{ lobby.saved }} saved</text>
           <text class="mf-verdict" x="180" y="104" text-anchor="middle">{{ lobby.room === 'bad' ? '✗ bad word' : lobby.room === 'saved' ? '✓ saved' : lobby.room === 'check' ? 'checking…' : '' }}</text>
         </g>
-        <circle v-for="(pk, i) in lobby.packets" :key="i" class="mf-packet" :class="{ bad: pk.bad }" :cx="packetX(pk)" cy="74" r="4"/>
+        <circle v-for="(pk, i) in lobby.packets" :key="i" class="mf-packet" :class="{ bad: pk.bad }" :cx="packetX(pk)" :cy="74 + mid" r="4"/>
       </svg>
       <p class="mf-note" aria-live="polite">{{ lobby.stage }}</p>
       <div class="mf-buttons">
@@ -429,6 +439,11 @@ const arrowEnd = a => {
 .mf-note { min-height: 1.4em; margin: 8px 0 0; font-size: 13px; line-height: 1.4; }
 .mf-scene { display: block; width: 100%; max-width: 620px; margin: 0 auto; }
 .mf-scene text { font-family: Tahoma, sans-serif; }
+/* the card preview: exactly the frame, the scene taking whatever the status line leaves */
+.mf-preview .mf-panel { box-sizing: border-box; display: flex; flex-direction: column; height: 375px; }
+.mf-preview .mf-scene { flex: 1; min-height: 0; max-width: none; }
+.mf-preview .mf-note { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mf-preview .mf-buttons { display: none; }
 
 /* fig 1 */
 .mf-win { fill: var(--mf-win); stroke: var(--mf-line); }

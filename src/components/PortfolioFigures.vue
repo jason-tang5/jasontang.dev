@@ -7,12 +7,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import RetroIcon from './RetroIcon.vue';
 import { useLiveStats } from '../live-stats.js';
 import { registry } from '../registry.js';
-defineProps({ figure: { type: String, required: true } });
+// preview is the desktop on its projects card, where it already fills the 600 by 375 frame
+defineProps({ figure: { type: String, required: true }, preview: Boolean });
 const emit = defineEmits(['open']);
 
 // ---- desktop: the site in miniature. a cursor opens a window, drags it, closes
 // it and moves on, only while the figure is on screen ----
-const deskIcons = ['about', 'resume', 'experience', 'projects', 'blog', 'analytics', 'contact', 'games', 'funstuff'];
+const deskIcons = ['about', 'resume', 'projects', 'blog', 'analytics', 'contact', 'games', 'funstuff'];
 // every position is a percentage of the little screen
 const iconAt = k => ({ x: 3 + Math.floor(k / 5) * 12, y: 3 + (k % 5) * 18 });
 const scenes = [
@@ -132,7 +133,7 @@ const tiles = computed(() => {
 </script>
 
 <template>
-  <figure v-if="figure === 'desktop'" class="pf-figure">
+  <figure v-if="figure === 'desktop'" class="pf-figure" :class="{ 'pf-preview': preview }">
     <div ref="deskStage" class="pf-mini pf-frame">
       <div class="pf-mini-desk">
         <button v-for="(id, k) in deskIcons" :key="id" class="pf-mini-icon" :class="{ picked: mini.selected === id }" :style="pct(iconAt(k))"

@@ -4,11 +4,14 @@
 // circle check with a circle you can drag around, and three ways to get bar speed out
 // of the same noisy track. the numbers follow lift-lens/backend (metrics.py,
 // plate_tracking.py), drawn at 140 px a metre
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { angles, clip, speed } from '../liftlens-clip.mjs';
+import { reducedMotion, useInView } from '../in-view.js';
 // compact is the about page's fig 1: when it's narrow it keeps the video beside the
-// readouts and leaves out the charts, so it doesn't run down the whole page
-defineProps({ figure: { type: String, required: true }, compact: Boolean });
+// readouts and leaves out the charts, so it doesn't run down the whole page. preview is
+// fig 1 on its projects card: the video beside the two charts, no readouts or controls,
+// playing by itself while the card is on screen
+const props = defineProps({ figure: { type: String, required: true }, compact: Boolean, preview: Boolean });
 
 // ---- angles: a real clean on video, with liftlens's numbers for it alongside ----
 // the video already has the app's skeleton and bar path drawn on. the charts and readouts
@@ -38,13 +41,19 @@ const speedNow = computed(() => sampleAt(speed, 1, now.value));
 const CW = 200, CH = 70;
 const cx = t => 4 + (t - clip.start) / (clip.end - clip.start) * (CW - 8);
 const inClip = rows => rows.filter(r => r[0] >= clip.start && r[0] <= clip.end);
+const ay = a => CH - 6 - a / 180 * (CH - 18);
 const angleLines = angleDefs.map(d => ({
   ...d,
-  points: inClip(angles).filter(r => r[d.col] !== null).map(r => `${cx(r[0]).toFixed(1)},${(CH - 6 - r[d.col] / 180 * (CH - 18)).toFixed(1)}`).join(' '),
+  points: inClip(angles).filter(r => r[d.col] !== null).map(r => `${cx(r[0]).toFixed(1)},${ay(r[d.col]).toFixed(1)}`).join(' '),
 }));
 const VLO = -0.5, VHI = 2;
 const vy = v => CH - 6 - (Math.min(VHI, Math.max(VLO, v)) - VLO) / (VHI - VLO) * (CH - 18);
 const speedLine = inClip(speed).map(r => `${cx(r[0]).toFixed(1)},${vy(r[1]).toFixed(1)}`).join(' ');
+// axis ticks, placed in html beside the stretched svgs as a share of its height or width
+const angleTicks = [0, 90, 180].map(v => ({ label: `${v}°`, y: ay(v) }));
+const speedTicks = [0, 1, 2].map(v => ({ label: String(v), y: vy(v) }));
+const clipLength = clip.end - clip.start;
+const timeTicks = [0, clipLength / 2, clipLength].map(t => ({ label: `${Number(t.toFixed(1))} s`, x: cx(clip.start + t) }));
 
 // the video loops the lift itself, skipping the summary the export ends on
 let frame = 0;
@@ -72,8 +81,26 @@ function stopped() { playing.value = false; cancelAnimationFrame(frame); if (vid
 function loaded() {
   const v = video.value;
   v.currentTime = clip.start;
+  if (props.preview) return previewPlay();
   // with reduced motion it waits on the first frame until you press play
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) v.play().catch(() => {});
+}
+// the preview plays only while its card is on screen, and with reduced motion holds
+// still on the first frame of the lift
+const anglesFigure = ref(null);
+const anglesInView = useInView(anglesFigure);
+function previewPlay() {
+  const v = video.value;
+  if (!props.preview || !v || v.readyState < 1) return;
+  if (anglesInView.value && !reducedMotion()) v.play().catch(() => {});
+  else v.pause();
+}
+watch(anglesInView, previewPlay);
+// if it ever runs off the end of the file it starts the lift again
+function ended() {
+  if (!props.preview) return;
+  video.value.currentTime = clip.start;
+  previewPlay();
 }
 onBeforeUnmount(() => cancelAnimationFrame(frame));
 
@@ -283,14 +310,14 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 </script>
 
 <template>
-  <figure v-if="figure === 'angles'" class="ll-figure" :class="{ 'll-compact': compact }">
+  <figure v-if="figure === 'angles'" ref="anglesFigure" class="ll-figure" :class="{ 'll-compact': compact, 'll-preview': preview }">
     <!-- the about page puts its own caption here -->
     <figcaption><slot name="caption"><strong>Fig. 1</strong> A power clean, filmed from the side. Each angle comes from three keypoints, and the graphs follow the video.</slot></figcaption>
     <div class="ll-panel ll-angles">
       <div class="ll-cam">
         <video ref="video" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
           aria-label="A power clean with LiftLens's skeleton and bar path drawn on"
-          @loadedmetadata="loaded" @play="started" @pause="stopped" @seeked="now = video.currentTime"/>
+          @loadedmetadata="loaded" @play="started" @pause="stopped" @ended="ended" @seeked="now = video.currentTime"/>
       </div>
       <div class="ll-side">
         <dl class="ll-stats">
@@ -308,18 +335,24 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
                and the strokes keep their width, or both would squash with them -->
           <div class="ll-chart-box">
             <span>Joint angles</span>
+            <div class="ll-y"><b v-for="t in angleTicks" :key="t.label" :style="{ top: `${t.y / CH * 100}%` }">{{ t.label }}</b></div>
             <svg :viewBox="`0 0 ${CW} ${CH}`" preserveAspectRatio="none">
+              <line v-for="t in angleTicks" :key="t.label" class="ll-grid" x1="0" :x2="CW" :y1="t.y" :y2="t.y" vector-effect="non-scaling-stroke"/>
               <polyline v-for="l in angleLines" :key="l.name" :points="l.points" :style="{ stroke: l.color }" vector-effect="non-scaling-stroke"/>
               <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4" vector-effect="non-scaling-stroke"/>
             </svg>
+            <div class="ll-x"><b v-for="t in timeTicks" :key="t.label" :style="{ left: `${t.x / CW * 100}%` }">{{ t.label }}</b></div>
           </div>
           <div class="ll-chart-box">
             <span>Bar speed, m/s</span>
+            <div class="ll-y"><b v-for="t in speedTicks" :key="t.label" :style="{ top: `${t.y / CH * 100}%` }">{{ t.label }}</b></div>
             <svg :viewBox="`0 0 ${CW} ${CH}`" preserveAspectRatio="none">
+              <line v-for="t in speedTicks.slice(1)" :key="t.label" class="ll-grid" x1="0" :x2="CW" :y1="t.y" :y2="t.y" vector-effect="non-scaling-stroke"/>
               <line class="ll-zero" x1="4" :x2="CW - 4" :y1="vy(0)" :y2="vy(0)" vector-effect="non-scaling-stroke"/>
               <polyline class="ll-speed" :points="speedLine" vector-effect="non-scaling-stroke"/>
               <line class="ll-cursor" :x1="cx(now)" :x2="cx(now)" y1="12" :y2="CH - 4" vector-effect="non-scaling-stroke"/>
             </svg>
+            <div class="ll-x"><b v-for="t in timeTicks" :key="t.label" :style="{ left: `${t.x / CW * 100}%` }">{{ t.label }}</b></div>
           </div>
         </div>
         <div class="ll-transport">
@@ -494,6 +527,13 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 }
 .ll-cam { position: relative; aspect-ratio: 9 / 16; }
 .ll-video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+/* the about page's copy cuts most of the floor off the bottom of the video, so it's
+   less tall */
+.ll-compact .ll-cam { aspect-ratio: 27 / 40; }
+.ll-compact .ll-video { object-fit: cover; object-position: top; }
+/* and shows just the two graphs beside it, without the readouts */
+.ll-compact .ll-stats { display: none; }
+.ll-compact .ll-side { grid-template-rows: minmax(0, 1fr) auto; }
 .ll-side { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; gap: 8px; }
 .ll-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; }
 .ll-stats > div { min-width: 0; padding: 6px 8px; background: var(--ll-tile); border: 1px solid var(--ll-edge); color: var(--ll-text); }
@@ -503,9 +543,19 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 .ll-stats dd { margin: 2px 0 0; font: bold 20px 'Courier New', monospace; }
 .ll-stats dd small { margin-left: 4px; font: 11px Tahoma, sans-serif; color: var(--ll-dim); }
 .ll-charts { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; contain: size; gap: 6px; }
-.ll-chart-box { position: relative; min-height: 0; }
-.ll-chart-box span { position: absolute; top: 3px; left: 5px; font: 10px Tahoma, sans-serif; color: var(--ll-dim); pointer-events: none; }
-.ll-charts svg { display: block; width: 100%; height: 100%; min-height: 0; box-sizing: border-box; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
+.ll-chart-box { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 12px; min-height: 0; }
+.ll-chart-box span { position: absolute; top: 3px; left: 31px; font: 10px Tahoma, sans-serif; color: var(--ll-dim); pointer-events: none; }
+.ll-charts svg { grid-column: 2; display: block; width: 100%; height: 100%; min-height: 0; box-sizing: border-box; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
+/* the axes: ticks sit beside and under the svg, since its text would stretch with it */
+.ll-y, .ll-x { position: relative; font: 9px 'Courier New', monospace; color: var(--ll-dim); }
+.ll-y { grid-column: 1; grid-row: 1; }
+.ll-x { grid-column: 2; grid-row: 2; }
+.ll-y b, .ll-x b { position: absolute; font-weight: normal; white-space: nowrap; }
+.ll-y b { right: 3px; transform: translateY(-50%); }
+.ll-x b { top: 1px; transform: translateX(-50%); }
+.ll-x b:first-child { transform: none; }
+.ll-x b:last-child { transform: translateX(-100%); }
+.ll-grid { stroke: var(--ll-edge); stroke-dasharray: 2 3; opacity: .7; }
 .ll-charts polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
 .ll-charts .ll-speed { stroke: var(--ll-bar); }
 .ll-zero { stroke: var(--ll-edge); }
@@ -523,14 +573,19 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 @container (max-width: 260px) { .ll-stats { grid-template-columns: minmax(0, 1fr); } }
 @container (max-width: 420px) {
   .ll-compact .ll-angles { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
-  /* the video stretches to the readouts' height and fills it, cropping a little off
-     its sides, so the two columns end level */
+  /* the video keeps a fixed height and the graphs stretch to match it, so the two
+     columns end level */
   .ll-compact .ll-cam { max-width: none; aspect-ratio: auto; min-height: 200px; }
-  .ll-compact .ll-video { object-fit: cover; }
-  .ll-compact .ll-side { grid-template-rows: none; align-content: start; }
-  .ll-compact .ll-stats { grid-template-columns: minmax(0, 1fr); }
-  .ll-compact .ll-charts, .ll-compact .ll-transport code { display: none; }
+  .ll-compact .ll-charts { contain: size; }
+  .ll-compact .ll-charts svg { height: 100%; }
+  .ll-compact .ll-transport code { display: none; }
 }
+/* the projects card's copy: exactly 600 by 375, the video full height on the left and
+   the two charts filling the rest, with no readouts or controls */
+.ll-preview .ll-angles { box-sizing: border-box; height: 375px; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.ll-preview .ll-cam { height: 100%; aspect-ratio: 9 / 16; }
+.ll-preview .ll-side { grid-template-rows: minmax(0, 1fr); }
+.ll-preview .ll-stats, .ll-preview .ll-transport { display: none; }
 
 /* fig 2 */
 /* the lifter sits back in grey so the plates and the candidate circle read first */

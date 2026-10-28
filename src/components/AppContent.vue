@@ -75,12 +75,73 @@ defineProps({
 });
 const emit = defineEmits(['open', 'close', 'unlock', 'wallpaper']);
 
-const selected = ref(projects[0]);
-// the preview's back and next buttons step through the files, wrapping at the ends
-function stepProject(by) {
-  const i = projects.findIndex(p => p.id === selected.value.id);
-  selected.value = projects[(i + by + projects.length) % projects.length];
+// the projects row scrolls sideways: arrows at either end, and a mouse wheel's up and
+// down turned into a card left or right. the row snaps to cards, so the wheel moves a
+// whole card at a time rather than a nudge the snap would pull straight back
+const heroRow = ref(null);
+const heroAtStart = ref(true);
+const heroAtEnd = ref(false);
+function updateHeroEnds() {
+  const row = heroRow.value;
+  if (!row) return;
+  heroAtStart.value = row.scrollLeft < 2;
+  heroAtEnd.value = row.scrollLeft > row.scrollWidth - row.clientWidth - 2;
 }
+// the cards grow with the window, so each figure, drawn 600px wide, is zoomed to fit
+function fitHeroFigures() {
+  const figure = heroRow.value?.querySelector('.hero-figure');
+  if (figure?.clientWidth) heroRow.value.style.setProperty('--hero-zoom', figure.clientWidth / 600);
+  updateHeroEnds();
+}
+watch(heroRow, (row, _, onCleanup) => {
+  if (!row) return;
+  const observer = new ResizeObserver(fitHeroFigures);
+  observer.observe(row);
+  onCleanup(() => observer.disconnect());
+}, { flush: 'post' });
+const heroScrollBehavior = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth');
+function scrollHero(direction) {
+  heroAim = null;
+  heroRow.value?.scrollBy({ left: direction * heroRow.value.clientWidth * 0.8, behavior: heroScrollBehavior() });
+}
+// brings the next card past the middle of the row (or the one before it) to the middle.
+// while the row is still sliding, the next card is counted from where it's headed, so
+// a quick spin of the wheel keeps going, but never more than about a card ahead of
+// where the row actually is
+let heroAim = null;
+let heroAimTimer = 0;
+function stepHero(direction) {
+  const row = heroRow.value;
+  const left = row.getBoundingClientRect().left - row.scrollLeft;
+  const centers = [...row.children].map(card => {
+    const box = card.getBoundingClientRect();
+    return box.left - left + box.width / 2;
+  });
+  const cardStep = centers.length > 1 ? centers[1] - centers[0] : row.clientWidth;
+  if (heroAim !== null && Math.abs(heroAim - row.scrollLeft) > cardStep * 0.75) return;
+  const middle = (heroAim ?? row.scrollLeft) + row.clientWidth / 2;
+  const target = direction > 0 ? centers.find(c => c > middle + 1) : centers.findLast(c => c < middle - 1);
+  if (target === undefined) return;
+  heroAim = Math.min(Math.max(0, target - row.clientWidth / 2), row.scrollWidth - row.clientWidth);
+  row.scrollTo({ left: heroAim, behavior: heroScrollBehavior() });
+  clearTimeout(heroAimTimer);
+  heroAimTimer = setTimeout(() => { heroAim = null; }, 500);
+}
+// a card for every notch of a mouse wheel (100px). a trackpad's stream of small deltas
+// adds up to the same before it moves
+let wheelTotal = 0;
+function heroWheel(event) {
+  const row = heroRow.value;
+  if (!row || Math.abs(event.deltaX) >= Math.abs(event.deltaY) || row.scrollWidth <= row.clientWidth) return;
+  event.preventDefault();
+  const delta = event.deltaMode ? event.deltaY * 40 : event.deltaY;
+  if (Math.sign(delta) !== Math.sign(wheelTotal)) wheelTotal = 0;
+  wheelTotal += delta;
+  if (Math.abs(wheelTotal) < 100) return;
+  stepHero(Math.sign(wheelTotal));
+  wheelTotal = 0;
+}
+onBeforeUnmount(() => clearTimeout(heroAimTimer));
 const favoritesStrip = ref(null);
 const favoritesLeft = ref(false);
 const favoritesRight = ref(false);
@@ -145,86 +206,6 @@ const places = [
 ];
 const hoveredPlace = ref(null);
 
-// the projects folder shows its files as large icons or as a details list
-const projectViews = [
-  { id: 'icons', label: 'Large icons', glyph: 'M1 1h6v6H1zM9 1h6v6H9zM1 9h6v6H1zM9 9h6v6H9zM2 2v4h4V2zM10 2v4h4V2zM2 10v4h4v-4zM10 10v4h4v-4z' },
-  { id: 'details', label: 'Details', glyph: 'M1 2h3v3H1zM6 3h9v1H6zM1 7h3v3H1zM6 8h9v1H6zM1 12h3v3H1zM6 13h9v1H6z' },
-];
-// in the details list on a touchscreen a double tap only picks the file, since the
-// rows are close enough to open one by accident. the preview's view project button
-// opens it
-let lastPointer = '';
-function openOnDoubleClick(p) {
-  if (lastPointer === 'touch' && projectView.value === 'details') return;
-  emit('open', p.id);
-}
-const projectView = ref(read('projects-view', 'icons') === 'details' ? 'details' : 'icons');
-function setProjectView(view) {
-  projectView.value = view;
-  save('projects-view', view);
-}
-
-// the details view's columns can be dragged wider or narrower by their header edges.
-// until one is dragged they squeeze to fit the pane, after that every column keeps
-// its own width and the pane scrolls if it runs out. an empty last column holds the
-// row's open button so it never sits on top of the type
-let savedColumns = null;
-try { savedColumns = JSON.parse(read('projects-columns', 'null')); } catch { /* keep the defaults */ }
-const columns = ref(savedColumns?.name ? savedColumns : null);
-const detailsHeader = ref(null);
-function detailsColumns() {
-  const c = columns.value;
-  return c
-    ? `24px ${c.name}px ${c.date}px ${c.kind}px minmax(64px, 1fr)`
-    : '24px minmax(90px, 1fr) minmax(0, 112px) minmax(0, 100px) 64px';
-}
-function resizeColumn(key, event) {
-  // pin every column to its current width so dragging one doesn't reflow the others.
-  // the name header also spans the icon column
-  if (!columns.value) {
-    const [name, date, kind] = [...detailsHeader.value.children].map(el => el.getBoundingClientRect().width);
-    columns.value = { name: Math.round(name - 24), date: Math.round(date), kind: Math.round(kind) };
-  }
-  const start = columns.value[key];
-  const x = event.clientX;
-  const handle = event.currentTarget;
-  handle.setPointerCapture(event.pointerId);
-  const move = e => {
-    columns.value[key] = Math.max(40, Math.round(start + e.clientX - x));
-  };
-  const end = () => {
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', end);
-    handle.removeEventListener('pointercancel', end);
-    save('projects-columns', JSON.stringify(columns.value));
-  };
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
-}
-// the line between the preview and the files drags like the details columns, and
-// the width it's left at is remembered
-const explorer = ref(null);
-const previewWidth = ref(Number(read('projects-preview', '0')) || null);
-function resizePreview(event) {
-  const start = event.currentTarget.parentElement.getBoundingClientRect().width;
-  const x = event.clientX;
-  const handle = event.currentTarget;
-  handle.setPointerCapture(event.pointerId);
-  const move = e => {
-    const room = explorer.value.clientWidth - 160;
-    previewWidth.value = Math.round(Math.max(180, Math.min(room, start + e.clientX - x)));
-  };
-  const end = () => {
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', end);
-    handle.removeEventListener('pointercancel', end);
-    save('projects-preview', String(previewWidth.value));
-  };
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
-}
 const resumeUrl =`${import.meta.env.BASE_URL}assets/Jason_Tang_Resume.pdf`;
 const portraitUrl = new URL('../../assets/profile.jpg', import.meta.url).href;
 const portraitHint = ref(true);
@@ -487,95 +468,30 @@ function balloonDone(event, id) {
     </footer>
   </div>
 
-  <!-- projects folder, explorer style: the selected file's details on the left,
-       the files as big icons on the right like a my computer folder -->
-  <div v-else-if="win.type === 'projects'" class="app-layout">
-    <div class="toolbar explorer-toolbar">
-      <div class="explorer-folder inset" aria-hidden="true">
-        <RetroIcon name="folder" small/>
-        <span>Projects</span>
-      </div>
-      <span class="toolbar-separator" aria-hidden="true"/>
-      <!-- large icons or details, like the view buttons on a windows 95 folder -->
-      <div class="view-toggle" role="group" aria-label="View">
-        <button
-          v-for="v in projectViews"
-          :key="v.id"
-          class="raised view-button"
-          :class="{ pressed: projectView === v.id }"
-          :aria-pressed="projectView === v.id"
-          :aria-label="v.label"
-          :title="v.label"
-          @click="setProjectView(v.id)"
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges"><path :d="v.glyph" fill="currentColor" fill-rule="evenodd"/></svg>
-        </button>
-      </div>
-    </div>
-    <div class="address-bar">
-      <span>Address</span>
-      <div class="inset address-with-icon"><RetroIcon name="folder" small/>Portfolio:\Projects</div>
-    </div>
-    <div ref="explorer" class="project-explorer content-scroll inset" :style="previewWidth ? { '--preview-width': `${previewWidth}px` } : null">
-      <aside class="project-preview">
-        <div class="preview-steps" role="group" aria-label="Project navigation">
-          <button @click="stepProject(-1)">← Back</button>
-          <span>{{ projects.findIndex(p => p.id === selected.id) + 1 }} / {{ projects.length }}</span>
-          <button @click="stepProject(1)">Next →</button>
-        </div>
-        <div class="preview-title">
-          <RetroIcon :name="selected.icon"/>
-          <div>
-            <h2>{{ selected.name }}</h2>
-            <time>{{ selected.date }}</time>
+  <!-- projects folder: one row of cards that scrolls sideways, each with the project's
+       lead figure playing in the same size box, its season, one line and its tech -->
+  <div v-else-if="win.type === 'projects'" class="app-layout projects-hero-app">
+    <div class="projects-hero-wrap">
+      <button v-show="!heroAtStart" class="raised hero-arrow hero-arrow-prev" aria-label="Previous projects" @click="scrollHero(-1)">‹</button>
+      <div ref="heroRow" class="projects-hero" role="list" aria-label="Projects" @scroll.passive="updateHeroEnds" @wheel="heroWheel">
+        <article v-for="p in projects" :key="p.id" class="hero-card raised" role="listitem">
+          <button class="hero-card-open" :aria-label="`Open ${p.name}`" @click="emit('open', p.id)"/>
+          <div class="hero-figure" aria-hidden="true" inert>
+            <div class="hero-figure-scale">
+              <component :is="figureFor[f]" v-for="f in [p.figures?.lead ?? []].flat().slice(0, 1)" :key="p.id + f" :figure="f" preview/>
+            </div>
+            <span class="hero-view">view project</span>
           </div>
-        </div>
-        <p>{{ selected.summary }}</p>
-        <div class="preview-actions">
-          <small><TechList :items="selected.tech" chips/></small>
-          <button class="raised tinted" @click="emit('open', selected.id)">View project</button>
-        </div>
-        <!-- the project's first figure, the same one that opens its what i built -->
-        <component :is="figureFor[f]" v-for="f in [selected.figures?.lead ?? []].flat().slice(0, 1)" :key="selected.id + f" :figure="f" @open="id => emit('open', id)"/>
-        <i class="preview-resize" aria-hidden="true" @pointerdown.prevent="resizePreview"/>
-      </aside>
-      <div
-        :class="projectView === 'details' ? ['project-details', { 'fixed-columns': columns }] : 'project-icons'"
-        :style="projectView === 'details' ? { '--details-columns': detailsColumns() } : null"
-        role="group"
-        aria-label="Projects"
-      >
-        <div v-if="projectView === 'details'" ref="detailsHeader" class="list-header" aria-hidden="true">
-          <span>Name<i class="col-resize" @pointerdown.prevent="resizeColumn('name', $event)"/></span>
-          <span>Modified<i class="col-resize" @pointerdown.prevent="resizeColumn('date', $event)"/></span>
-          <span>Type<i class="col-resize" @pointerdown.prevent="resizeColumn('kind', $event)"/></span>
-          <span class="col-filler"/>
-        </div>
-        <!-- hovering a file (or selecting it) shows an open button under its name -->
-        <div v-for="p in projects" :key="p.id" :class="['project-item', { selected: selected.id === p.id }]">
-          <button
-            class="project-file"
-            :aria-pressed="selected.id === p.id"
-            :title="projectView === 'details' ? null : p.kind"
-            @pointerdown="lastPointer = $event.pointerType"
-            @click="selected = p"
-            @dblclick="openOnDoubleClick(p)"
-            @keydown.enter.prevent="emit('open', p.id)"
-          >
-            <RetroIcon :name="p.icon" :small="projectView === 'details'"/>
-            <span>{{ p.name }}</span>
-            <template v-if="projectView === 'details'">
-              <small class="col-date">{{ p.date }}</small>
-              <small class="col-kind">{{ p.kind }}</small>
-            </template>
-          </button>
-          <button class="row-open raised" :title="`Open ${p.name} in its own window`" @click="emit('open', p.id)">
-            Open<span class="sr-only"> {{ p.name }}</span>
-          </button>
-        </div>
+          <div class="hero-copy">
+            <h2><RetroIcon :name="p.icon" small/>{{ p.name }} <time>{{ p.date }}</time></h2>
+            <p>{{ p.tagline }}</p>
+          </div>
+          <TechList class="hero-tech" :items="p.tech" chips @click="emit('open', p.id)"/>
+        </article>
       </div>
+      <button v-show="!heroAtEnd" class="raised hero-arrow hero-arrow-next" aria-label="More projects" @click="scrollHero(1)">›</button>
     </div>
-    <footer class="status-bar"><span>{{ selected.name }} · {{ selected.kind }}</span><span>{{ projects.length }} objects</span></footer>
+    <footer class="status-bar"><span>Click a project to open it</span><span>{{ projects.length }} projects</span></footer>
   </div>
 
   <!-- a single project -->

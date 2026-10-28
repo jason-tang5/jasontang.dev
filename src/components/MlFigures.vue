@@ -4,8 +4,11 @@
 // pass through x·x + x one gradient at a time, the tiled matmul kernel loading its
 // tiles phase by phase, and where pytorch and keras put adam's epsilon. the rules
 // follow ml-framework/crates/minitorch (autograd.rs, cuda.rs, optim.rs)
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-const props = defineProps({ figure: { type: String, required: true } });
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { reducedMotion, useInView } from '../in-view.js';
+// preview is the projects folder's card: fig 1 alone in a 600 × 375 frame, no buttons,
+// playing only while the card is on screen
+const props = defineProps({ figure: { type: String, required: true }, preview: Boolean });
 
 const fmt = v => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
@@ -97,11 +100,14 @@ function play() {
 }
 function stop() { playing.value = false; cancelAnimationFrame(raf); }
 function restart() { clock.value = 0; if (!playing.value) play(); }
+const root = ref(null);
+const inView = props.preview ? useInView(root) : null;
+if (inView) watch(inView, on => { if (reducedMotion()) return; if (on) play(); else stop(); });
 onMounted(() => {
   if (props.figure !== 'train') return;
   // with reduced motion it opens on the finished run and only moves if you press play
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) clock.value = END;
-  else play();
+  if (reducedMotion()) clock.value = END;
+  else if (!props.preview) play();
 });
 onBeforeUnmount(() => cancelAnimationFrame(raf));
 
@@ -201,7 +207,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 </script>
 
 <template>
-  <figure v-if="figure === 'train'" class="mm-figure">
+  <figure v-if="figure === 'train'" ref="root" class="mm-figure" :class="{ 'mm-preview': preview }">
     <figcaption><strong>Fig. 1</strong> Training the 784-256-128-10 MLP on MNIST. Real test digits go forward, gradients come back, Adam steps, and the GPU races the CPU through 10 epochs.</figcaption>
     <div class="mm-panel">
       <svg class="mm-net" viewBox="0 0 360 132" aria-hidden="true">
@@ -381,6 +387,17 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-curve small { color: var(--muted); }
 @container (max-width: 380px) { .mm-curve { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .mm-wires, .mm-neuron, .mm-prob { transition: none; } }
+/* the card preview: exactly the frame, the network on top and the race beside the loss
+   curve under it */
+.mm-preview .mm-panel { box-sizing: border-box; display: grid; grid-template: minmax(0, 1fr) auto auto / minmax(0, 1fr) minmax(0, 1fr); column-gap: 14px; height: 375px; }
+.mm-preview .mm-net { grid-column: 1 / -1; width: 100%; height: 100%; max-width: none; }
+.mm-preview .mm-stage { grid-column: 1 / -1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-preview .mm-race { row-gap: 12px; }
+.mm-preview .mm-race .mm-bar { height: 22px; }
+.mm-preview .mm-curve { grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; }
+.mm-preview .mm-curve svg { height: 56px; }
+.mm-preview .mm-curve p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-preview .mm-curve small, .mm-preview .mm-curve br, .mm-preview .mm-buttons { display: none; }
 
 /* fig 2 */
 .mm-graph { display: block; width: 100%; max-width: 480px; margin: 0 auto; }

@@ -2019,139 +2019,129 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 
 /* ---- projects ---- */
 
-/* the preview takes most of the window (65% of it) between 205px and 760px, so a big
-   or maximized window doesn't stretch it past what the figures need */
-.project-explorer {
-  display: grid;
-  grid-template-columns: clamp(205px, 65%, 760px) minmax(0, 1fr);
-  background: var(--paper);
-}
-
-/* once the dividing line is dragged, the preview keeps that width while it fits */
-.project-explorer[style*="--preview-width"] {
-  grid-template-columns: max(180px, min(var(--preview-width), calc(100% - 160px))) minmax(0, 1fr);
-}
-
-.project-preview {
+/* the folder is one row of cards scrolling sideways. every card is the same size and
+   grows with the window: the project's lead figure, in its preview layout of exactly
+   600x375 with its own sunken frame and no controls, zoomed to the card's width in a
+   16:10 box (the zoom is set from the script), then the name,
+   season, one line and the tech chips pinned to the bottom. the card is as wide as the
+   window's height leaves room for, with about 230px kept for the writing, scrollbar
+   and padding, and never wider than the window. in a short window the figure gives up
+   height so the card still fits above the scrollbar. the row snaps a card to its
+   middle, and sits centred when every card fits */
+.projects-hero-wrap {
   position: relative;
-  background: var(--d-page-alt, #eeeee7);
-  border-right: 1px solid var(--d-rule, #bbb);
-  padding: 12px 18px 16px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  container-type: size;
+  background: var(--d-page, #f5f4ed);
 }
-
-/* the grab strip over the dividing line */
-.preview-resize {
-  position: absolute;
-  top: 0;
-  right: -4px;
-  bottom: 0;
-  width: 7px;
-  z-index: 1;
-  cursor: var(--classic-ew);
-  touch-action: none;
+.projects-hero {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: safe center;
+  gap: 16px;
+  padding: 18px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
 }
-
-/* the figure sits under the view project button, without its caption */
-.project-explorer .project-preview figure {
-  margin: 14px 0 0;
-}
-
-.project-preview figcaption {
-  display: none;
-}
-
-/* the selected project's name, in the blog's pixel heading font */
-.project-preview h2 {
-  font: bold 19px/1.3 'Pixel MS Sans Serif', Tahoma, sans-serif;
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: grayscale;
-  margin: 0;
-}
-
-/* Navigation sits above the selected project's details in the sidebar. */
-.project-preview {
+.hero-card {
+  position: relative;
+  flex: 0 0 clamp(316px, (100cqh - 228px) * 1.6 + 16px, 100cqw - 36px);
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  max-height: 100%;
+  padding: 8px;
+  overflow: hidden;
+  scroll-snap-align: center;
+  background: var(--surface);
+  transition: translate .15s;
 }
-
-.preview-steps {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-bottom: 4px;
-  font-size: 11px;
-  color: var(--d-muted, #4c4c4c);
-}
-
-.preview-steps button {
-  padding: 3px 0;
+.hero-card:hover { translate: 0 -3px; }
+.hero-card:has(.hero-card-open:focus-visible) { outline: 2px dotted var(--ink); outline-offset: 2px; }
+/* the whole card is the button */
+.hero-card-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 11px;
-  line-height: 18px;
+  padding: 0;
+  background: none;
+  cursor: pointer;
 }
-
-.preview-steps button:hover {
+.hero-card-open:focus-visible { outline: none; }
+.hero-figure {
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--d-page, #f5f4ed);
+}
+.hero-figure-scale {
+  width: 600px;
+  zoom: var(--hero-zoom, .5);
+  pointer-events: none;
+}
+/* a little yellow tip in the figure's bottom left corner that pops up while the card
+   is pointed at or focused */
+.hero-view {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--edge);
+  background: var(--tip);
   color: var(--ink);
-  text-decoration: underline;
+  font: 14px 'Pixel MS Sans Serif', Tahoma, sans-serif;
+  -webkit-font-smoothing: none;
+  opacity: 0;
+  translate: 0 4px;
+  transition: opacity .12s, translate .12s;
 }
-
-/* the project's icon on the same line as its name */
-.preview-title {
+.hero-card:hover .hero-view,
+.hero-card:has(.hero-card-open:focus-visible) .hero-view { opacity: 1; translate: 0 0; }
+@media (prefers-reduced-motion: reduce) { .hero-view { transition: none; translate: 0 0; } }
+/* beats the figures' own scoped margins */
+.hero-figure .hero-figure-scale > figure { margin: 0; }
+.hero-figure-scale figcaption { display: none; }
+.hero-copy h2 {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.preview-title > * {
-  flex: none;
-}
-
-.preview-title > div {
-  flex: 1;
-  min-width: 0;
-}
-
-/* when it was made, small under the name */
-.preview-title time {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--d-muted, #4c4c4c);
-}
-
-.project-preview p {
+  align-items: baseline;
+  gap: 6px;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font: bold 15px 'Pixel MS Sans Serif', Tahoma, sans-serif;
+  -webkit-font-smoothing: none;
+}
+/* the season after the name, on the same line */
+.hero-copy time { font: 11px Tahoma, sans-serif; color: var(--muted); }
+.hero-copy p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; }
+/* over the card's open button, so hovering a chip still ticks. a click opens it too */
+.hero-tech { position: relative; z-index: 2; margin-top: auto; font-size: 11px; cursor: pointer; }
+.hero-arrow.raised {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  translate: 0 -50%;
+  width: 26px;
+  height: 44px;
+  min-height: 0;
+  padding: 0;
+  font: bold 20px/1 Tahoma, sans-serif;
+}
+.hero-arrow-prev { left: 4px; }
+.hero-arrow-next { right: 4px; }
+@media (hover: none) { .hero-arrow.raised { display: none; } }
+@media (max-width: 700px) {
+  .projects-hero { padding: 14px; gap: 12px; }
 }
 
-/* the tech chips and the view project button share a row, the button on the right,
-   and the button drops under the chips only when they don't leave it room */
-.preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin-top: 10px;
-}
-
-.preview-actions > small {
-  display: block;
-  line-height: 1.65;
-  font-size: 11px;
-  color: var(--d-muted, #4c4c4c);
-}
-
-.preview-actions > button {
-  flex: none;
-  font-size: 12px;
-}
 
 /* ---- documents (single project, experience) ---- */
 
@@ -5139,33 +5129,6 @@ label.mail-label {
     display: none;
   }
 
-  /* file list on top, preview below */
-  .project-explorer {
-    display: flex;
-    flex-direction: column-reverse;
-    flex: 1;
-    justify-content: flex-end;
-  }
-
-  /* the list keeps its full height. the details list scrolls sideways, which would
-     otherwise let it shrink and cut off rows when a taller preview comes in */
-  .project-icons,
-  .project-details {
-    flex-shrink: 0;
-  }
-
-  .project-preview {
-    border-right: 0;
-    border-top: 1px solid var(--d-rule, #aaa);
-    padding: 12px 20px 16px;
-  }
-
-  .preview-resize {
-    display: none;
-  }
-
-
-
   .document {
     --doc-gutter: 18px;
     padding: 22px var(--doc-gutter);
@@ -5173,8 +5136,7 @@ label.mail-label {
 
   .toolbar button,
   .toolbar a,
-  .settings-reset,
-  .preview-actions > button {
+  .settings-reset {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -7390,305 +7352,13 @@ label.mail-label {
   }
 }
 
-/* ---- the projects folder's files, as big icons like a my computer window ----
-   click selects (the name gets the navy highlight, like a desktop icon), double click opens, and
-   hovering or selecting one shows an open button under it */
-
-.project-icons {
-  display: grid;
-  /* even gaps, like the other folders */
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  justify-items: center;
-  align-content: start;
-  gap: 4px;
-  padding: 10px 6px;
-  min-width: 0;
-}
-
-.project-item {
-  position: relative;
-  width: 92px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.project-file {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 4px;
-  border: 1px dotted transparent;
-  background: none;
-  color: var(--ink);
-  font: 11px 'Pixel MS Sans Serif', Tahoma, sans-serif;
-  -webkit-font-smoothing: none;
-  cursor: var(--classic-pointer);
-}
-
-.project-file span {
-  padding: 1px 3px;
-  text-align: center;
-  line-height: 1.3;
-}
-
-.project-file:hover span {
-  color: var(--d-link, #000080);
-  text-decoration: underline;
-}
-
-.project-item.selected .project-file {
-  background: var(--navy);
-}
-
-.project-item.selected .project-file,
-.project-item.selected .project-file span,
-.project-item.selected .project-file small {
-  color: #fff;
-  text-decoration: none;
-}
-
-.project-file:focus-visible {
-  outline: none;
-  border-color: var(--ink);
-}
-
-.project-item.selected .project-file:focus-visible {
-  border-color: #fff;
-}
-
-.row-open {
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2px 10px;
-  font-size: 11px;
-  visibility: hidden;
-}
-
-.project-item:focus-within .row-open,
-.project-item.selected .row-open {
-  visibility: visible;
-}
-
-/* only a real pointer shows it on hover. on a phone, safari treats a tap that makes
-   something appear on hover as just a hover, so picking a file took an extra tap */
-@media (hover: hover) {
-  .project-item:hover .row-open {
-    visibility: visible;
-  }
-}
-
-/* the open button sits right under the name. hidden, it still keeps its room, so
-   nothing moves when it shows up */
-.project-icons .row-open {
-  position: static;
-  transform: none;
-  padding: 1px 10px;
-  min-height: 0;
-}
-
-/* in the icon view only the name is highlighted, not a big navy square */
-.project-icons .project-item.selected .project-file {
-  background: none;
-}
-
-.project-icons .project-item.selected .project-file span {
-  background: var(--navy);
-}
-
-.project-icons .project-file span {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-
-/* ---- the projects folder in details view: name, modified and type columns under
-   raised column headers whose right edges drag to resize them. a selected row is
-   highlighted end to end, with its open button in the empty last column ---- */
-
-.project-details {
-  min-width: 0;
-  overflow-x: auto;
-  container-type: inline-size;
-}
-
-.project-details .list-header,
-.project-details .project-file {
-  display: grid;
-  grid-template-columns: var(--details-columns);
-  align-items: center;
-  gap: 0;
-}
-
-/* once resized, rows grow with the columns and the pane scrolls sideways if they're too wide */
-.project-details.fixed-columns .list-header,
-.project-details.fixed-columns .project-item {
-  min-width: max-content;
-}
-
-/* name's header also covers the icon column */
-.project-details .list-header span:first-child {
-  grid-column: span 2;
-}
-
-.project-details .list-header {
-  font: 11px 'Pixel MS Sans Serif', Tahoma, sans-serif;
-  -webkit-font-smoothing: none;
-}
-
-.project-details .list-header span {
-  position: relative;
-  min-width: 0;
-  padding: 3px 6px;
-  background: var(--surface);
-  border: 1px solid;
-  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* the grab strip on each header's right edge */
-.col-resize {
-  position: absolute;
-  top: 0;
-  right: -1px;
-  bottom: 0;
-  width: 6px;
-  cursor: var(--classic-ew);
-  touch-action: none;
-}
-
-.project-details .project-item {
-  width: auto;
-  display: block;
-  padding: 0;
-}
-
-.project-details .project-file {
-  padding: 3px 0;
-  text-align: left;
-}
-
-.project-details .project-file .retro-icon {
-  justify-self: end;
-}
-
-.project-details .project-file > span {
-  justify-self: start;
-  max-width: calc(100% - 6px);
-  margin-left: 3px;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.project-details .project-file small {
-  min-width: 0;
-  padding: 0 6px;
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.project-details .row-open {
-  top: 50%;
-  bottom: auto;
-  left: auto;
-  right: 6px;
-  transform: translateY(-50%);
-  padding: 1px 10px;
-}
-
-/* on a touchscreen the open button would come up right where the next tap lands,
-   so the details list leaves it off and the preview's view project button opens */
-@media (hover: none), (any-pointer: coarse) {
-  .project-details .row-open {
-    display: none;
-  }
-}
-
-/* a narrow pane gives the open buttons' column back to the others. the preview's
-   view project button and double clicking still open it */
-@container (max-width: 380px) {
-  .project-details:not(.fixed-columns) .list-header,
-  .project-details:not(.fixed-columns) .project-file {
-    grid-template-columns: 24px minmax(90px, 1fr) minmax(0, 112px) minmax(0, 100px);
-  }
-
-  .project-details:not(.fixed-columns) .col-filler,
-  .project-details .row-open {
-    display: none;
-  }
-}
-
-
-/* the explorer toolbar over the projects folder: which folder you're in, then the
-   view buttons, pressed in for the current one */
-.explorer-toolbar {
-  gap: 6px;
-  padding: 4px 7px;
-  min-height: 0;
-}
-
-.explorer-folder {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 170px;
-  padding: 3px 6px;
-  background: var(--paper);
-  color: var(--ink);
-  font: 11px 'Pixel MS Sans Serif', Tahoma, sans-serif;
-  -webkit-font-smoothing: none;
-}
+/* a thin etched line between groups of toolbar buttons */
 
 .toolbar-separator {
   align-self: stretch;
   border-left: 1px solid var(--shadow);
   border-right: 1px solid var(--light);
   margin: 1px 2px;
-}
-
-.view-toggle {
-  display: flex;
-}
-
-.explorer-toolbar .view-button {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 24px;
-  padding: 0;
-  color: var(--ink);
-}
-
-.view-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.view-button.pressed {
-  background: repeating-conic-gradient(var(--d-pressed, #dedede) 0 25%, var(--d-check, #cacaca) 0 50%) 0 0 / 2px 2px;
-}
-
-:root[data-theme="dark"] .view-button.pressed {
-  --d-check: #404046;
-}
-
-.address-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 /* ---- labelled icons a bit smaller than a desktop icon ---- */

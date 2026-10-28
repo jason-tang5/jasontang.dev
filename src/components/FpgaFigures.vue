@@ -2,10 +2,12 @@
 // the figures in the fpga 2048 writeup (content.mjs, figures), redrawn from the
 // ece241 slides as things to poke at: the board as one 64-bit register, the two
 // step slide played one step at a time, and the one-hot keyboard fsm driven by
-// wasd. the tiles use the vga's 3-bit colours from twenty48.mjs
-import { computed, onBeforeUnmount, ref } from 'vue';
-import { emptyBoard, slideLine, tileColor, tileInk, toRegister, value } from '../twenty48.mjs';
-defineProps({ figure: { type: String, required: true } });
+// wasd. the tiles use the vga's 3-bit colours from twenty48.mjs. preview is the
+// projects card: fig 1 plays a real game of 2048 by itself, filling a 600 × 375 frame
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { addTile, canMove, emptyBoard, newGame, slide, slideLine, tileColor, tileInk, toRegister, value } from '../twenty48.mjs';
+import { reducedMotion, useInView } from '../in-view.js';
+const props = defineProps({ figure: { type: String, required: true }, preview: Boolean });
 
 // ---- register: every tile is 4 bits of one 64-bit register ----
 const board = ref([1, 0, 1, 0, 0, 2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 11]);
@@ -24,6 +26,80 @@ function shuffle() {
 const focusRange = computed(() => `[${focus.value * 4 + 3}:${focus.value * 4}]`);
 // the 16 nibbles laid out like the board, so each one sits where its tile does
 const nibbles = computed(() => bits.value.map((b, i) => ({ i, b })));
+
+// the preview's game: it pushes down, then left, so the big tiles pile into the
+// bottom left corner, and only goes right or up when it has to
+const order = ['down', 'left', 'right', 'up'];
+function autoMove(start) {
+  for (const d of order) {
+    const s = slide(start, d);
+    if (!s.moved) continue;
+    const added = addTile(s.board);
+    // light up the biggest merge, or the new tile when nothing merged
+    const merged = s.moves.filter(m => m.merged).map(m => m.to).sort((a, b) => s.board[b] - s.board[a]);
+    return { board: added.board, focus: merged[0] ?? added.at, moves: s.moves, slid: s.board, at: added.at };
+  }
+  return null;
+}
+// it starts partway into a game, so the card has some big tiles on it from the first frame
+if (props.preview) {
+  let start = newGame();
+  for (let n = 0, next; n < 120 && (next = autoMove(start)); n++) start = next.board;
+  board.value = start;
+  focus.value = start.indexOf(Math.max(...start));
+}
+const registerFigure = ref(null);
+const registerInView = useInView(registerFigure);
+// each move slides the tiles across on a layer over the board, in three steps like the
+// game's vga redraw, then the merged tiles and the new one pop in
+const slideMs = 150;
+const sliding = ref(null);
+const merged = ref([]);
+const spawned = ref(-1);
+const popped = computed(() => [...merged.value, spawned.value]);
+const shownBoard = computed(() => (sliding.value ? emptyBoard() : board.value));
+const cellAt = i => ({ '--col': i % 4, '--row': Math.floor(i / 4) });
+let gameTimer = 0;
+let slideFrame = 0;
+function gameTick() {
+  const before = board.value;
+  const next = autoMove(before);
+  if (next) {
+    sliding.value = next.moves.map(m => ({ power: before[m.from], at: m.from, to: m.to }));
+    slideFrame = requestAnimationFrame(() => {
+      slideFrame = requestAnimationFrame(() => { sliding.value?.forEach(t => { t.at = t.to; }); });
+    });
+    gameTimer = setTimeout(() => {
+      sliding.value = null;
+      board.value = next.board;
+      focus.value = next.focus;
+      merged.value = [...new Set(next.moves.filter(m => m.merged).map(m => m.to))];
+      spawned.value = next.at;
+      gameTimer = setTimeout(afterMove, 800 - slideMs);
+    }, slideMs);
+  } else afterMove();
+}
+// a stuck board holds for a moment, then a new game starts
+function afterMove() {
+  if (canMove(board.value)) return gameTick();
+  gameTimer = setTimeout(() => {
+    board.value = newGame();
+    focus.value = board.value.findIndex(Boolean);
+    merged.value = [];
+    spawned.value = -1;
+    gameTimer = setTimeout(gameTick, 800);
+  }, 1500);
+}
+function stopGame() {
+  clearTimeout(gameTimer);
+  cancelAnimationFrame(slideFrame);
+  if (sliding.value) sliding.value = null;
+}
+watch(() => props.preview && registerInView.value && !reducedMotion(), on => {
+  stopGame();
+  if (on) gameTimer = setTimeout(gameTick, 800);
+});
+onBeforeUnmount(stopGame);
 
 // ---- datapath: the block diagram from the slides, redrawn. pick a block to light
 // up the buses into and out of it ----
@@ -153,14 +229,18 @@ const lit = name => edge.value === name;
 </script>
 
 <template>
-  <figure v-if="figure === 'register'" class="fx-figure">
+  <figure v-if="figure === 'register'" ref="registerFigure" class="fx-figure" :class="{ 'fx-preview': preview }">
     <figcaption><strong>Fig. 1</strong> The whole board is one 64-bit register, with 4 bits per tile. Click a tile to double it.</figcaption>
     <div class="fx-panel fx-register">
       <div class="fx-board" role="group" aria-label="Board">
-        <button v-for="(p, i) in board" :key="i" class="fx-tile" :class="{ picked: focus === i }"
+        <button v-for="(p, i) in shownBoard" :key="popped.includes(i) ? `${i}-${board.join()}` : i" class="fx-tile"
+          :class="{ picked: focus === i && !sliding, merged: merged.includes(i), spawned: spawned === i }"
           :style="{ background: p ? tileColor(p) : '#000', color: tileInk(p) }"
           :aria-label="`Cell ${i}: ${p ? value(p) : 'empty'}, bits ${bits[i]}`"
           @click="bump(i)" @focus="focus = i" @mouseenter="focus = i">{{ p ? value(p) : '' }}</button>
+        <div v-if="sliding" class="fx-slide-layer" aria-hidden="true">
+          <span v-for="(t, n) in sliding" :key="n" class="fx-tile" :style="{ ...cellAt(t.at), background: tileColor(t.power), color: tileInk(t.power) }">{{ value(t.power) }}</span>
+        </div>
       </div>
       <div class="fx-nibbles" aria-hidden="true">
         <span v-for="n in nibbles" :key="n.i" :class="{ picked: focus === n.i }" @mouseenter="focus = n.i">
@@ -289,6 +369,25 @@ const lit = name => edge.value === name;
 .fx-hex { margin: 0 0 10px; overflow-wrap: anywhere; }
 @container (max-width: 220px) { .fx-register { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'board' 'nibbles' 'reg'; } }
 .fx-figure { container-type: inline-size; }
+/* the projects card: the board and register as big as the frame's width allows, the
+   readout and hex centred under them */
+.fx-preview .fx-register { box-sizing: border-box; height: 375px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; }
+.fx-preview .fx-button { display: none; }
+/* the moving tiles sit over the board's cells, a cell plus its 2px line apart */
+.fx-preview .fx-board { position: relative; }
+.fx-slide-layer { position: absolute; inset: 2px; pointer-events: none; }
+.fx-slide-layer .fx-tile {
+  position: absolute; top: 0; left: 0; width: calc((100% - 6px) / 4);
+  translate: calc(var(--col) * (100% + 2px)) calc(var(--row) * (100% + 2px));
+  transition: translate .12s steps(3, jump-start);
+}
+/* a merged tile bumps up a size, a new one grows out of the middle of its black cell */
+.fx-board .fx-tile.merged { position: relative; z-index: 1; animation: fx-merge .18s steps(3); }
+.fx-board .fx-tile.spawned { animation: fx-spawn .18s steps(3); }
+@keyframes fx-merge { 50% { transform: scale(1.12); } }
+@keyframes fx-spawn { from { box-shadow: inset 0 0 0 24px #000; color: transparent; } }
+.fx-preview .fx-readout { justify-content: center; }
+.fx-preview .fx-hex { margin: 0; text-align: center; }
 
 /* fig 3 */
 .fx-row { display: grid; grid-template-columns: repeat(4, minmax(0, 64px)) auto; gap: 2px; align-items: center; justify-content: center; }

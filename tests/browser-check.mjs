@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer as createViteServer } from 'vite';
 import { photos } from '../src/photos.mjs';
+import { projects } from '../src/content.mjs';
 
 const root = resolve('dist');
 const mime = {

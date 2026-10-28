@@ -2,10 +2,12 @@
 // the figures in the reversi writeup (content.mjs, figures), all driven by the same
 // game as the games folder (reversi.mjs): the board the way the c version kept and
 // printed it, the table of square weights, one move scored part by part, and the
-// look-ahead that catches a move that only looks good
-import { computed, ref } from 'vue';
+// look-ahead that catches a move that only looks good. preview is the projects card:
+// fig 1 plays the bot against itself, filling a 600 × 375 frame
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { black, white, other, newBoard, legalMoves, flipsFor, play, gameOver, count, evaluate, evaluateParts, weights, corners, nextToCorner } from '../reversi.mjs';
-defineProps({ figure: { type: String, required: true } });
+import { reducedMotion, useInView } from '../in-view.js';
+const props = defineProps({ figure: { type: String, required: true }, preview: Boolean });
 
 // ---- shared: seeded positions, square names, discs ----
 const seeded = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -89,6 +91,27 @@ function cReset() {
   cSquare.value = 19;
   cLog.value = '';
 }
+// the preview's two bots: each turn one aims at the move that scores best for it once
+// played, checks it in every direction, then plays it. a little noise breaks near ties
+// so no two games go the same way
+const cFigure = ref(null);
+const cInView = useInView(cFigure);
+let botTimer = 0;
+const botWait = (ms, fn) => { botTimer = setTimeout(fn, ms); };
+function botAim() {
+  if (gameOver(cBoard.value)) { cReset(); return botWait(700, botAim); }
+  const turn = cTurn.value;
+  const scored = legalMoves(cBoard.value, turn).map(m => ({ m, score: evaluate(play(cBoard.value, m, turn), turn) + Math.random() * 6 }));
+  const { m } = scored.reduce((a, b) => (b.score > a.score ? b : a));
+  cSquare.value = m;
+  // the finished board stays up a little longer before the next game
+  botWait(700, () => { cPlay(m); botWait(gameOver(cBoard.value) ? 2000 : 700, botAim); });
+}
+watch(() => props.preview && cInView.value && !reducedMotion(), on => {
+  clearTimeout(botTimer);
+  if (on) botWait(700, botAim);
+});
+onBeforeUnmount(() => clearTimeout(botTimer));
 
 // ---- weights: the positional table, with the corner rule ----
 const taken = ref([]);
@@ -194,13 +217,13 @@ const candidates = computed(() => {
   return list.sort((a, b) => a.m - b.m);
 });
 const colX = k => 70 + k * 140;
-const preview = ref(null);
+const peeked = ref(null);
 // the path lit green: down to whatever you picked, or to the move clippy plays. a move
 // on its own lights its worst reply too once looking two ahead
 const litPath = computed(() => {
-  const m = preview.value?.m ?? chosen.value;
+  const m = peeked.value?.m ?? chosen.value;
   const c = tree.value.find(t => t.m === m);
-  const r = preview.value?.r ?? (deep.value ? c?.replies[0]?.r : undefined);
+  const r = peeked.value?.r ?? (deep.value ? c?.replies[0]?.r : undefined);
   return { m, r };
 });
 // every edge in the tree, the lit path drawn last so the grey never covers it
@@ -213,14 +236,14 @@ const edges = computed(() => {
   return [...list.filter(e => !e.lit), ...list.filter(e => e.lit)];
 });
 const previewBoard = computed(() => {
-  const p = preview.value;
+  const p = peeked.value;
   const c = tree.value.find(t => t.m === (p?.m ?? chosen.value));
   if (!c) return { board: treeBoard.value, marks: [] };
   if (p?.r !== undefined) return { board: play(c.after, p.r, black), marks: [c.m, p.r] };
   return { board: c.after, marks: [c.m] };
 });
 const treeNote = computed(() => {
-  const p = preview.value;
+  const p = peeked.value;
   const g = tree.value.find(t => t.m === greedyPick.value), d = tree.value.find(t => t.m === deepPick.value);
   if (p?.r !== undefined) return `Clippy plays ${nameOf(p.m)}, you answer ${nameOf(p.r)}: the board is worth ${signed(tree.value.find(t => t.m === p.m).replies.find(x => x.r === p.r).score)} to Clippy.`;
   if (p) {
@@ -233,12 +256,12 @@ const treeNote = computed(() => {
 });
 function newTree() {
   treeBoard.value = randomPosition(figureRandom, 10 + Math.floor(figureRandom() * 20), disagrees);
-  preview.value = null;
+  peeked.value = null;
 }
 </script>
 
 <template>
-  <figure v-if="figure === 'board'" class="rx-figure">
+  <figure v-if="figure === 'board'" ref="cFigure" class="rx-figure" :class="{ 'rx-preview': preview }">
     <figcaption><strong>Fig. 1</strong> The board is a grid of characters (U for unoccupied, B for black, W for white) printed to the terminal, with each row and column labelled by a letter. Hover over a square to see it checked in all 8 directions, and click to play it.</figcaption>
     <div class="rx-panel rx-split rx-c">
       <div class="rx-board" role="group" aria-label="Board">
@@ -332,8 +355,8 @@ function newTree() {
     <div class="rx-panel">
       <div class="rx-buttons">
         <span class="rx-toggle" role="group" aria-label="How far ahead">
-          <button class="raised rx-button" :class="{ pressed: !deep }" :aria-pressed="!deep" @click="deep = false; preview = null">1 move ahead</button>
-          <button class="raised rx-button" :class="{ pressed: deep }" :aria-pressed="deep" @click="deep = true; preview = null">2 moves ahead</button>
+          <button class="raised rx-button" :class="{ pressed: !deep }" :aria-pressed="!deep" @click="deep = false; peeked = null">1 move ahead</button>
+          <button class="raised rx-button" :class="{ pressed: deep }" :aria-pressed="deep" @click="deep = true; peeked = null">2 moves ahead</button>
         </span>
         <button class="raised rx-button" @click="newTree">New position</button>
       </div>
@@ -345,14 +368,14 @@ function newTree() {
           </g>
           <g class="rx-node root"><rect x="220" y="6" width="120" height="28"/><text x="280" y="24">Clippy to move</text></g>
           <template v-for="(c, k) in candidates" :key="c.m">
-            <g class="rx-node" :class="{ on: c.m === chosen, peek: preview?.m === c.m && preview?.r === undefined }" role="button" tabindex="0" :aria-label="`${nameOf(c.m)}: now ${signed(c.now)}, worst case ${signed(c.worst)}`"
-              @click="preview = { m: c.m }" @keydown.enter.space.prevent="preview = { m: c.m }">
+            <g class="rx-node" :class="{ on: c.m === chosen, peek: peeked?.m === c.m && peeked?.r === undefined }" role="button" tabindex="0" :aria-label="`${nameOf(c.m)}: now ${signed(c.now)}, worst case ${signed(c.worst)}`"
+              @click="peeked = { m: c.m }" @keydown.enter.space.prevent="peeked = { m: c.m }">
               <rect :x="colX(k) - 52" y="74" width="104" height="42"/>
               <text :x="colX(k)" y="90" class="big">{{ nameOf(c.m) }}</text>
               <text :x="colX(k)" y="108" :class="{ faint: deep }">now {{ signed(c.now) }}</text>
             </g>
-            <g v-for="(r, j) in c.replies.slice(0, 3)" :key="r.r" class="rx-node reply" :class="{ worst: j === 0, dim: !deep, peek: preview?.m === c.m && preview?.r === r.r }"
-              role="button" tabindex="0" :aria-label="`You reply ${nameOf(r.r)}: ${signed(r.score)}`" @click="preview = { m: c.m, r: r.r }" @keydown.enter.space.prevent="preview = { m: c.m, r: r.r }">
+            <g v-for="(r, j) in c.replies.slice(0, 3)" :key="r.r" class="rx-node reply" :class="{ worst: j === 0, dim: !deep, peek: peeked?.m === c.m && peeked?.r === r.r }"
+              role="button" tabindex="0" :aria-label="`You reply ${nameOf(r.r)}: ${signed(r.score)}`" @click="peeked = { m: c.m, r: r.r }" @keydown.enter.space.prevent="peeked = { m: c.m, r: r.r }">
               <rect :x="colX(k) + (j - 1) * 44 - 20" y="146" width="40" height="34"/>
               <text :x="colX(k) + (j - 1) * 44" y="160">{{ nameOf(r.r) }}</text>
               <text :x="colX(k) + (j - 1) * 44" y="174">{{ signed(r.score) }}</text>
@@ -447,6 +470,11 @@ button.rx-cell:not(:disabled) { cursor: var(--classic-pointer, pointer); }
   .rx-c > .rx-term { padding: 6px 8px; font-size: 11px; }
 }
 @container (max-width: 220px) { .rx-c { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'board' 'term' 'under'; } }
+/* the projects card: the board as tall as the frame, the terminal and the direction
+   check stacked beside it */
+.rx-preview .rx-c { box-sizing: border-box; height: 375px; grid-template-columns: 343px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.rx-preview .rx-buttons { display: none; }
+.rx-preview .rx-c > .rx-c-under { overflow: hidden; }
 .rx-term span.on { background: #c0c0c0; color: #000; }
 .rx-term span.flip { color: #ffe066; font-weight: bold; }
 .rx-check { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; }
