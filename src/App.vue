@@ -1193,13 +1193,13 @@ onMounted(() => {
 
   // bring back the windows from last time, then put whatever the url asks for on
   // top. a fresh visit (or one where everything was closed) gets the starter note
-  // and the about window. opening them isn't counted as a visitor's open
+  // and then the about window, so about sits in front of the note. opening them
+  // isn't counted as a visitor's open
   restoreOpen();
   const fresh = !windows.length;
-  let starter;
   if (fresh) {
     restoring = true;
-    starter = openStarterNote();
+    openStarterNote();
     restoring = false;
   }
   const id = hashApp();
@@ -1212,10 +1212,6 @@ onMounted(() => {
       focusRegion(active.value);
     }
   }
-  // the tips note sits in front of whatever opened, so a window reaching over to the
-  // right doesn't cover it, but that window stays the active one. it waits a tick,
-  // since each open focuses its window then and focusing brings a window to the front
-  if (starter) nextTick(() => { if (get(starter)) get(starter).z = ++z; });
 
   timer = setInterval(() => { clock.value = new Date(); }, 60000);
   document.addEventListener('pointerdown', outside);
