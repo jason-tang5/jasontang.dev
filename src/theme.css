@@ -1978,7 +1978,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 
 /* the typed line under my name: the pixel font in the link colour, with a blinking
-   underscore cursor like the build terminal's. its height is fixed so the page doesn't
+   underscore cursor. its height is fixed so the page doesn't
    jump while a word's being typed or erased */
 .about-copy .typed-roles {
   height: 1.3em;
@@ -2663,16 +2663,8 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 .terminal .t-dim { color: #808080; }
 .terminal .t-dir, .terminal .t-user { font-weight: bold; }
 
-.terminal-cursor {
-  animation: terminal-blink 1s step-end infinite;
-}
-
 @keyframes terminal-blink {
   50% { visibility: hidden; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .terminal-cursor { animation: none; }
 }
 
 .terminal-suggestions {

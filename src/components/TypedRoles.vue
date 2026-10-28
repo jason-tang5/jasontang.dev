@@ -1,6 +1,6 @@
 <script setup>
 // the line under my name on the about page that types out a word, holds it, backspaces
-// it and types the next, round and round. like the build terminal, it only runs while
+// it and types the next, round and round. it only runs while
 // the window's open and it's on screen, and with reduced motion it just shows the first
 // word. screen readers get the whole list at once
 import { onBeforeUnmount, onMounted, ref } from 'vue';
