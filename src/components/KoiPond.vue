@@ -16,6 +16,11 @@ const props = defineProps({
   look: { type: String, default: '' },
   count: { type: Number, default: undefined },
   scale: { type: Number, default: 1 },
+  // more things to dim the fish under, the way the desktop does its icons, like the
+  // fishbowl's messages. each is only dimmed where it shows inside its veilClip
+  // ancestor, so a message scrolled out of the conversation leaves the water alone
+  veil: { type: String, default: '' },
+  veilClip: { type: String, default: '' },
 });
 
 const canvas = ref(null);
@@ -27,11 +32,18 @@ let pressedAt = null;
 // along while they're dragged
 function veils() {
   const origin = canvas.value.getBoundingClientRect();
-  const boxes = (selector, pad, hollow) => [...canvas.value.parentElement.querySelectorAll(selector)]
-    .map(el => el.getBoundingClientRect())
-    .filter(rect => rect.width)
-    .map(rect => ({ x: rect.left - origin.left - pad.x, y: rect.top - origin.top - pad.y, width: rect.width + pad.x * 2, height: rect.height + pad.y * 2, hollow }));
-  return [...boxes('.desktop-shortcut', { x: 7, y: 8 }, false), ...boxes('[data-window]', { x: 0, y: 0 }, true)];
+  const rect = el => {
+    const box = el.getBoundingClientRect();
+    const clip = props.veilClip && el.closest(props.veilClip)?.getBoundingClientRect();
+    if (!clip) return box;
+    const left = Math.max(box.left, clip.left), top = Math.max(box.top, clip.top);
+    return { left, top, width: Math.min(box.right, clip.right) - left, height: Math.min(box.bottom, clip.bottom) - top };
+  };
+  const boxes = (selector, pad, hollow) => (selector ? [...canvas.value.parentElement.querySelectorAll(selector)] : [])
+    .map(rect)
+    .filter(box => box.width > 0 && box.height > 0)
+    .map(box => ({ x: box.left - origin.left - pad.x, y: box.top - origin.top - pad.y, width: box.width + pad.x * 2, height: box.height + pad.y * 2, hollow }));
+  return [...boxes('.desktop-shortcut', { x: 7, y: 8 }, false), ...boxes('[data-window]', { x: 0, y: 0 }, true), ...boxes(props.veil, { x: 4, y: 3 }, false)];
 }
 
 onMounted(() => {
