@@ -28,7 +28,7 @@ export function createPond({ width, height, count = 5, random = Math.random } = 
     const y = random() * height;
     const heading = random() * Math.PI * 2;
     // sizes spread evenly from little to big, give or take, so there's always a mix
-    const size = 0.45 + 0.65 * (i + 0.2 + random() * 0.6) / count;
+    const size = 0.36 + 0.52 * (i + 0.2 + random() * 0.6) / count;
     return {
       x, y, heading, size,
       speed: 28 + random() * 14,
@@ -323,7 +323,7 @@ export function createKoiPond(canvas, { dark = false, veils = () => [] } = {}) {
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!pond) pond = createPond({ width, height, count: clamp(Math.round(width * height / 260000), 3, 7) });
+    if (!pond) pond = createPond({ width, height, count: clamp(Math.round(width * height / 260000) + 3, 6, 10) });
     else resizePond(pond, width, height);
   }
 
