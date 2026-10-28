@@ -2036,15 +2036,14 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 
 /* ---- projects ---- */
 
-/* the folder is one row of cards scrolling sideways. every card is the same size and
-   grows with the window: the project's lead figure, in its preview layout of exactly
-   600x375 with its own sunken frame and no controls, zoomed to the card's width in a
-   16:10 box (the zoom is set from the script), then the name,
+/* the folder is one row of cards scrolling sideways, one centred at a time. every
+   card is the same size and grows with the window: the project's lead figure, in its
+   preview layout of exactly 600x375 with its own sunken frame and no controls, zoomed
+   to the card's width in a 16:10 box (the zoom is set from the script), then the name,
    season, one line and the tech chips pinned to the bottom. the card is as wide as the
-   window's height leaves room for, with about 230px kept for the writing, scrollbar
-   and padding, and never wider than the window. in a short window the figure gives up
-   height so the card still fits above the scrollbar. the row snaps a card to its
-   middle, and sits centred when every card fits */
+   window's height leaves room for and never wider than the window (set from the
+   script). in a short window the figure gives up height so the card still fits above
+   the dots. the row snaps a card to its middle */
 .projects-hero-wrap {
   position: relative;
   flex: 1;
@@ -2065,10 +2064,20 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   overscroll-behavior-x: contain;
+  /* room at each end for the first and last cards to be centred (set from the script) */
+  padding-inline: var(--hero-pad, 18px);
+  /* the dots under the row show where it is, like the gallery's */
+  scrollbar-width: none;
+  cursor: grab;
 }
+.projects-hero::-webkit-scrollbar { display: none; }
+.projects-hero.dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+.projects-hero.dragging .hero-card { translate: none; transition: none; }
+.projects-hero.dragging .hero-view { opacity: 0; }
+.hero-dots { background: var(--d-page, #f5f4ed); padding-top: 0; }
 .hero-card {
   position: relative;
-  flex: 0 0 clamp(316px, (100cqh - 228px) * 1.6 + 16px, 100cqw - 36px);
+  flex: 0 0 var(--hero-card, clamp(316px, (100cqh - 228px) * 1.6 + 16px, 100cqw - 36px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2079,6 +2088,9 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   scroll-snap-align: center;
   background: var(--surface);
   transition: translate .15s;
+  /* each card is its own layer, so the row slides them along without redrawing the
+     zoomed figures inside every frame */
+  will-change: translate;
 }
 .hero-card:hover { translate: 0 -3px; }
 .hero-card:has(.hero-card-open:focus-visible) { outline: 2px dotted var(--ink); outline-offset: 2px; }
@@ -2156,7 +2168,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 .hero-arrow-next { right: 4px; }
 @media (hover: none) { .hero-arrow.raised { display: none; } }
 @media (max-width: 700px) {
-  .projects-hero { padding: 14px; gap: 12px; }
+  .projects-hero { padding: 14px var(--hero-pad, 14px); gap: 12px; }
 }
 
 

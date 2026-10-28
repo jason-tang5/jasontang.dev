@@ -76,60 +76,127 @@ defineProps({
 });
 const emit = defineEmits(['open', 'close', 'unlock', 'wallpaper']);
 
-// the projects row scrolls sideways: arrows at either end, and a mouse wheel's up and
-// down turned into a card left or right. the row snaps to cards, so the wheel moves a
-// whole card at a time rather than a nudge the snap would pull straight back
+// the projects row works like the gallery: one project in the frame at a time, with a
+// dot under it for each. drag it with a mouse (a finger just scrolls it), tap a dot,
+// use the arrows at either end, or turn a mouse wheel
 const heroRow = ref(null);
 const heroAtStart = ref(true);
 const heroAtEnd = ref(false);
+const heroCurrent = ref(0);
+// the scroll that brings each card into the frame
+const heroStops = ref([0]);
+const nearestStop = at => heroStops.value.reduce((best, s, i) => (Math.abs(s - at) < Math.abs(heroStops.value[best] - at) ? i : best), 0);
 function updateHeroEnds() {
   const row = heroRow.value;
   if (!row) return;
   heroAtStart.value = row.scrollLeft < 2;
   heroAtEnd.value = row.scrollLeft > row.scrollWidth - row.clientWidth - 2;
+  heroCurrent.value = nearestStop(row.scrollLeft);
 }
-// the cards grow with the window, so each figure, drawn 600px wide, is zoomed to fit
-function fitHeroFigures() {
-  const figure = heroRow.value?.querySelector('.hero-figure');
-  if (figure?.clientWidth) heroRow.value.style.setProperty('--hero-zoom', figure.clientWidth / 600);
+// scrolling fires faster than the screen draws, so the dots catch up once a frame
+let heroScrollFrame = 0;
+function heroScrolled() {
+  if (heroScrollFrame) return;
+  heroScrollFrame = requestAnimationFrame(() => { heroScrollFrame = 0; updateHeroEnds(); });
+}
+const heroScrollBehavior = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth');
+function showHero(index) {
+  const stops = heroStops.value;
+  index = Math.min(Math.max(0, index), stops.length - 1);
+  heroAim = index;
+  heroRow.value?.scrollTo({ left: stops[index], behavior: heroScrollBehavior() });
+  clearTimeout(heroAimTimer);
+  heroAimTimer = setTimeout(() => { heroAim = null; }, 500);
+}
+const scrollHero = direction => showHero((heroAim ?? heroCurrent.value) + direction);
+
+// a card is as wide as the window's height leaves room for (about 230px kept for the
+// writing and padding), never wider than the window. the row gets enough room at each
+// end for the first and last cards to sit in the middle too, so whichever card is
+// showing is centred with the edges of its neighbours peeking in either side. each
+// figure, drawn 600px wide, is then zoomed to its card
+function fitHeroCards() {
+  const row = heroRow.value;
+  if (!row?.children.length) return;
+  const wrap = row.parentElement;
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  const ideal = Math.max(316, Math.min((wrap.clientHeight - 228) * 1.6 + 16, wrap.clientWidth - 36));
+  // at least 20px of each neighbour stays in view
+  const width = Math.min(ideal, row.clientWidth - (gap + 20) * 2);
+  const side = (row.clientWidth - width) / 2;
+  row.style.setProperty('--hero-card', `${width}px`);
+  row.style.setProperty('--hero-pad', `${side}px`);
+  const first = row.children[0].offsetLeft;
+  heroStops.value = [...row.children].map(card => card.offsetLeft - first);
+  const figure = row.querySelector('.hero-figure');
+  if (figure?.clientWidth) row.style.setProperty('--hero-zoom', figure.clientWidth / 600);
   updateHeroEnds();
 }
 watch(heroRow, (row, _, onCleanup) => {
   if (!row) return;
-  const observer = new ResizeObserver(fitHeroFigures);
+  const observer = new ResizeObserver(fitHeroCards);
   observer.observe(row);
   onCleanup(() => observer.disconnect());
 }, { flush: 'post' });
-const heroScrollBehavior = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth');
-function scrollHero(direction) {
-  heroAim = null;
-  heroRow.value?.scrollBy({ left: direction * heroRow.value.clientWidth * 0.8, behavior: heroScrollBehavior() });
+
+// a mouse drags the row along under it. letting go settles on the nearest stop, or the
+// next one over with a flick. the snap is off while it's held and sliding, so it
+// doesn't fight the drag
+const heroDragging = ref(false);
+let heroDrag = null;
+let heroDragged = false;
+let heroSettleTimer = 0;
+function heroDown(event) {
+  heroDragged = false;
+  if (event.pointerType !== 'mouse' || event.button !== 0) return;
+  heroDrag = { id: event.pointerId, x: event.clientX, from: heroRow.value.scrollLeft, moves: [{ x: event.clientX, t: event.timeStamp }] };
 }
-// brings the next card past the middle of the row (or the one before it) to the middle.
-// while the row is still sliding, the next card is counted from where it's headed, so
-// a quick spin of the wheel keeps going, but never more than about a card ahead of
-// where the row actually is
+function heroMove(event) {
+  if (heroDrag?.id !== event.pointerId) return;
+  const dx = event.clientX - heroDrag.x;
+  if (!heroDragging.value) {
+    if (Math.abs(dx) < 6) return;
+    clearTimeout(heroSettleTimer);
+    heroDragging.value = true;
+    heroRow.value.setPointerCapture(event.pointerId);
+  }
+  heroRow.value.scrollLeft = heroDrag.from - dx;
+  heroDrag.moves.push({ x: event.clientX, t: event.timeStamp });
+  if (heroDrag.moves.length > 5) heroDrag.moves.shift();
+}
+function heroUp(event) {
+  if (heroDrag?.id !== event.pointerId) return;
+  const { moves } = heroDrag;
+  heroDrag = null;
+  if (!heroDragging.value) return;
+  heroDragged = true;
+  const at = heroRow.value.scrollLeft;
+  // how fast the mouse was going over its last few moves, in px per ms
+  const first = moves[0];
+  const last = moves[moves.length - 1];
+  const speed = last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0;
+  let index = nearestStop(at);
+  if (Math.abs(speed) > 0.4) {
+    const direction = speed < 0 ? 1 : -1;
+    if (Math.sign(heroStops.value[index] - at) !== direction) index += direction;
+  }
+  showHero(index);
+  clearTimeout(heroSettleTimer);
+  heroSettleTimer = setTimeout(() => { heroDragging.value = false; }, 450);
+}
+// a mouse let go after a drag still clicks, which shouldn't open the card under it
+function heroSwallowClick(event) {
+  if (!heroDragged) return;
+  heroDragged = false;
+  event.stopPropagation();
+  event.preventDefault();
+}
+
+// a stop for every notch of a mouse wheel (100px). a trackpad's stream of small deltas
+// adds up to the same before it moves. while the row is still sliding, the next stop is
+// counted from where it's headed, so a quick spin of the wheel keeps going
 let heroAim = null;
 let heroAimTimer = 0;
-function stepHero(direction) {
-  const row = heroRow.value;
-  const left = row.getBoundingClientRect().left - row.scrollLeft;
-  const centers = [...row.children].map(card => {
-    const box = card.getBoundingClientRect();
-    return box.left - left + box.width / 2;
-  });
-  const cardStep = centers.length > 1 ? centers[1] - centers[0] : row.clientWidth;
-  if (heroAim !== null && Math.abs(heroAim - row.scrollLeft) > cardStep * 0.75) return;
-  const middle = (heroAim ?? row.scrollLeft) + row.clientWidth / 2;
-  const target = direction > 0 ? centers.find(c => c > middle + 1) : centers.findLast(c => c < middle - 1);
-  if (target === undefined) return;
-  heroAim = Math.min(Math.max(0, target - row.clientWidth / 2), row.scrollWidth - row.clientWidth);
-  row.scrollTo({ left: heroAim, behavior: heroScrollBehavior() });
-  clearTimeout(heroAimTimer);
-  heroAimTimer = setTimeout(() => { heroAim = null; }, 500);
-}
-// a card for every notch of a mouse wheel (100px). a trackpad's stream of small deltas
-// adds up to the same before it moves
 let wheelTotal = 0;
 function heroWheel(event) {
   const row = heroRow.value;
@@ -139,10 +206,10 @@ function heroWheel(event) {
   if (Math.sign(delta) !== Math.sign(wheelTotal)) wheelTotal = 0;
   wheelTotal += delta;
   if (Math.abs(wheelTotal) < 100) return;
-  stepHero(Math.sign(wheelTotal));
+  showHero((heroAim ?? heroCurrent.value) + Math.sign(wheelTotal));
   wheelTotal = 0;
 }
-onBeforeUnmount(() => clearTimeout(heroAimTimer));
+onBeforeUnmount(() => { clearTimeout(heroAimTimer); clearTimeout(heroSettleTimer); cancelAnimationFrame(heroScrollFrame); });
 const favoritesStrip = ref(null);
 const favoritesLeft = ref(false);
 const favoritesRight = ref(false);
@@ -467,7 +534,9 @@ function balloonDone(event, id) {
   <div v-else-if="win.type === 'projects'" class="app-layout projects-hero-app">
     <div class="projects-hero-wrap">
       <button v-show="!heroAtStart" class="raised hero-arrow hero-arrow-prev" aria-label="Previous projects" @click="scrollHero(-1)">‹</button>
-      <div ref="heroRow" class="projects-hero" role="list" aria-label="Projects" @scroll.passive="updateHeroEnds" @wheel="heroWheel">
+      <div ref="heroRow" :class="['projects-hero', { dragging: heroDragging }]" role="list" aria-label="Projects"
+        @scroll.passive="heroScrolled" @wheel="heroWheel" @pointerdown="heroDown" @pointermove="heroMove" @pointerup="heroUp" @pointercancel="heroUp"
+        @click.capture="heroSwallowClick" @dragstart.prevent>
         <article v-for="p in projects" :key="p.id" class="hero-card raised" role="listitem">
           <button class="hero-card-open" :aria-label="`Open ${p.name}`" @click="emit('open', p.id)"/>
           <div class="hero-figure" aria-hidden="true" inert>
@@ -485,6 +554,16 @@ function balloonDone(event, id) {
       </div>
       <button v-show="!heroAtEnd" class="raised hero-arrow hero-arrow-next" aria-label="More projects" @click="scrollHero(1)">›</button>
     </div>
+    <nav class="picture-dots hero-dots" aria-label="Projects">
+      <button
+        v-for="(p, index) in projects"
+        :key="p.id"
+        :aria-label="`Show ${p.name}`"
+        :aria-current="heroCurrent === index ? 'true' : null"
+        :class="{ on: heroCurrent === index }"
+        @click="showHero(index)"
+      />
+    </nav>
     <footer class="status-bar"><span>Click a project to open it</span><span>{{ projects.length }} projects</span></footer>
   </div>
 
