@@ -2584,6 +2584,11 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   white-space: nowrap;
 }
 
+/* the figure ends the page, so the sheet's own padding is the only space under it */
+.about-copy .about-facts-section .ll-figure {
+  margin-bottom: 0;
+}
+
 /* the terminal in fun stuff (Terminal.vue): a black screen in the dos colours that
    scrolls as it fills, the prompt as its last line, and a row of commands to tap under it */
 .terminal {

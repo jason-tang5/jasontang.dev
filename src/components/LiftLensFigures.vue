@@ -572,10 +572,11 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 /* too narrow for two readouts side by side */
 @container (max-width: 260px) { .ll-stats { grid-template-columns: minmax(0, 1fr); } }
 @container (max-width: 420px) {
-  .ll-compact .ll-angles { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
-  /* the video keeps a fixed height and the graphs stretch to match it, so the two
-     columns end level */
-  .ll-compact .ll-cam { max-width: none; aspect-ratio: auto; min-height: 200px; }
+  .ll-compact .ll-angles { grid-template-columns: auto minmax(0, 1fr); }
+  /* the video comes first: a fixed height at its own shape, so none of the lift is
+     cropped off the sides, and the graphs take what width is left and stretch to the
+     same height, so the two columns end level */
+  .ll-compact .ll-cam { width: auto; max-width: none; height: 200px; }
   .ll-compact .ll-charts { contain: size; }
   .ll-compact .ll-charts svg { height: 100%; }
   .ll-compact .ll-transport code { display: none; }
