@@ -14,10 +14,12 @@ const BODY = 51; // of those, the ones under the body. the rest carry the tail f
 const SEE_FOOD = 640; // px a koi notices pellets from
 const BITE = 18; // px from the mouth close enough to eat
 const PELLET_LIFE = 14; // seconds before an uneaten pellet sinks out of sight
-const SPREAD = 75; // px/s a pellet starts spreading outward at, so it ends up about SPREAD * SPREAD_TIME / 3 px out
+const FALL = 0.22; // seconds a pellet takes to drop into the water from above
+const DROP = 15; // px above the water it's dropped from
+const SPREAD = 35; // px/s a pellet starts spreading outward at, so it ends up about SPREAD * SPREAD_TIME / 3 px out
 const SPREAD_TIME = 1; // seconds until a pellet stops moving
 const FOOD_GAP = 16; // px kept between pellets, more than a grid square's diagonal
-const RIPPLE_LIFE = 3.2; // seconds a ripple takes to fade
+const RIPPLE_LIFE = 1.8; // seconds a ripple takes to fade
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // the smallest turn from angle a to angle b, between -π and π
 const turnTo = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -33,20 +35,21 @@ export function createPond({ width, height, count = 5, scale = 1, random = Math.
     return {
       x, y, heading, size,
       speed: 28 + random() * 14,
-      // its markings, like a kohaku: often a cap on the head, one or two big uneven
-      // patches over the back leaning to one side, and a few small dots scattered about
+      // its markings, like a kohaku: often a cap on the head, then a run of medium
+      // patches stepping down the back, each leaning to one side or the other, and a
+      // scatter of small spots between them
       spots: [
-        ...random() < 0.6 ? [{ t: 0.07, across: (random() - 0.5) * 0.5, long: 0.05, wide: 0.6 }] : [],
-        ...Array.from({ length: 1 + Math.floor(random() * 2) }, () => ({
-          t: 0.2 + random() * 0.3,
-          across: (random() < 0.5 ? -1 : 1) * random() * 0.4,
-          long: 0.07 + random() * 0.07,
-          wide: 0.55 + random() * 0.35,
-        })),
-        ...Array.from({ length: 2 + Math.floor(random() * 3) }, () => ({
-          t: 0.15 + random() * 0.45,
+        ...random() < 0.55 ? [{ t: 0.07, across: (random() - 0.5) * 0.4, long: 0.04 + random() * 0.015, wide: 0.45 + random() * 0.15 }] : [],
+        ...((n, side) => Array.from({ length: n }, (_, j) => ({
+          t: 0.17 + (j + 0.2 + random() * 0.6) / n * 0.5,
+          across: (j % 2 ? side : -side) * (0.15 + random() * 0.4),
+          long: 0.04 + random() * 0.03,
+          wide: 0.3 + random() * 0.25,
+        })))(3 + Math.floor(random() * 3), random() < 0.5 ? -1 : 1),
+        ...Array.from({ length: 4 + Math.floor(random() * 4) }, () => ({
+          t: 0.12 + random() * 0.58,
           across: (random() - 0.5) * 1.6,
-          long: 0.015 + random() * 0.01,
+          long: 0.016 + random() * 0.008,
           wide: 0.14 + random() * 0.08,
         })),
       ].map(spot => ({ ...spot, phase: random() * Math.PI * 2 })),
@@ -71,8 +74,9 @@ export function resizePond(pond, width, height) {
   pond.height = height;
 }
 
-// a handful of pellets scattered around the click, and a ripple where they land. each
-// one spreads outward from the click, slowing to a stop as it settles on the water
+// a handful of pellets scattered around the click, dropped in from just above. each
+// one makes its own ripple where it lands, then spreads outward from the click,
+// slowing to a stop as it settles on the water
 export function feedPond(pond, x, y, count = 4) {
   for (let i = 0; i < count; i++) {
     const angle = pond.random() * Math.PI * 2;
@@ -81,10 +85,14 @@ export function feedPond(pond, x, y, count = 4) {
     pond.food.push({
       x: x + Math.cos(angle) * reach, y: y + Math.sin(angle) * reach, age: 0, driftPhase: angle,
       vx: Math.cos(angle) * push, vy: Math.sin(angle) * push,
+      // each falls a little apart from the others. none can be eaten until it's in
+      fall: FALL * (0.85 + pond.random() * 0.3),
     });
   }
-  pond.ripples.push({ x, y, age: 0, size: 1 });
 }
+
+// a pellet hitting the water sends out a little ripple of its own
+const land = (pond, f) => pond.ripples.push({ x: f.x, y: f.y, age: 0, size: 0.7 });
 
 // moves everything on by dt seconds
 export function stepPond(pond, dt) {
@@ -96,6 +104,7 @@ export function stepPond(pond, dt) {
     let target = null;
     let best = SEE_FOOD;
     for (const f of pond.food) {
+      if (f.fall > 0) continue;
       const d = Math.hypot(f.x - k.x, f.y - k.y);
       if (d < best) { best = d; target = f; }
     }
@@ -110,31 +119,43 @@ export function stepPond(pond, dt) {
         k.wanderAt = 3 + pond.random() * 5;
       }
       want = k.wander;
-      // steer back in before swimming off an edge
-      const margin = 90;
-      if (k.x < margin || k.x > width - margin || k.y < margin || k.y > height - margin) {
+      // one that's got past an edge anyway heads straight back in
+      if (k.x < 0 || k.x > width || k.y < 0 || k.y > height) {
         want = Math.atan2(height / 2 - k.y, width / 2 - k.x);
       }
     }
 
-    // edge away from any other koi swimming over it, gently, so they drift apart
-    // over time without ever swerving hard. a koi after food barely bothers
+    // edge away from any other koi, gently, so they keep apart without ever swerving
+    // hard. it feels for the bodies around both its head and a point some way ahead of
+    // it, so it starts turning before it gets there. while it wanders the pond's edges
+    // push it away the same way, harder the closer it gets. a koi after food bothers
+    // less, and goes wherever the food is
     let awayX = 0, awayY = 0;
+    const aheadX = k.x + Math.cos(k.heading) * 160 * k.size, aheadY = k.y + Math.sin(k.heading) * 160 * k.size;
     for (const other of pond.koi) {
       if (other === k) continue;
-      const room = 70 * (k.size + other.size);
-      for (let n = 0; n < BODY; n += 8) {
+      const room = 100 * (k.size + other.size);
+      for (let n = 0; n < BODY; n += 6) {
         const p = other.spine[n];
-        const dx = k.x - p.x, dy = k.y - p.y;
-        const d = Math.hypot(dx, dy);
-        if (d > 0 && d < room) {
-          awayX += dx / d * (1 - d / room);
-          awayY += dy / d * (1 - d / room);
+        for (const [x, y] of [[k.x, k.y], [aheadX, aheadY]]) {
+          const dx = x - p.x, dy = y - p.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 0 && d < room) {
+            awayX += dx / d * (1 - d / room);
+            awayY += dy / d * (1 - d / room);
+          }
         }
       }
     }
+    const wall = 200;
+    for (const [d, nx, ny] of target ? [] : [[k.x, 1, 0], [width - k.x, -1, 0], [k.y, 0, 1], [height - k.y, 0, -1]]) {
+      if (d < wall) {
+        awayX += nx * 3 * (1 - d / wall);
+        awayY += ny * 3 * (1 - d / wall);
+      }
+    }
     if (awayX || awayY) {
-      const push = (target ? 0.15 : 0.6) * Math.min(1, Math.hypot(awayX, awayY));
+      const push = (target ? 0.3 : 0.9) * Math.min(1, Math.hypot(awayX, awayY));
       want = Math.atan2(Math.sin(want) * (1 - push) + awayY * push, Math.cos(want) * (1 - push) + awayX * push);
     }
 
@@ -171,9 +192,9 @@ export function stepPond(pond, dt) {
     // Surface disturbances, staggered independently for each koi. A koi rushing
     // for food churns the water far more often, and a little harder.
     if (speed > 0) k.wakeIn -= dt;
-    if (target) k.wakeIn = Math.min(k.wakeIn, 0.6);
+    if (target) k.wakeIn = Math.min(k.wakeIn, 1.2);
     if (speed > 0 && k.wakeIn <= 0) {
-      k.wakeIn = target ? 0.3 + pond.random() * 0.3 : 1.2 + pond.random() * 1.4;
+      k.wakeIn = target ? 0.8 + pond.random() * 0.6 : 3 + pond.random() * 3;
       const tail = swimmingSpine(k).at(-1);
       pond.ripples.push({
         x: tail.x,
@@ -183,16 +204,21 @@ export function stepPond(pond, dt) {
     }
 
     // it eats every pellet its mouth passes over, not just the one it's after
-    for (const f of pond.food.filter(f => Math.hypot(f.x - k.x, f.y - k.y) < BITE)) {
+    for (const f of pond.food.filter(f => !(f.fall > 0) && Math.hypot(f.x - k.x, f.y - k.y) < BITE)) {
       pond.food.splice(pond.food.indexOf(f), 1);
       pond.ripples.push({ x: f.x, y: f.y, age: 0, size: 0.6 });
       pond.eaten++;
     }
   }
 
-  // a pellet spreads outward from where it landed, fast at first and easing to a dead
-  // stop SPREAD_TIME seconds in, then stays put
+  // a pellet drops into the water, then spreads outward from where it landed, fast at
+  // first and easing to a dead stop SPREAD_TIME seconds in, then stays put
   for (const f of pond.food) {
+    if (f.fall > 0) {
+      f.fall -= dt;
+      if (f.fall <= 0) land(pond, f);
+      continue;
+    }
     const left = Math.max(0, 1 - f.age / SPREAD_TIME);
     f.x = clamp(f.x + f.vx * left * left * dt, 0, width);
     f.y = clamp(f.y + f.vy * left * left * dt, 0, height);
@@ -203,7 +229,7 @@ export function stepPond(pond, dt) {
   for (let i = 0; i < pond.food.length; i++) {
     for (let j = i + 1; j < pond.food.length; j++) {
       const a = pond.food[i], b = pond.food[j];
-      const moveA = a.age < SPREAD_TIME, moveB = b.age < SPREAD_TIME;
+      const moveA = a.fall <= 0 && a.age < SPREAD_TIME, moveB = b.fall <= 0 && b.age < SPREAD_TIME;
       if (!moveA && !moveB) continue;
       let dx = b.x - a.x, dy = b.y - a.y;
       let d = Math.hypot(dx, dy);
@@ -531,27 +557,54 @@ export function createKoiPond(canvas, { dark = false, veils = () => [], look = '
 
     for (const k of pond.koi) drawKoi(k);
 
-    // each pellet is a little o floating on top of the fish, snapped to the grid
+    // each pellet is a little o floating on top of the fish, snapped to the grid. one
+    // still falling drops in from above, speeding up as it goes
     ctx.font = `bold ${CELL}px 'Courier New', monospace`;
-    for (const f of pond.food) mark(f.x, f.y, 'o', palette.food, Math.max(0, 1 - f.age / PELLET_LIFE));
+    // each one's colour drifts slowly between a darker and a lighter shade of the
+    // food's, out of step with the others, so they shimmer a little
+    const foodDark = mix(palette.food, '#000000', 0.2), foodLight = mix(palette.food, '#ffffff', 0.35);
+    for (const f of pond.food) {
+      const shade = 0.5 + 0.5 * Math.sin(f.age * 1.6 + f.driftPhase * 3);
+      const falling = Math.max(0, f.fall) / FALL;
+      const above = DROP * (1 - (1 - falling) ** 2) * (falling > 0 ? 1 : 0);
+      mark(f.x, f.y - above, 'o', mix(foodDark, foodLight, shade), Math.max(0, 1 - f.age / PELLET_LIFE));
+    }
 
-    // ripples: rings of letters spreading out and fading
+    // ripples: rings of letters spreading out and fading. a fresh one is a thick band
+    // a few letters deep, its trailing rings fainter, and it thins to a single ring as
+    // it spreads
     ctx.font = `bold ${CELL - 3}px 'Courier New', monospace`;
     for (const r of pond.ripples) {
       const progress = r.age / RIPPLE_LIFE;
-      const radius = 8 + progress * 150 * r.size;
-      const dots = Math.max(12, Math.ceil(2 * Math.PI * radius / CELL));
+      const radius = 8 + progress * 95 * r.size;
+      const depth = (r.wake ? 2 : 3) * (1 - progress) + 1;
       const occupied = new Set();
-      for (let i = 0; i < dots; i++) {
-        const a = i / dots * Math.PI * 2;
-        const x = r.x + Math.cos(a) * radius;
-        const y = r.y + Math.sin(a) * radius;
-        const key = `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
-        if (occupied.has(key)) continue;
-        occupied.add(key);
-        // Tangential strokes follow the circle: horizontal at top/bottom, vertical at the sides.
-        const glyph = Math.abs(Math.sin(a)) > 0.85 ? '-' : Math.abs(Math.cos(a)) > 0.85 ? '|' : Math.sin(2 * a) > 0 ? '/' : '\\';
-        mark(x, y, glyph, palette.ripple, (1 - progress) * (r.wake ? 0.65 : 1));
+      for (let band = 0; band < Math.ceil(depth); band++) {
+        const ring = radius - band * CELL * 0.9;
+        if (ring < 4) break;
+        // the leading ring is full strength, each one behind it fainter, and the last
+        // one fades out as the band thins
+        const strength = (1 - band / depth) * Math.min(1, depth - band);
+        const dots = Math.max(12, Math.ceil(2 * Math.PI * ring / CELL));
+        for (let i = 0; i < dots; i++) {
+          const a = i / dots * Math.PI * 2;
+          // noise: the ring wobbles in and out a little around its circle, and its
+          // letters come and go and vary in strength, more so as it spreads. it's
+          // worked out from the angle and where the ripple started, so it holds still
+          // rather than flickering
+          const wobble = (Math.sin(a * 5 + r.x) + Math.sin(a * 9 + r.y * 1.7)) * 1.2;
+          const grain = (Math.sin(Math.round(a * 24) * 12.99 + band * 78.2 + r.x * 3.1 + r.y) * 43758.5) % 1;
+          const speck = Math.abs(grain);
+          if (speck < 0.05 + 0.12 * progress) continue;
+          const x = r.x + Math.cos(a) * (ring + wobble);
+          const y = r.y + Math.sin(a) * (ring + wobble);
+          const key = `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
+          if (occupied.has(key)) continue;
+          occupied.add(key);
+          // Tangential strokes follow the circle: horizontal at top/bottom, vertical at the sides.
+          const glyph = Math.abs(Math.sin(a)) > 0.85 ? '-' : Math.abs(Math.cos(a)) > 0.85 ? '|' : Math.sin(2 * a) > 0 ? '/' : '\\';
+          mark(x, y, glyph, palette.ripple, strength * (0.8 + 0.2 * speck) * (1 - progress) * (r.wake ? 0.65 : 1));
+        }
       }
     }
 
@@ -648,7 +701,14 @@ export function createKoiPond(canvas, { dark = false, veils = () => [], look = '
   return {
     feed(x, y) {
       feedPond(pond, x, y);
-      if (reduced.matches) draw();
+      // with reduced motion nothing animates, so the food is already in the water
+      if (reduced.matches) {
+        for (const f of pond.food) {
+          if (f.fall > 0) land(pond, f);
+          f.fall = 0;
+        }
+        draw();
+      }
     },
     touch(x, y) {
       if (reduced.matches) return;

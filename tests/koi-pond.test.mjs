@@ -15,12 +15,16 @@ test('koi stay in the pond while they wander', () => {
   }
 });
 
-test('feeding drops pellets and a ripple, and nearby koi swim over and eat them', () => {
+test('feeding drops pellets that each ripple as they land, and nearby koi swim over and eat them', () => {
   const pond = createPond({ width: 800, height: 600, count: 1, random: seeded(7) });
   const [koi] = pond.koi;
+  koi.speed = 0;
   feedPond(pond, koi.x + 120, koi.y);
   assert.equal(pond.food.length, 4);
-  assert.equal(pond.ripples.length, 1);
+  assert.equal(pond.ripples.length, 0);
+  for (let i = 0; i < 12; i++) stepPond(pond, 0.05);
+  assert.equal(pond.ripples.length, 4);
+  koi.speed = 35;
   for (let i = 0; i < 400 && pond.food.length; i++) stepPond(pond, 0.05);
   assert.equal(pond.food.length, 0);
   assert.equal(pond.eaten, 4);
