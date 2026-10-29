@@ -115,52 +115,47 @@ export const projects = [
   },
   {
     id: 'msn-messenger',
-    name: 'MSN Messenger',
-    kind: 'Real-time web',
+    name: 'Fishbowl',
+    kind: 'Interactive web',
     date: 'Fall 2026',
-    icon: 'messenger',
-    // opens the chat itself on the desktop
+    icon: 'koi',
     app: 'chat',
-    tech: ['JavaScript', 'Vue', 'Cloudflare Workers', 'Durable Objects', 'WebSockets', 'SQLite', 'Workers AI', 'Turnstile', 'Playwright'],
-    // interactive figures, see MessengerFigures.vue. the lead is an animation, and
-    // implementation places the rest
-    figures: { lead: 'lobby' },
-    summary: 'A public chat room for everyone visiting this site, styled after MSN Messenger.',
-    tagline: 'A live chat room for this site.',
+    tech: ['JavaScript', 'Vue', 'Canvas 2D', 'Cloudflare Workers', 'Durable Objects', 'WebSockets', 'SQLite', 'Workers AI', 'Turnstile', 'Playwright'],
+    figures: { lead: 'fishbowl' },
+    summary: 'A shared chat room with ASCII koi swimming behind the conversation.',
+    tagline: 'Say hi, feed fish.',
     why: [
-      'The Analytics window tells you who’s here. I wanted a way to say hi. And what’s an early-2000s desktop without a messenger?',
+      'A desktop feels more alive with someone else in it. Fishbowl gives visitors a place to say hi, with the familiar blues of MSN Messenger and a pond that keeps moving while the room is quiet.',
     ],
     contribution: [
-      ['Open ', { open: 'chat', text: 'Fishbowl' }, ', pick a nickname, and you’re in one lobby with everyone else on the site. Messages show up for everyone instantly, and I can moderate the room from the same window.'],
+      ['Open ', { open: 'chat', text: 'Fishbowl' }, ', pick a nickname, and join everyone else on the site. See who’s online, send a message, or start one with @Clippy to ask the site’s AI assistant a question. Click an empty patch of water to feed the koi.'],
+      'The pond’s visual inspiration comes from [Dao Ho’s pond](https://www.daoho.dev/). The fish here use the same custom canvas simulation as this site’s koi wallpaper, recoloured in pale MSN blues.',
     ],
     implementationTitle: 'How it works',
     implementation: [
-      { subheading: 'One room, one object' },
-      'The whole room is a single Cloudflare Durable Object: one tiny server with its own SQLite database, holding a WebSocket open to every visitor. One room means one copy of the truth, so two messages can never trip over each other.',
+      { subheading: 'Fish made of letters' },
+      'Each koi follows a chain of points that bends into a spine. A moving wave gives its body, fins and forked tail their sway. Canvas draws the fish as a grid of shaded squares and characters, with generated markings that make each one different.',
+      { subheading: 'A pond you can touch' },
+      'Clicking the water scatters food pellets. Nearby koi turn toward them, speed up, and leave ripples as they eat. Moving the mouse leaves a brief trail. Fish fade beneath message text to keep it readable, and clicks on words or controls stay with the chat.',
+      'The canvas resizes with its window and changes palette with the desktop theme. Reduced-motion mode holds the fish still while keeping the pond visible.',
+      { subheading: 'One shared room' },
+      'A single Cloudflare Durable Object owns the lobby. WebSockets push new messages and presence updates to connected browsers, while SQLite stores messages, sessions, moderation settings and send limits.',
+      { figure: 'lobby' },
       { subheading: 'Sleeping between messages' },
-      'Most of the time nobody’s typing, so the room hibernates. It leaves memory while everyone stays connected, and the next message wakes it right back up. Anything that has to survive a nap, like rate limits, lives in SQLite.',
+      'The room uses hibernating WebSockets, so connections can stay open when the object leaves memory. Rate limits live in SQLite too: waking up does not give a visitor a fresh allowance.',
       { figure: 'sleep' },
       { subheading: 'Keeping it friendly' },
-      'A public text box attracts exactly who you’d expect. Every message runs a gauntlet before it’s saved: 250 characters, a profanity filter, slow mode, 20 a minute and no repeats. Bots hit a Turnstile check before they can even sign in.',
+      'Joining requires a Turnstile check. The server checks every message for length, profanity and invalid control characters, then applies slow mode, a 20-per-minute limit and a check against the sender’s last three messages. Moderation controls let me remove messages, mute or ban sessions, and close the room.',
       { figure: 'checks' },
-      { subheading: 'Never sending twice' },
-      'Phones drop connections all the time. Every message carries a retry ID, so sending again after a drop never saves a second copy.',
+      { subheading: 'Safe to send again' },
+      'A dropped connection can lose the acknowledgement after a message has already been saved. The browser retries with the same message ID, and the room returns the saved message instead of inserting another copy.',
       { figure: 'retry' },
-      { heading: 'How Clippy came to life' },
-      'Once the room worked, it felt a little empty, so I brought back the most annoying assistant in computing history. Start a message with @Clippy and he answers in the room, running on Google’s Gemma 4 through Cloudflare Workers AI.',
-      'He knows the site’s layout and its live stats, so ask him where the games are or what his Reversi record is. Hard limits keep him from bankrupting me: one question at a time, 500 a day, and 200-token replies. Every token he burns shows up in Analytics.',
-      { heading: 'Other approaches I considered' },
-      { table: [
-        ['Approach', 'Pros', 'Cons'],
-        ['**One Durable Object** (what I built)', 'One copy of the truth, so sends never race. New messages are pushed the instant they’re saved. It sleeps when the room is quiet, so an idle chat costs next to nothing. It lives in the same Worker as the rest of the site.', 'One object can only serve so many people at once: plenty for a portfolio, not for a big app. Memory is wiped on every nap, so anything that matters has to live in SQLite. It ties me to Cloudflare.'],
-        ['**Supabase Realtime**', 'Postgres, live updates and sign-in out of the box.', 'Three systems (database, realtime and functions) that have to agree. Rate limits and moderation would sit in database rules or a separate function, away from the send itself. One more service and bill outside the site.'],
-        ['**Polling an API**', 'The simplest to build: plain requests, no open connections, works everywhere.', 'Messages show up late, by up to one poll. Every open tab keeps asking the server for nothing.'],
-        ['**Node and Socket.IO on a server**', 'Familiar, full control, a huge ecosystem.', 'A server running 24/7 for a room that’s empty most of the day. Uptime, scaling and patches are on me. Spread across more than one server, it needs Redis to share messages between them.'],
-      ] },
+      { heading: 'Clippy lives here too' },
+      'Messages starting with @Clippy call Gemma 4 through Workers AI. His prompt includes a guide to the site, bounded recent conversation history and live site statistics. He can give directions and answer questions; he cannot operate the desktop.',
+      'The room allows one AI request at a time, caps requests at 500 per UTC day, and asks for replies of at most 200 tokens with a 20-second timeout. Token usage is recorded for Analytics.',
       { heading: 'What I learned' },
-      'Give shared state one owner, and treat memory as a cache. With one object owning the room there’s nothing to lock, and anything that only lives in memory is allowed to disappear.',
+      'The chat and the pond share a window, but need different kinds of state. The room keeps durable records so reconnects and hibernation are safe. The fish keep a local simulation that can be rebuilt whenever the canvas mounts. Making both work together also means deciding which clicks belong to the water and which belong to the conversation.',
     ],
-    funFact: 'Windows Live Messenger shut down in 2013 (2014 in China), and everyone was moved over to Skype. Skype itself shut down in May 2025, so for now this little lobby has outlived them both.',
   },
   {
     id: 'portfolio',
@@ -174,7 +169,7 @@ export const projects = [
     // others are placed in contribution and implementation, see writeup() in AppContent.vue
     figures: { lead: 'desktop' },
     summary: 'This site!',
-    tagline: 'A Windows 95 desktop you can actually poke around.',
+    tagline: 'This site!',
     contribution: [
       'Most portfolios are a scrolling page. I wanted mine to be something you’d want to poke around in, so I built a desktop, inspired by sharyap.com, expensive.toys and the react-video-ascii package.',
       'Then I filled it with things I’d want to find: Breakout guarding my email, a Snake leaderboard, Clippy trash-talking you over Reversi, and a lot more.',
@@ -203,7 +198,7 @@ export const projects = [
     // interactive figures, see MlFigures.vue. the implementation list places the rest
     figures: { lead: 'train' },
     summary: 'A small ML framework in Rust, from tensors to GPU training.',
-    tagline: 'A Rust ML framework, from tensors to GPUs.',
+    tagline: 'Machine learning from scratch in Rust.',
     why: [
       'PyTorch turns training a neural network into a few lines of code. I wanted to know what those lines actually do, so I built the whole thing myself, from the numbers up to the GPU.',
     ],
@@ -237,7 +232,7 @@ export const projects = [
     // the implementation list can drop them in between its paragraphs too
     figures: { lead: 'register' },
     summary: 'The tile-merging game, implemented in hardware on a DE1-SoC.',
-    tagline: '2048 built out of logic, played on an FPGA.',
+    tagline: '2048 built on the DE1-SoC.',
     contribution: 'For ECE241, my partner and I built 2048 in Verilog on a DE1-SoC FPGA. It draws on a VGA display at 60 Hz, and you play it with a real PS/2 keyboard.',
     implementationTitle: 'How it works',
     implementation: [
@@ -269,7 +264,7 @@ export const projects = [
     // it itself, between its two paragraphs
     figures: { lead: 'board' },
     summary: 'A terminal Reversi clone written in C, with an AI opponent, built for my Computer Fundamentals course (APS105).',
-    tagline: 'A Reversi AI in C that plays to win.',
+    tagline: 'Minimax Reversi in C.',
     // these are lists of paragraphs, { figure }, { list } and { heading } items, and
     // paragraphs given as arrays can hold { open, text } links to other windows. see
     // writeup() in AppContent.vue

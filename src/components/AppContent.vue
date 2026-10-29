@@ -26,6 +26,7 @@ import ReversiFigures from './ReversiFigures.vue';
 import LiftLensFigures from './LiftLensFigures.vue';
 import MlFigures from './MlFigures.vue';
 import MessengerFigures from './MessengerFigures.vue';
+import FishbowlFigure from './FishbowlFigure.vue';
 import { read, save, remove } from '../storage.js';
 import { track } from '../analytics.js';
 import { balloonColors, balloonFrames, balloonString } from '../balloon-sprite.js';
@@ -46,7 +47,7 @@ const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
 const Terminal = defineAsyncComponent(() => import('./Terminal.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
-const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, hips: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
+const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, hips: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures, fishbowl: FishbowlFigure, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
 // a project's why i built it, what i built and implementation sections as one list of
 // items: a string is a paragraph, an array a paragraph mixing text with { open, text }
 // links to other windows, then { heading }, { subheading }, { figure }, { list }
