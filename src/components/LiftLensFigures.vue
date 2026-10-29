@@ -462,7 +462,7 @@ onBeforeUnmount(compareStop);
   </figure>
 
   <figure v-else-if="figure === 'plate'" class="ll-figure">
-    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle.</figcaption>
+    <figcaption><strong>Fig. 2</strong> Finding the plate at setup.</figcaption>
     <div class="ll-panel">
       <svg ref="plateSvg" class="ll-scene" viewBox="0 24 320 162" @pointermove="drag" @pointerup="release" @pointercancel="release">
         <line class="ll-floor" x1="0" x2="320" :y1="floor + 1" :y2="floor + 1"/>
@@ -499,7 +499,7 @@ onBeforeUnmount(compareStop);
   </figure>
 
   <figure v-else-if="figure === 'path'" ref="pathFigure" class="ll-figure">
-    <figcaption><strong>Fig. 3</strong> The bar path of a 105 kg power clean, from the floor to the top of the pull.</figcaption>
+    <figcaption><strong>Fig. 3</strong> Bar path of a 105 kg power clean.</figcaption>
     <div class="ll-panel ll-angles ll-path-panel">
       <div class="ll-cam">
         <video ref="pathVideo" class="ll-video" :src="pathVideoUrl" :poster="pathPosterUrl" muted playsinline loop preload="auto"
@@ -532,7 +532,7 @@ onBeforeUnmount(compareStop);
   </figure>
 
   <figure v-else-if="figure === 'smooth'" class="ll-figure">
-    <figcaption><strong>Fig. 4</strong> Bar speed through one clean, calculated three ways from the same jittery track.</figcaption>
+    <figcaption><strong>Fig. 4</strong> Bar speed from one jittery track, three ways.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`${methods[method].label}: peak ${estPeak.v.toFixed(2)} m/s`">
         <clipPath id="ll-plot"><rect :x="plot.x" :y="plot.y" :width="plot.w" :height="plot.h"/></clipPath>
@@ -567,7 +567,7 @@ onBeforeUnmount(compareStop);
   </figure>
 
   <figure v-else-if="figure === 'reps'" class="ll-figure">
-    <figcaption><strong>Fig. 5</strong> Bar speed for the clean in Fig. 1 and a made-up rep that’s 30% slower.</figcaption>
+    <figcaption><strong>Fig. 5</strong> A real rep and one 30% slower.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${RW} ${RH}`" role="img" :aria-label="percent ? 'Both reps stretched to 0 to 100 percent, their curves on top of each other' : 'Both reps in seconds, the slower one longer and lower'">
         <line v-for="v in [0, 1]" :key="v" class="ll-grid" :class="{ zero: v === 0 }" :x1="rplot.x" :x2="rplot.x + rplot.w" :y1="ry(v)" :y2="ry(v)"/>
@@ -599,7 +599,7 @@ onBeforeUnmount(compareStop);
   </figure>
 
   <figure v-else-if="figure === 'compare'" ref="compareFigure" class="ll-figure">
-    <figcaption><strong>Fig. 6</strong> Two recorded cleans at real speed, lined up on the moment the bar leaves the floor.</figcaption>
+    <figcaption><strong>Fig. 6</strong> Two cleans, lined up at lift-off.</figcaption>
     <div class="ll-panel">
       <div class="ll-compare-videos">
         <div v-for="(lift, i) in comparison" :key="lift.cls" class="ll-compare-lift">

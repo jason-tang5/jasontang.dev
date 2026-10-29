@@ -230,7 +230,7 @@ const lit = name => edge.value === name;
 
 <template>
   <figure v-if="figure === 'register'" ref="registerFigure" class="fx-figure" :class="{ 'fx-preview': preview }">
-    <figcaption><strong>Fig. 1</strong> The whole board is one 64-bit register, with 4 bits per tile. Click a tile to double it.</figcaption>
+    <figcaption><strong>Fig. 1</strong> The board as one 64-bit register.</figcaption>
     <div class="fx-panel fx-register">
       <div class="fx-board" role="group" aria-label="Board">
         <button v-for="(p, i) in shownBoard" :key="popped.includes(i) ? `${i}-${board.join()}` : i" class="fx-tile"
@@ -259,7 +259,7 @@ const lit = name => edge.value === name;
   </figure>
 
   <figure v-else-if="figure === 'datapath'" class="fx-figure">
-    <figcaption><strong>Fig. 2</strong> The drawing datapath, from our block diagram. Pick a block to see what it does and where it goes.</figcaption>
+    <figcaption><strong>Fig. 2</strong> The drawing datapath.</figcaption>
     <div class="fx-panel">
       <div class="fx-schematic">
         <svg viewBox="0 0 600 296" shape-rendering="crispEdges" role="group" aria-label="Block diagram">
@@ -286,7 +286,7 @@ const lit = name => edge.value === name;
   </figure>
 
   <figure v-else-if="figure === 'slide'" class="fx-figure">
-    <figcaption><strong>Fig. 3</strong> The two-step slide: combine equal tiles, then compact.</figcaption>
+    <figcaption><strong>Fig. 3</strong> The two-step slide.</figcaption>
     <div class="fx-panel">
       <div class="fx-row" :class="{ done: frame.done }">
         <span v-for="(p, i) in frame.cells" :key="i" class="fx-tile" :class="{ look: frame.look.includes(i), hit: frame.hit && frame.look.includes(i) }"
@@ -306,7 +306,7 @@ const lit = name => edge.value === name;
   </figure>
 
   <figure v-else-if="figure === 'fsm'" class="fx-figure">
-    <figcaption><strong>Fig. 4</strong> The keyboard FSM, with one one-hot state per key and a gap state for the extra break code. Press W, A, S or D.</figcaption>
+    <figcaption><strong>Fig. 4</strong> The keyboard FSM.</figcaption>
     <div class="fx-panel" tabindex="0" aria-label="Keyboard FSM. Press W, A, S or D." @keydown="fsmKey">
       <svg class="fx-fsm" viewBox="0 0 320 166" shape-rendering="crispEdges" aria-hidden="true">
         <g class="fx-edges">

@@ -22,7 +22,7 @@ function stir(event) {
       </div>
       <span v-if="!preview" class="fishbowl-hint">Click the water to feed the fish</span>
     </div>
-    <figcaption v-if="!preview">The same koi simulation that swims behind the chat. Pond visuals inspired by <a href="https://www.daoho.dev/" target="_blank" rel="noopener noreferrer">Dao Ho</a>.</figcaption>
+    <figcaption v-if="!preview">The koi behind the chat, inspired by <a href="https://www.daoho.dev/" target="_blank" rel="noopener noreferrer">Dao Ho</a>.</figcaption>
   </figure>
 </template>
 

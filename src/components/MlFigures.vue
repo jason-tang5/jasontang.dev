@@ -655,7 +655,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
 
 <template>
   <figure v-if="figure === 'train'" ref="root" class="mm-figure" :class="{ 'mm-preview': preview }">
-    <figcaption><strong>Fig. 1</strong> Training the 784-256-128-10 MLP on MNIST. Real test digits go forward, gradients come back, Adam steps, and the GPU races the CPU through 10 epochs.</figcaption>
+    <figcaption><strong>Fig. 1</strong> Training on MNIST, GPU against CPU.</figcaption>
     <div class="mm-panel">
       <svg class="mm-net" viewBox="0 0 380 150" aria-hidden="true">
         <rect class="mm-digit-bg" x="7" y="21" width="86" height="86"/>
@@ -717,7 +717,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'layer'" class="mm-figure">
-    <figcaption><strong>Fig. 3</strong> What one layer computes, shrunk to four pixels and three neurons. Each neuron weighs every pixel, adds them up with a bias, and keeps the total only if it’s positive, a step called ReLU. Stacking the weights into a matrix does every neuron at once.</figcaption>
+    <figcaption><strong>Fig. 3</strong> One layer, four pixels into three neurons.</figcaption>
     <div class="mm-panel">
       <p class="mm-part"><b>① One neuron.</b> Click a neuron to follow it, or a pixel to change how bright it is.</p>
       <div class="mm-layer-views">
@@ -801,7 +801,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'graph'" class="mm-figure">
-    <figcaption><strong>Fig. 4</strong> The forward and backward pass through y = (x·w + x)·(x + w). x feeds three operations and w feeds two, so their gradients have to be added up.</figcaption>
+    <figcaption><strong>Fig. 4</strong> Backprop through y = (x·w + x)·(x + w).</figcaption>
     <div class="mm-panel">
       <svg class="mm-graph" viewBox="0 0 400 204" aria-hidden="true">
         <defs>
@@ -862,7 +862,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'tiles'" class="mm-figure">
-    <figcaption><strong>Fig. 5</strong> Why the matmul kernel works in tiles. Step through it, or click another 2 × 2 patch of C to follow that one.</figcaption>
+    <figcaption><strong>Fig. 5</strong> The tiled matmul kernel.</figcaption>
     <div class="mm-panel">
       <div class="mm-scroll">
         <svg class="mm-tiles" viewBox="0 0 334 182" role="group" aria-label="Matrices">
@@ -919,7 +919,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'optim'" ref="optimRoot" class="mm-figure">
-    <figcaption><strong>Fig. 6</strong> SGD, Momentum, RMSProp and Adam rolling down the same loss from the same spot, each with one learning rate it keeps on every surface. Drag to turn it.</figcaption>
+    <figcaption><strong>Fig. 6</strong> SGD, Momentum, RMSProp and Adam on four losses.</figcaption>
     <div class="mm-panel">
       <span class="mm-toggle mm-surfaces" role="group" aria-label="Loss surface">
         <button v-for="(s, id) in surfaces" :key="id" class="raised mm-button" :class="{ pressed: surfaceId === id }" :aria-pressed="surfaceId === id" @click="pickSurface(id)">{{ s.name }}</button>
@@ -947,7 +947,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'epsilon'" class="mm-figure">
-    <figcaption><strong>Fig. 7</strong> One Adam step on a weight with a steady gradient, the way PyTorch and Keras each add epsilon (1e-8).</figcaption>
+    <figcaption><strong>Fig. 7</strong> Where PyTorch and Keras add epsilon.</figcaption>
     <div class="mm-panel">
       <div class="mm-sliders">
         <label>Gradient size g <code>{{ sci(g) }}</code><input v-model.number="gExp" type="range" min="-10" max="-2" step="0.5" aria-label="Gradient size"></label>

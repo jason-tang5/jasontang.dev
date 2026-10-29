@@ -267,7 +267,7 @@ const arrowEnd = a => {
 
 <template>
   <figure v-if="figure === 'lobby'" ref="root" class="mf-figure" :class="{ 'mf-preview': preview }">
-    <figcaption><strong>Fig. 1</strong> Alice and Bob in the lobby. Every message goes up to the room, gets checked and saved, then comes back down to everyone connected.</figcaption>
+    <figcaption><strong>Fig. 1</strong> A message through the lobby.</figcaption>
     <div class="mf-panel">
       <svg class="mf-scene" :viewBox="`0 0 360 ${150 + grow}`" role="img" :aria-label="lobby.stage">
         <g v-for="w in windows" :key="w.who" :transform="`translate(${w.x}, 4)`">
@@ -307,7 +307,7 @@ const arrowEnd = a => {
   </figure>
 
   <figure v-else-if="figure === 'sleep'" class="mf-figure">
-    <figcaption><strong>Fig. 2</strong> 40 seconds in the room, sped up. Between bursts the lobby leaves memory, but every socket stays connected. Anything kept in a variable is gone when it wakes up. Anything in SQLite is still there.</figcaption>
+    <figcaption><strong>Fig. 2</strong> The lobby sleeping between messages.</figcaption>
     <div class="mf-panel">
       <svg class="mf-scene" viewBox="0 0 360 172" role="img" :aria-label="sleep.awake ? 'The lobby is awake' : 'The lobby is asleep, sockets still open'">
         <g v-for="(name, i) in people" :key="name">
@@ -355,7 +355,7 @@ const arrowEnd = a => {
   </figure>
 
   <figure v-else-if="figure === 'checks'" class="mf-figure">
-    <figcaption><strong>Fig. 3</strong> The checks every message goes through before it’s saved, in the lobby’s order. Watch the demo, or type your own. It uses the real filter and the real 3-second slow mode.</figcaption>
+    <figcaption><strong>Fig. 3</strong> The checks before a message is saved.</figcaption>
     <div class="mf-panel">
       <div class="mf-track" aria-hidden="true">
         <div v-for="(g, i) in gates" :key="g.label" class="mf-gate" :class="gateState(i)">{{ g.label }}</div>
@@ -378,7 +378,7 @@ const arrowEnd = a => {
   </figure>
 
   <figure v-else-if="figure === 'retry'" class="mf-figure">
-    <figcaption><strong>Fig. 4</strong> A message sent just as the train goes into a tunnel. The ack never makes it back, so the browser sends it again after reconnecting.</figcaption>
+    <figcaption><strong>Fig. 4</strong> A message sent again after a dropped connection.</figcaption>
     <div class="mf-panel">
       <svg class="mf-scene" viewBox="0 0 360 170" role="img" :aria-label="retry.note">
         <text class="mf-room-name" :x="lane.you" y="12" text-anchor="middle">Your browser</text>

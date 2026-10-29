@@ -262,7 +262,7 @@ function newTree() {
 
 <template>
   <figure v-if="figure === 'board'" ref="cFigure" class="rx-figure" :class="{ 'rx-preview': preview }">
-    <figcaption><strong>Fig. 1</strong> The board is a grid of characters (U for unoccupied, B for black, W for white) printed to the terminal, with each row and column labelled by a letter. Hover over a square to see it checked in all 8 directions, and click to play it.</figcaption>
+    <figcaption><strong>Fig. 1</strong> The board in the terminal.</figcaption>
     <div class="rx-panel rx-split rx-c">
       <div class="rx-board" role="group" aria-label="Board">
         <button v-for="(cell, i) in cBoard" :key="i"
@@ -297,7 +297,7 @@ function newTree() {
   </figure>
 
   <figure v-else-if="figure === 'weights'" class="rx-figure">
-    <figcaption><strong>Fig. 2</strong> The weight of every square. Hover over one to see why, and click a corner to take it.</figcaption>
+    <figcaption><strong>Fig. 2</strong> The weight of every square.</figcaption>
     <div class="rx-panel rx-split">
       <div class="rx-board rx-weights" role="group" aria-label="Square weights">
         <button v-for="(w, i) in weights" :key="i" :class="['rx-cell', `w-${tint(i)}`, { picked: pickedSquare === i, corner: corners.includes(i) }]"
@@ -320,7 +320,7 @@ function newTree() {
   </figure>
 
   <figure v-else-if="figure === 'eval'" class="rx-figure">
-    <figcaption><strong>Fig. 3</strong> Clippy (white) scoring its moves. Each number is a legal move and its score. Pick one to see the breakdown.</figcaption>
+    <figcaption><strong>Fig. 3</strong> Clippy scoring its moves.</figcaption>
     <div class="rx-panel rx-split rx-eval">
       <div class="rx-board" role="group" aria-label="Clippy's legal moves">
         <button v-for="(cell, i) in evalBoard" :key="i" :disabled="scoreAt[i] === undefined"
@@ -351,7 +351,7 @@ function newTree() {
   </figure>
 
   <figure v-else-if="figure === 'lookahead'" class="rx-figure">
-    <figcaption><strong>Fig. 4</strong> Looking ahead. Each of Clippy’s moves, your replies to it, and the score for Clippy after each. Pick any of them to see the board.</figcaption>
+    <figcaption><strong>Fig. 4</strong> Looking ahead a move.</figcaption>
     <div class="rx-panel">
       <div class="rx-buttons">
         <span class="rx-toggle" role="group" aria-label="How far ahead">
