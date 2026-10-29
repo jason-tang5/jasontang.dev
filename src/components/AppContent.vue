@@ -264,12 +264,12 @@ const places = [
     items: [
       { id: 'projects', path: 'Portfolio:\\Projects' },
       { id: 'resume', path: 'Portfolio:\\Jason_Tang_Resume.pdf' },
+      { id: 'chat', path: 'Portfolio:\\Fishbowl' },
     ],
   },
   {
     title: 'Other places',
     items: [
-      { id: 'chat', path: 'Portfolio:\\Fishbowl' },
       { id: 'analytics', path: 'Portfolio:\\Analytics' },
       { id: 'funstuff', path: 'Portfolio:\\Fun Stuff' },
       { id: 'games', path: 'Portfolio:\\Games' },
