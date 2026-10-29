@@ -35,13 +35,14 @@ export const apps = [
   app('minesweeper', 'Minesweeper', 'mine', 300, 400, 250, 330),
   app('reversi', 'Reversi', 'reversi', 420, 660, 350, 480),
   app('2048', '2048', '2048', 540, 800, 320, 560),
+  app('digits', 'Digit Guesser', 'digits', 560, 430, 320, 470),
   // locked until you beat the breakout game in contact, see unlock() in App.vue
   app('mail', 'Mail', 'mail', 500, 450, 360, 330),
 ];
 
 // the apps that live inside the games and fun stuff folders instead of on the desktop
 export const folders = {
-  games: ['contact', 'minesweeper', 'snake', 'reversi', '2048'],
+  games: ['contact', 'minesweeper', 'snake', 'reversi', '2048', 'digits'],
   funstuff: ['pictures', 'stickies', 'music', 'terminal'],
 };
 const tucked = ['settings', 'mail', 'computer', ...Object.values(folders).flat()];

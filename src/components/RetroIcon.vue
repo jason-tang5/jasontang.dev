@@ -242,6 +242,15 @@ const [balloonBody, balloonEdge] = balloonColors[0];
         <path fill="#555" d="M6 11h2v10H6zM24 11h2v10h-2z"/>
         <path stroke="none" fill="#777" d="M9 9h1v14H9zM21 9h1v14h-1z"/>
       </g>
+      <!-- the digit guesser: a 7 drawn in white on a black pad in a grey frame, with a
+           green tick for the guess -->
+      <g v-else-if="name === 'digits'">
+        <path fill="#c0c0c0" d="M2 3h27v25H2z"/>
+        <path fill="#000" stroke="none" d="M5 6h21v19H5z"/>
+        <path fill="#fff" stroke="none" d="M9 9h12v3H9zM18 12h3v3h-3zM17 15h3v3h-3zM16 18h3v3h-3zM15 21h3v3h-3z"/>
+        <path fill="#1baf7a" d="M21 21h9v9h-9z"/>
+        <path fill="#fff" stroke="none" d="M23 25h1v1h-1zM24 26h1v1h-1zM25 25h1v1h-1zM26 24h1v1h-1zM27 23h1v1h-1z"/>
+      </g>
       <!-- a green board with the four opening discs in the middle -->
       <g v-else-if="name === 'reversi'">
         <path fill="#6b3e1c" d="M2 2h28v28H2z"/>

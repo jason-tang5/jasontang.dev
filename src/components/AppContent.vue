@@ -44,9 +44,10 @@ const Snake = defineAsyncComponent(() => import('./Snake.vue'));
 const Minesweeper = defineAsyncComponent(() => import('./Minesweeper.vue'));
 const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
+const Digits = defineAsyncComponent(() => import('./Digits.vue'));
 const Terminal = defineAsyncComponent(() => import('./Terminal.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
-const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, path: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, compare: LiftLensFigures, train: MlFigures, layer: MlFigures, graph: MlFigures, tiles: MlFigures, optim: MlFigures, epsilon: MlFigures, fishbowl: FishbowlFigure, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
+const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, path: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, compare: LiftLensFigures, train: MlFigures, draw: MlFigures, layer: MlFigures, graph: MlFigures, tiles: MlFigures, optim: MlFigures, epsilon: MlFigures, fishbowl: FishbowlFigure, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
 // a project's why i built it, what i built and implementation sections as one list of
 // items: a string is a paragraph, an array a paragraph mixing text with { open, text }
 // links to other windows, then { heading }, { subheading }, { figure }, { list }
@@ -706,6 +707,7 @@ function balloonDone(event, id) {
   <Minesweeper v-else-if="win.type === 'minesweeper'" :active="active" :win="win" @open="id => emit('open', id)"/>
   <Reversi v-else-if="win.type === 'reversi'" :active="active" @open="id => emit('open', id)"/>
   <Twenty48 v-else-if="win.type === '2048'" :active="active" @open="id => emit('open', id)"/>
+  <Digits v-else-if="win.type === 'digits'" @open="id => emit('open', id)"/>
 
   <!-- desktop settings -->
   <div v-else-if="win.type === 'settings'" class="app-layout">

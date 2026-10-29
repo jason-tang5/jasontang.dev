@@ -205,6 +205,8 @@ export const projects = [
     icon: 'chip',
     file: 'mini-ml.exe',
     caption: '#5b4a94',
+    // the trained network is a game in the games folder, the writeup's play it button
+    game: 'digits',
     tech: ['Rust', 'CUDA', 'TypeScript', 'PyTorch', 'TensorFlow'],
     // interactive figures, see MlFigures.vue. the implementation list places the rest
     figures: { lead: 'train' },
@@ -215,6 +217,8 @@ export const projects = [
     ],
     contribution: [
       'A small deep learning library in Rust, with automatic gradients, CUDA kernels and TypeScript bindings. It reads handwritten digits with **97.8% accuracy**, and the GPU trains about **16× faster** than the single-threaded CPU backend.',
+      { subheading: 'Try it out' },
+      { figure: 'draw' },
     ],
     implementationTitle: 'How it works',
     implementation: [

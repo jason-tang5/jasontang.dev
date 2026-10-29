@@ -1,12 +1,14 @@
 <script setup>
 // the figures in the mini ml framework writeup (content.mjs, figures): the mnist mlp
-// training on real test digits while the cuda and cpu backends race, one layer as a network
+// training on real test digits while the cuda and cpu backends race, a pad to draw a
+// digit on that the trained mlp guesses (DigitPad.vue), one layer as a network
 // and as W·a + b, the backward pass through (x·w + x)·(x + w) one gradient at a time, the tiled matmul kernel loading its
 // tiles into shared memory phase by phase, sgd, momentum, rmsprop and adam rolling down four
 // loss surfaces, and where pytorch and keras put adam's epsilon. the rules follow
 // ml-framework/crates/minitorch (autograd.rs, cuda.rs, optim.rs)
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { reducedMotion, useInView } from '../in-view.js';
+import DigitPad from './DigitPad.vue';
 // preview is the projects folder's card: fig 1 alone in a 600 × 375 frame, no buttons,
 // playing only while the card is on screen
 const props = defineProps({ figure: { type: String, required: true }, preview: Boolean });
@@ -709,8 +711,13 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
     </div>
   </figure>
 
+  <figure v-else-if="figure === 'draw'" class="mm-figure">
+    <figcaption><strong>Fig. 2</strong> Draw a digit.</figcaption>
+    <div class="mm-panel"><DigitPad class="mm-draw"/></div>
+  </figure>
+
   <figure v-else-if="figure === 'layer'" class="mm-figure">
-    <figcaption><strong>Fig. 2</strong> What one layer computes, shrunk to four pixels and three neurons. Each neuron weighs every pixel, adds them up with a bias, and keeps the total only if it’s positive, a step called ReLU. Stacking the weights into a matrix does every neuron at once.</figcaption>
+    <figcaption><strong>Fig. 3</strong> What one layer computes, shrunk to four pixels and three neurons. Each neuron weighs every pixel, adds them up with a bias, and keeps the total only if it’s positive, a step called ReLU. Stacking the weights into a matrix does every neuron at once.</figcaption>
     <div class="mm-panel">
       <p class="mm-part"><b>① One neuron.</b> Click a neuron to follow it, or a pixel to change how bright it is.</p>
       <div class="mm-layer-views">
@@ -794,7 +801,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'graph'" class="mm-figure">
-    <figcaption><strong>Fig. 3</strong> The forward and backward pass through y = (x·w + x)·(x + w). x feeds three operations and w feeds two, so their gradients have to be added up.</figcaption>
+    <figcaption><strong>Fig. 4</strong> The forward and backward pass through y = (x·w + x)·(x + w). x feeds three operations and w feeds two, so their gradients have to be added up.</figcaption>
     <div class="mm-panel">
       <svg class="mm-graph" viewBox="0 0 400 204" aria-hidden="true">
         <defs>
@@ -855,7 +862,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'tiles'" class="mm-figure">
-    <figcaption><strong>Fig. 4</strong> Why the matmul kernel works in tiles. Step through it, or click another 2 × 2 patch of C to follow that one.</figcaption>
+    <figcaption><strong>Fig. 5</strong> Why the matmul kernel works in tiles. Step through it, or click another 2 × 2 patch of C to follow that one.</figcaption>
     <div class="mm-panel">
       <div class="mm-scroll">
         <svg class="mm-tiles" viewBox="0 0 334 182" role="group" aria-label="Matrices">
@@ -912,7 +919,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'optim'" ref="optimRoot" class="mm-figure">
-    <figcaption><strong>Fig. 5</strong> SGD, Momentum, RMSProp and Adam rolling down the same loss from the same spot, each with one learning rate it keeps on every surface. Drag to turn it.</figcaption>
+    <figcaption><strong>Fig. 6</strong> SGD, Momentum, RMSProp and Adam rolling down the same loss from the same spot, each with one learning rate it keeps on every surface. Drag to turn it.</figcaption>
     <div class="mm-panel">
       <span class="mm-toggle mm-surfaces" role="group" aria-label="Loss surface">
         <button v-for="(s, id) in surfaces" :key="id" class="raised mm-button" :class="{ pressed: surfaceId === id }" :aria-pressed="surfaceId === id" @click="pickSurface(id)">{{ s.name }}</button>
@@ -940,7 +947,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'epsilon'" class="mm-figure">
-    <figcaption><strong>Fig. 6</strong> One Adam step on a weight with a steady gradient, the way PyTorch and Keras each add epsilon (1e-8).</figcaption>
+    <figcaption><strong>Fig. 7</strong> One Adam step on a weight with a steady gradient, the way PyTorch and Keras each add epsilon (1e-8).</figcaption>
     <div class="mm-panel">
       <div class="mm-sliders">
         <label>Gradient size g <code>{{ sci(g) }}</code><input v-model.number="gExp" type="range" min="-10" max="-2" step="0.5" aria-label="Gradient size"></label>
@@ -992,6 +999,10 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
 .mm-note { min-height: 2.8em; margin: 10px 0 8px; font-size: 13px; line-height: 1.45; }
 .mm-note > b:first-child { margin-right: 6px; font: bold 11px 'Courier New', monospace; color: var(--muted); }
 .mm-note code, .mm-sum code, .mm-sliders code, .mm-bars code { font: bold 12px 'Courier New', monospace; color: var(--d-link, #000080); }
+
+/* fig 2: the pad fills what the guess and bars leave of the width, and when that gets
+   too small it takes the whole width with them wrapped under it */
+.mm-draw { --pad-size: max(min(100cqi - 270px, 440px), min(100cqi - 28px, 320px)); }
 
 /* fig 1: the network, the race, and the loss curve */
 .mm-net { display: block; width: 100%; max-width: 600px; margin: 0 auto; }

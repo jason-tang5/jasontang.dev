@@ -11,7 +11,7 @@ test('ls lists the folder you are in, and cd moves between them', () => {
   assert.match(text(run('ls', state).lines[0]), /games\/.*funstuff\/.*about\.txt.*about/);
   state.cwd = run('cd games', state).cwd;
   assert.equal(state.cwd, 'games');
-  assert.equal(text(run('ls', state).lines[0]), 'contact  minesweeper  snake  reversi  2048');
+  assert.equal(text(run('ls', state).lines[0]), 'contact  minesweeper  snake  reversi  2048  digits');
   assert.equal(text(run('pwd', state).lines[0]), '/home/jason/games');
   assert.equal(run('cd ../funstuff', state).cwd, 'funstuff');
   assert.equal(run('cd', state).cwd, '');
