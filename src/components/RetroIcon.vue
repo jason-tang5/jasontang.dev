@@ -220,11 +220,11 @@ const [balloonBody, balloonEdge] = balloonColors[0];
         <path fill="#f2b179" d="M18 17h12v1h1v12h-1v1H18v-1H17V18h1z"/>
         <path fill="#fff" d="M21 19h2v2h-2zM23 19h2v2h-2zM25 19h2v2h-2zM21 21h2v2h-2zM25 21h2v2h-2zM21 23h2v2h-2zM23 23h2v2h-2zM25 23h2v2h-2zM21 25h2v2h-2zM25 25h2v2h-2zM21 27h2v2h-2zM23 27h2v2h-2zM25 27h2v2h-2z"/>
       </g>
-      <!-- the same red pixel balloon that floats up over the about page, 24 sprite pixels
-           tall so it's pixel for pixel on a 24px toolbar button. it rests leaning left,
-           and on the about page it flips to leaning right and back, the way the real
-           ones bob -->
-      <svg v-else-if="name === 'balloon'" x="5.33" width="21.33" height="32" viewBox="-1 0 16 24" stroke="none">
+      <!-- the same red pixel balloon that floats up over the about page, with the bottom
+           of its string cut off so the balloon fills more of the icon. it rests leaning
+           left, and on the about page it flips to leaning right and back, the way the
+           real ones bob -->
+      <svg v-else-if="name === 'balloon'" x="3.2" width="25.6" height="32" viewBox="-1 0 16 20" stroke="none">
         <g v-for="(f, k) in [balloonFrames[0], balloonFrames[2]]" :key="k" :class="k ? 'bl-b' : 'bl-a'">
           <path :d="f.outline" :fill="balloonEdge"/>
           <path :d="f.fill" :fill="balloonBody"/>
@@ -277,13 +277,17 @@ const [balloonBody, balloonEdge] = balloonColors[0];
         <path fill="#c9a000" d="M21 21h6l-6 6z"/>
         <path fill="none" stroke="#8a7400" d="M7 13h15M7 17h15M7 21h10"/>
       </g>
+      <!-- stepped silhouettes and top-left highlights match the desktop's pixel icons -->
       <g v-else-if="name === 'sun'">
         <path fill="#ffd21f" d="M15 2h2v4h-2zM15 26h2v4h-2zM2 15h4v2H2zM26 15h4v2h-4zM5 5h3v3H5zM24 5h3v3h-3zM5 24h3v3H5zM24 24h3v3h-3z"/>
         <path fill="#ffd21f" d="M12 9h8v1h2v2h1v8h-1v2h-2v1h-8v-1h-2v-2H9v-8h1v-2h2z"/>
-        <path fill="#fff6b0" stroke="none" d="M12 11h3v2h-3z"/>
+        <path fill="#e6a817" stroke="none" d="M21 12h1v8h-1v2h-2v-2h1v-8zM12 21h7v1h-7z"/>
+        <path fill="#fff6b0" stroke="none" d="M12 11h6v1h-6zM11 12h2v3h-2z"/>
       </g>
       <g v-else-if="name === 'moon'">
         <path fill="#f3e9a6" d="M13 4h7v2h-4v2h-2v3h-1v10h1v3h2v2h4v2h-7v-2h-3v-2H8v-3H7V11h1V8h2V6h3z"/>
+        <path fill="#fff9d4" stroke="none" d="M13 5h4v1h-4zM10 7h3v1h-3zM9 9h2v3H9zM8 12h1v7H8z"/>
+        <path fill="#c9b968" stroke="none" d="M9 21h2v3h2v2h3v1h-3v-2h-3v-2H9z"/>
         <path fill="#fff" stroke="none" d="M23 8h2v2h-2zM21 16h2v2h-2zM26 21h2v2h-2z"/>
       </g>
       <g v-else-if="name === 'start'">
