@@ -267,6 +267,9 @@ try {
   const gamesFolder = page.locator('[data-window="games"]');
   await expect(page.locator('.desktop-shortcut', { hasText: 'Games' })).toHaveCount(1);
   await expect(page.locator('.desktop-shortcut', { hasText: 'Minesweeper' })).toHaveCount(0);
+  // contact and the terminal live in their folders, not on the desktop
+  await expect(page.locator('.desktop-shortcut', { hasText: 'Contact' })).toHaveCount(0);
+  await expect(page.locator('.desktop-shortcut', { hasText: 'Terminal' })).toHaveCount(0);
   await gamesFolder.getByRole('button', { name: /Snake/ }).click();
   const snake = page.locator('[data-window="snake"]');
   await expect(snake.locator('pre')).toContainText('best');
@@ -515,7 +518,7 @@ try {
   assert.ok(await soundsFrom(() => noisy.getByRole('button', { name: 'Close About Me', exact: true }).click()) > 0, 'closing makes a sound');
 
   // play breakout until the first brick breaks, which should make a sound on its own
-  await noisy.locator('.desktop-shortcut', { hasText: 'Contact' }).dblclick();
+  await noisy.evaluate(() => { location.hash = 'app=contact'; });
   const contact = noisy.locator('[data-window="contact"]');
   await contact.getByRole('button', { name: 'Insert coin to start' }).click();
   await noisy.waitForTimeout(150);
