@@ -2683,19 +2683,6 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   50% { visibility: hidden; }
 }
 
-.terminal-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 2px 2px;
-}
-
-.terminal-suggestions button {
-  padding: 2px 8px;
-  font: 12px Consolas, 'Courier New', monospace;
-  color: var(--ink);
-}
-
 /* the about page's quick facts (AboutFacts.vue): each label in the pixel font like the
    blog's headings, lined up in a column, with the fact beside it. dotted pixel lines,
    like a windows focus box, run between the rows and down between the two columns */

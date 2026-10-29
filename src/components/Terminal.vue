@@ -9,9 +9,6 @@ import { complete, host, pathOf, run, user } from '../shell.mjs';
 const props = defineProps({ visible: Boolean, active: Boolean });
 const emit = defineEmits(['open', 'close']);
 
-// a few commands to tap, for phones. three, so they stay clear of the taskbar's handle
-const suggestions = ['help', 'ls', 'snake'];
-
 // each line is a list of { text, kind } segments. shell.mjs hands back strings or
 // [text, kind] pairs, and a line that's just a string
 const lines = ref([]);
@@ -112,9 +109,6 @@ onMounted(() => {
           @keydown="keydown"
         >
       </form>
-    </div>
-    <div class="terminal-suggestions" role="group" aria-label="Try a command">
-      <button v-for="s in suggestions" :key="s" class="raised" @click="submit(s)">{{ s }}</button>
     </div>
   </div>
 </template>
