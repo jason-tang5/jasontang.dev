@@ -34,7 +34,8 @@ export function createPond({ width, height, count = 5, scale = 1, random = Math.
     const size = (0.36 + 0.52 * (i + 0.2 + random() * 0.6) / count) * scale;
     return {
       x, y, heading, size,
-      speed: 28 + random() * 14,
+      // px a second while it drifts about. rushing for food it goes about three times that
+      speed: 18 + random() * 9,
       // its markings, like a kohaku: often a cap on the head, then a run of medium
       // patches stepping down the back, each leaning to one side or the other, and a
       // scatter of small spots between them
@@ -167,7 +168,7 @@ export function stepPond(pond, dt) {
     // closing in on a pellet it slows down and turns tighter, nibbling its way between
     // the scattered food instead of looping wide round each one
     const near = target ? clamp(1 - best / 150, 0, 1) : 0;
-    const speed = k.speed * (1 + 1.2 * k.excite) * stroke * (1 - 0.6 * near);
+    const speed = k.speed * (1 + 2.4 * k.excite) * stroke * (1 - 0.6 * near);
     // away from food, never tighter than a circle about 40% of its length across, so
     // even an excited koi swings round in a wide arc instead of folding back on itself
     const turnRate = Math.min(0.7 + 1.8 * k.excite, speed / (90 * k.size * (1 - 0.8 * near)));
