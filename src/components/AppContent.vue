@@ -46,7 +46,7 @@ const Reversi = defineAsyncComponent(() => import('./Reversi.vue'));
 const Twenty48 = defineAsyncComponent(() => import('./Twenty48.vue'));
 const Terminal = defineAsyncComponent(() => import('./Terminal.vue'));
 // the interactive figures in a project's writeup, by name (content.mjs, figures)
-const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, hips: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures, fishbowl: FishbowlFigure, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
+const figureFor = { desktop: PortfolioFigures, apps: PortfolioFigures, stack: PortfolioFigures, live: PortfolioFigures, register: FpgaFigures, datapath: FpgaFigures, slide: FpgaFigures, fsm: FpgaFigures, board: ReversiFigures, weights: ReversiFigures, eval: ReversiFigures, lookahead: ReversiFigures, angles: LiftLensFigures, plate: LiftLensFigures, path: LiftLensFigures, smooth: LiftLensFigures, reps: LiftLensFigures, compare: LiftLensFigures, train: MlFigures, graph: MlFigures, tiles: MlFigures, epsilon: MlFigures, fishbowl: FishbowlFigure, lobby: MessengerFigures, sleep: MessengerFigures, checks: MessengerFigures, retry: MessengerFigures };
 // a project's why i built it, what i built and implementation sections as one list of
 // items: a string is a paragraph, an array a paragraph mixing text with { open, text }
 // links to other windows, then { heading }, { subheading }, { figure }, { list }
@@ -537,11 +537,11 @@ function balloonDone(event, id) {
             <section class="about-facts-section" aria-labelledby="about-facts-heading">
               <h2 id="about-facts-heading">About me</h2>
               <AboutFacts :facts="profile.facts"/>
-              <!-- what i'm building right now, the clean from the liftlens writeup -->
+              <!-- what i'm building right now, the 105 kg clean from the liftlens writeup -->
               <LiftLensFigures figure="angles" compact>
                 <template #caption>
                   <span class="about-quote"><span>{{ profile.quote[0] }}</span> <span>{{ profile.quote[1] }}<span class="typed-cursor" aria-hidden="true">_</span></span></span>
-                  <a href="#app=liftlens"><strong>LiftLens</strong></a> 100kg @ 1.3m/s
+                  <a href="#app=liftlens"><strong>LiftLens</strong></a> 105kg @ 1.5m/s
                 </template>
               </LiftLensFigures>
             </section>

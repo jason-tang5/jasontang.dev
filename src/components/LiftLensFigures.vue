@@ -1,11 +1,14 @@
 <script setup>
 // the figures in the liftlens writeup (content.mjs, figures): a real clean on video with
 // the app's joint angles and bar speed for it alongside, the plate finder's
-// circle check with a circle you can drag around, and three ways to get bar speed out
+// circle check with a circle you can drag around, a heavier clean's bar path on its own
+// video, three ways to get bar speed out
 // of the same noisy track. the numbers follow lift-lens/backend (metrics.py,
 // plate_tracking.py), drawn at 140 px a metre
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { angles, clip, speed } from '../liftlens-clip.mjs';
+import * as heavy from '../liftlens-105.mjs';
+import { path, pathClip } from '../liftlens-path.mjs';
 import { reducedMotion, useInView } from '../in-view.js';
 // compact is the about page's fig 1: when it's narrow it keeps the video beside the
 // readouts and leaves out the charts, so it doesn't run down the whole page. preview is
@@ -15,11 +18,15 @@ const props = defineProps({ figure: { type: String, required: true }, compact: B
 
 // ---- angles: a real clean on video, with liftlens's numbers for it alongside ----
 // the video already has the app's skeleton and bar path drawn on. the charts and readouts
-// follow its playback, from the analysis in liftlens-clip.mjs
+// follow its playback, from the analysis in liftlens-clip.mjs. the about page and the
+// projects card show the 105 kg clean in liftlens-105.mjs instead
 const videoUrl = new URL('../../assets/projects/liftlens-clean.mp4', import.meta.url).href;
 const posterUrl = new URL('../../assets/projects/liftlens-clean-poster.jpg', import.meta.url).href;
+const lift = props.compact || props.preview
+  ? { ...heavy, video: new URL('../../assets/projects/liftlens-105.mp4', import.meta.url).href, poster: new URL('../../assets/projects/liftlens-105-poster.jpg', import.meta.url).href }
+  : { clip, angles, speed, video: videoUrl, poster: posterUrl };
 const video = ref(null);
-const now = ref(clip.start);
+const now = ref(lift.clip.start);
 const playing = ref(false);
 // the value at time t, straight between the samples either side, or null where there's none
 function sampleAt(rows, col, t) {
@@ -34,33 +41,33 @@ const angleDefs = [
   { name: 'Hip', col: 2, color: 'var(--ll-hip)' },
   { name: 'Elbow', col: 3, color: 'var(--ll-elbow)' },
 ];
-const readouts = computed(() => angleDefs.map(d => ({ ...d, value: sampleAt(angles, d.col, now.value) })));
-const speedNow = computed(() => sampleAt(speed, 1, now.value));
+const readouts = computed(() => angleDefs.map(d => ({ ...d, value: sampleAt(lift.angles, d.col, now.value) })));
+const speedNow = computed(() => sampleAt(lift.speed, 1, now.value));
 
 // the charts run from the start of the clip to the end
 const CW = 200, CH = 70;
-const cx = t => 4 + (t - clip.start) / (clip.end - clip.start) * (CW - 8);
-const inClip = rows => rows.filter(r => r[0] >= clip.start && r[0] <= clip.end);
+const cx = t => 4 + (t - lift.clip.start) / (lift.clip.end - lift.clip.start) * (CW - 8);
+const inClip = rows => rows.filter(r => r[0] >= lift.clip.start && r[0] <= lift.clip.end);
 const ay = a => CH - 6 - a / 180 * (CH - 18);
 const angleLines = angleDefs.map(d => ({
   ...d,
-  points: inClip(angles).filter(r => r[d.col] !== null).map(r => `${cx(r[0]).toFixed(1)},${ay(r[d.col]).toFixed(1)}`).join(' '),
+  points: inClip(lift.angles).filter(r => r[d.col] !== null).map(r => `${cx(r[0]).toFixed(1)},${ay(r[d.col]).toFixed(1)}`).join(' '),
 }));
 const VLO = -0.5, VHI = 2;
 const vy = v => CH - 6 - (Math.min(VHI, Math.max(VLO, v)) - VLO) / (VHI - VLO) * (CH - 18);
-const speedLine = inClip(speed).map(r => `${cx(r[0]).toFixed(1)},${vy(r[1]).toFixed(1)}`).join(' ');
+const speedLine = inClip(lift.speed).map(r => `${cx(r[0]).toFixed(1)},${vy(r[1]).toFixed(1)}`).join(' ');
 // axis ticks, placed in html beside the stretched svgs as a share of its height or width
 const angleTicks = [0, 90, 180].map(v => ({ label: `${v}°`, y: ay(v) }));
 const speedTicks = [0, 1, 2].map(v => ({ label: String(v), y: vy(v) }));
-const clipLength = clip.end - clip.start;
-const timeTicks = [0, clipLength / 2, clipLength].map(t => ({ label: `${Number(t.toFixed(1))} s`, x: cx(clip.start + t) }));
+const clipLength = lift.clip.end - lift.clip.start;
+const timeTicks = [0, clipLength / 2, clipLength].map(t => ({ label: `${Number(t.toFixed(1))} s`, x: cx(lift.clip.start + t) }));
 
 // the video loops the lift itself, skipping the summary the export ends on
 let frame = 0;
 function follow() {
   const v = video.value;
   if (!v) return;
-  if (v.currentTime >= clip.end || v.currentTime < clip.start - 0.05) v.currentTime = clip.start;
+  if (v.currentTime >= lift.clip.end || v.currentTime < lift.clip.start - 0.05) v.currentTime = lift.clip.start;
   now.value = v.currentTime;
   frame = requestAnimationFrame(follow);
 }
@@ -80,7 +87,7 @@ function started() { playing.value = true; cancelAnimationFrame(frame); frame = 
 function stopped() { playing.value = false; cancelAnimationFrame(frame); if (video.value) now.value = video.value.currentTime; }
 function loaded() {
   const v = video.value;
-  v.currentTime = clip.start;
+  v.currentTime = lift.clip.start;
   if (props.preview) return previewPlay();
   // with reduced motion it waits on the first frame until you press play
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) v.play().catch(() => {});
@@ -99,7 +106,7 @@ watch(anglesInView, previewPlay);
 // if it ever runs off the end of the file it starts the lift again
 function ended() {
   if (!props.preview) return;
-  video.value.currentTime = clip.start;
+  video.value.currentTime = lift.clip.start;
   previewPlay();
 }
 onBeforeUnmount(() => cancelAnimationFrame(frame));
@@ -174,6 +181,59 @@ function nudge(event) {
   event.preventDefault();
   cand.value = { ...cand.value, x: cand.value.x + step[0], y: cand.value.y + step[1] };
 }
+
+// ---- path: the bar path of a heavier clean, the dot following its video ----
+// the path is in liftlens-path.mjs. the clip loops while it's on screen, and with
+// reduced motion waits on its first frame until you press play
+const pathVideoUrl = new URL('../../assets/projects/liftlens-path.mp4', import.meta.url).href;
+const pathPosterUrl = new URL('../../assets/projects/liftlens-path-poster.jpg', import.meta.url).href;
+const pathFigure = ref(null);
+const pathVideo = ref(null);
+const pathNow = ref(0);
+const pathPlaying = ref(false);
+const pathInView = useInView(pathFigure);
+const pathEnd = path.at(-1)[0];
+const pathAt = computed(() => {
+  const t = Math.min(Math.max(pathNow.value, path[0][0]), pathEnd);
+  return { x: sampleAt(path, 1, t), y: sampleAt(path, 2, t), speed: pathNow.value <= pathEnd ? sampleAt(path, 3, t) : null };
+});
+const pathPeak = path.reduce((best, r) => (r[3] > best[3] ? r : best));
+// sideways is drawn 4 times wider than up, so a few cm of drift shows
+const PW = 150, PH = 150, XLO = -6, XHI = 12, YLO = -4, YHI = 96, STRETCH = 4;
+const pxScale = (PH - 16) / (YHI - YLO);
+const px = x => PW / 2 + (x - (XLO + XHI) / 2) * pxScale * STRETCH;
+const py = y => PH - 8 - (y - YLO) * pxScale;
+const pathLine = path.map(r => `${px(r[1]).toFixed(1)},${py(r[2]).toFixed(1)}`).join(' ');
+const pathSoFar = computed(() => [...path.filter(r => r[0] < pathNow.value).map(r => [r[1], r[2]]), [pathAt.value.x, pathAt.value.y]]
+  .map(([x, y]) => `${px(x).toFixed(1)},${py(y).toFixed(1)}`).join(' '));
+let pathFrame = 0;
+function pathFollow() {
+  if (!pathVideo.value) return;
+  pathNow.value = pathVideo.value.currentTime;
+  pathFrame = requestAnimationFrame(pathFollow);
+}
+function pathAuto() {
+  const v = pathVideo.value;
+  if (!v || v.readyState < 1) return;
+  if (pathInView.value && !reducedMotion()) v.play().catch(() => {});
+  else v.pause();
+}
+watch(pathInView, pathAuto);
+function pathPlay() {
+  const v = pathVideo.value;
+  if (!v) return;
+  if (!v.paused) { v.pause(); return; }
+  v.play().catch(() => {});
+}
+function pathSeek(event) {
+  const v = pathVideo.value;
+  if (!v) return;
+  v.pause();
+  v.currentTime = pathNow.value = Number(event.target.value);
+}
+function pathStarted() { pathPlaying.value = true; cancelAnimationFrame(pathFrame); pathFrame = requestAnimationFrame(pathFollow); }
+function pathStopped() { pathPlaying.value = false; cancelAnimationFrame(pathFrame); if (pathVideo.value) pathNow.value = pathVideo.value.currentTime; }
+onBeforeUnmount(() => cancelAnimationFrame(pathFrame));
 
 // ---- smooth: one clean's bar height at 60 fps with about a pixel of noise ----
 const DT = 1 / 60;
@@ -265,57 +325,94 @@ const rx = (t, length) => rplot.x + ((1 - stretched.value) * t / RSEC + stretche
 const repLines = computed(() => reps.map(r => ({ ...r, points: r.rows.map(([t, v]) => `${rx(t, r.length).toFixed(1)},${ry(v).toFixed(1)}`).join(' ') })));
 const STEPS = Array.from({ length: 101 }, (_, i) => rplot.x + i / 100 * rplot.w);
 
-// ---- hips: the same clean from the floor to the knee, knee opening against hip opening ----
-// the rows from lift-off until the bar passes the knee. the video follows the slider
-const hipRows = angles.filter(r => r[0] <= 0.39);
-const [hipT0, knee0, hip0] = hipRows[0];
-const hipT1 = hipRows.at(-1)[0];
-const hipVideo = ref(null);
-const hipNow = ref(hipT1);
-const hipPlaying = ref(false);
-const opened = computed(() => ({ knee: sampleAt(angles, 1, hipNow.value) - knee0, hip: sampleAt(angles, 2, hipNow.value) - hip0 }));
-// the chart puts the knee's opening across and the hip's up, the same scale both ways,
-// so opening together would be the dashed diagonal
-const HS = 150, HLO = -5, HHI = 50;
-const hx = d => 22 + (d - HLO) / (HHI - HLO) * (HS - 30);
-const hy = d => HS - 18 - (d - HLO) / (HHI - HLO) * (HS - 30);
-const hipPath = hipRows.map(r => `${hx(r[1] - knee0).toFixed(1)},${hy(r[2] - hip0).toFixed(1)}`).join(' ');
-const hipSoFar = computed(() => [...hipRows.filter(r => r[0] < hipNow.value).map(r => [r[1] - knee0, r[2] - hip0]), [opened.value.knee, opened.value.hip]]
-  .map(([k, h]) => `${hx(k).toFixed(1)},${hy(h).toFixed(1)}`).join(' '));
-let hipFrame = 0;
-function hipShow(t) {
-  hipNow.value = t;
-  if (hipVideo.value) hipVideo.value.currentTime = Math.max(0, t);
+// ---- compare: both recordings at real speed, lined up on the moment the bar leaves the floor ----
+// times here are seconds from lift-off, the first sample moving up at 0.05 m/s or more.
+// both videos play at normal speed, and the second is nudged back in step whenever it drifts.
+// the 105 kg clean leaves off its last sample, where the bar crashes into the catch
+const liftoffOf = rows => rows.find(r => r[1] >= 0.05)[0];
+const comparison = reactive([
+  { name: '100 kg, Sept 2026', cls: 'a', video: videoUrl, poster: posterUrl, duration: clip.duration, speeds: speed },
+  { name: '105 kg, Oct 2026', cls: 'b', video: pathVideoUrl, poster: pathPosterUrl, duration: pathClip.duration, speeds: path.slice(0, -1).map(r => [r[0], r[3]]) },
+].map(({ speeds, ...r }) => {
+  const liftoff = liftoffOf(speeds);
+  return { ...r, liftoff, rows: speeds.map(([t, v]) => [t - liftoff, v]), peak: Math.max(...speeds.map(row => row[1])) };
+}));
+const compareVideos = [];
+// the stretch of time both videos have frames for
+const compareLo = computed(() => Math.max(...comparison.map(r => -r.liftoff)));
+const compareHi = computed(() => Math.min(...comparison.map(r => r.duration - r.liftoff)) - 0.02);
+const compareNow = ref(0);
+const comparePlaying = ref(false);
+const compareX = t => 30 + (t - compareLo.value) / (compareHi.value - compareLo.value) * 260;
+const compareY = v => 112 - v / 1.6 * 88;
+const compareTicks = computed(() => [0, 0.5, 1, 1.5].filter(t => t <= compareHi.value));
+const inWindow = rows => rows.filter(r => r[0] >= compareLo.value && r[0] <= compareHi.value);
+const compareDots = computed(() => comparison.flatMap(lift => {
+  const rows = inWindow(lift.rows);
+  if (compareNow.value < rows[0][0] || compareNow.value > rows.at(-1)[0]) return [];
+  return [{ cls: lift.cls, value: sampleAt(rows, 1, compareNow.value) }];
+}));
+const compareLines = computed(() => comparison.map(r => ({ ...r,
+  points: inWindow(r.rows).map(([t, v]) => `${compareX(t).toFixed(1)},${compareY(v).toFixed(1)}`).join(' ') })));
+let compareFrame = 0;
+function compareStop() {
+  cancelAnimationFrame(compareFrame);
+  comparePlaying.value = false;
+  compareVideos.forEach(v => v?.pause());
 }
-// plays the stretch at quarter speed, from the floor again if it's already at the knee
-function hipPlay() {
-  const v = hipVideo.value;
-  if (!v) return;
-  if (!v.paused) { v.pause(); return; }
-  if (hipNow.value >= hipT1 - 0.01) hipShow(hipT0);
-  v.playbackRate = 0.25;
-  v.play().catch(() => {});
+function compareShow(t) {
+  compareNow.value = t;
+  compareVideos.forEach((v, i) => { if (v) v.currentTime = comparison[i].liftoff + t; });
 }
-function hipFollow() {
-  const v = hipVideo.value;
-  if (!v) return;
-  if (v.currentTime >= hipT1) { v.pause(); hipNow.value = hipT1; return; }
-  hipNow.value = Math.max(hipT0, v.currentTime);
-  hipFrame = requestAnimationFrame(hipFollow);
+function compareFollow() {
+  const [lead, other] = compareVideos;
+  if (!lead || !comparePlaying.value) return;
+  const t = lead.currentTime - comparison[0].liftoff;
+  if (t >= compareHi.value) compareLoop();
+  else compareNow.value = t;
+  if (other && Math.abs(other.currentTime - comparison[1].liftoff - t) > 0.04) other.currentTime = comparison[1].liftoff + t;
+  compareFrame = requestAnimationFrame(compareFollow);
 }
-function hipStarted() { hipPlaying.value = true; cancelAnimationFrame(hipFrame); hipFrame = requestAnimationFrame(hipFollow); }
-function hipStopped() { hipPlaying.value = false; cancelAnimationFrame(hipFrame); }
-function hipSeek(event) { hipVideo.value?.pause(); hipShow(Number(event.target.value)); }
-onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
+// at the end both go back to lift-off and carry on playing
+function compareLoop() { compareShow(compareLo.value); }
+async function comparePlay() {
+  if (comparePlaying.value) { compareStop(); return; }
+  if (compareVideos.length !== comparison.length || compareVideos.some(v => !v || v.readyState < 1)) return;
+  compareShow(compareNow.value >= compareHi.value - 0.01 ? compareLo.value : compareNow.value);
+  comparePlaying.value = true;
+  compareVideos.forEach(v => { v.playbackRate = 1; });
+  try {
+    await Promise.all(compareVideos.map(v => v.play()));
+    if (comparePlaying.value) compareFrame = requestAnimationFrame(compareFollow);
+  } catch { compareStop(); }
+}
+function compareLoaded(event, index) {
+  const duration = event.target.duration;
+  if (Number.isFinite(duration) && duration > 0) comparison[index].duration = duration;
+  compareShow(Math.min(Math.max(compareNow.value, compareLo.value), compareHi.value));
+  compareAuto();
+}
+function compareEnded() { if (comparePlaying.value) { compareLoop(); compareVideos.forEach(v => v?.play().catch(() => {})); } }
+// they repeat by themselves while the figure is on screen, and with reduced motion wait
+// on lift-off until you press play
+const compareFigure = ref(null);
+const compareInView = useInView(compareFigure);
+function compareAuto() {
+  if (!compareInView.value) { if (comparePlaying.value) compareStop(); return; }
+  if (!comparePlaying.value && !reducedMotion()) comparePlay();
+}
+watch(compareInView, compareAuto);
+function compareSeek(event) { compareStop(); compareShow(Number(event.target.value)); }
+onBeforeUnmount(compareStop);
 </script>
 
 <template>
   <figure v-if="figure === 'angles'" ref="anglesFigure" class="ll-figure" :class="{ 'll-compact': compact, 'll-preview': preview }">
     <!-- the about page puts its own caption here -->
-    <figcaption><slot name="caption"><strong>Fig. 1</strong> A power clean, filmed from the side. Each angle comes from three keypoints, and the graphs follow the video.</slot></figcaption>
+    <figcaption><slot name="caption"><strong>Fig. 1</strong> My first power clean back at UofT, Sept 2026.</slot></figcaption>
     <div class="ll-panel ll-angles">
       <div class="ll-cam">
-        <video ref="video" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
+        <video ref="video" class="ll-video" :src="lift.video" :poster="lift.poster" muted playsinline preload="auto"
           aria-label="A power clean with LiftLens's skeleton and bar path drawn on"
           @loadedmetadata="loaded" @play="started" @pause="stopped" @ended="ended" @seeked="now = video.currentTime"/>
       </div>
@@ -357,15 +454,15 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
         </div>
         <div class="ll-transport">
           <button class="raised ll-button" @click="play">{{ playing ? 'Pause' : 'Play' }}</button>
-          <input :value="now" class="ll-scrub" type="range" :min="clip.start" :max="clip.end" step="0.01" aria-label="Point in the lift" @input="seek">
-          <code>{{ (Math.min(Math.max(now, clip.start), clip.end) - clip.start).toFixed(1) }} /{{ (clip.end - clip.start).toFixed(1) }} s</code>
+          <input :value="now" class="ll-scrub" type="range" :min="lift.clip.start" :max="lift.clip.end" step="0.01" aria-label="Point in the lift" @input="seek">
+          <code>{{ (Math.min(Math.max(now, lift.clip.start), lift.clip.end) - lift.clip.start).toFixed(1) }} /{{ (lift.clip.end - lift.clip.start).toFixed(1) }} s</code>
         </div>
       </div>
     </div>
   </figure>
 
   <figure v-else-if="figure === 'plate'" class="ll-figure">
-    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle. Green ticks mark parts of the outline that line up with a real edge.</figcaption>
+    <figcaption><strong>Fig. 2</strong> Finding the plate at setup. Drag the dashed circle.</figcaption>
     <div class="ll-panel">
       <svg ref="plateSvg" class="ll-scene" viewBox="0 24 320 162" @pointermove="drag" @pointerup="release" @pointercancel="release">
         <line class="ll-floor" x1="0" x2="320" :y1="floor + 1" :y2="floor + 1"/>
@@ -401,8 +498,41 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
     </div>
   </figure>
 
+  <figure v-else-if="figure === 'path'" ref="pathFigure" class="ll-figure">
+    <figcaption><strong>Fig. 3</strong> The bar path of a 105 kg power clean, from the floor to the top of the pull.</figcaption>
+    <div class="ll-panel ll-angles ll-path-panel">
+      <div class="ll-cam">
+        <video ref="pathVideo" class="ll-video" :src="pathVideoUrl" :poster="pathPosterUrl" muted playsinline loop preload="auto"
+          aria-label="A 105 kg power clean with LiftLens's skeleton and bar path drawn on"
+          @loadedmetadata="pathAuto" @play="pathStarted" @pause="pathStopped" @seeked="pathNow = pathVideo.currentTime"/>
+      </div>
+      <div class="ll-side">
+        <dl class="ll-stats">
+          <div><dt><i class="bar" aria-hidden="true"/>Height</dt><dd>{{ Math.round(pathAt.y) }}<small>cm</small></dd></div>
+          <div><dt><i class="bar" aria-hidden="true"/>Bar speed</dt><dd>{{ pathAt.speed === null ? '—' : pathAt.speed.toFixed(2) }}<small>m/s</small></dd></div>
+        </dl>
+        <svg class="ll-opening ll-bar-path" :viewBox="`0 0 ${PW} ${PH}`" aria-hidden="true">
+          <line class="ll-zero" x1="4" :x2="PW - 4" :y1="py(0)" :y2="py(0)"/>
+          <line class="ll-together" :x1="px(0)" :x2="px(0)" :y1="py(0)" :y2="py(YHI)"/>
+          <text class="ll-dim" :x="px(0) - 3" :y="py(YHI) + 6" text-anchor="end">over setup</text>
+          <text class="ll-dim" :x="PW - 4" :y="py(0) - 3" text-anchor="end">toward me →</text>
+          <text class="ll-dim" :x="px(pathPeak[1]) - 6" :y="py(pathPeak[2]) + 2" text-anchor="end">{{ pathPeak[3].toFixed(2) }} m/s</text>
+          <circle class="ll-peak-mark" :cx="px(pathPeak[1])" :cy="py(pathPeak[2])" r="2"/>
+          <polyline class="ll-path ghost" :points="pathLine"/>
+          <polyline class="ll-path" :points="pathSoFar"/>
+          <circle class="ll-now" :cx="px(pathAt.x)" :cy="py(pathAt.y)" r="3"/>
+        </svg>
+        <div class="ll-transport">
+          <button class="raised ll-button" @click="pathPlay">{{ pathPlaying ? 'Pause' : 'Play' }}</button>
+          <input :value="pathNow" class="ll-scrub" type="range" min="0" :max="pathClip.duration" step="0.01" aria-label="Point in the lift" @input="pathSeek">
+          <code>{{ Math.min(pathNow, pathClip.duration).toFixed(1) }} /{{ pathClip.duration.toFixed(1) }} s</code>
+        </div>
+      </div>
+    </div>
+  </figure>
+
   <figure v-else-if="figure === 'smooth'" class="ll-figure">
-    <figcaption><strong>Fig. 3</strong> Bar speed through one clean, calculated three ways from the same jittery track. The dashed line is the true speed. The curve fit uses 50 ms either side of each point.</figcaption>
+    <figcaption><strong>Fig. 4</strong> Bar speed through one clean, calculated three ways from the same jittery track.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`${methods[method].label}: peak ${estPeak.v.toFixed(2)} m/s`">
         <clipPath id="ll-plot"><rect :x="plot.x" :y="plot.y" :width="plot.w" :height="plot.h"/></clipPath>
@@ -437,7 +567,7 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
   </figure>
 
   <figure v-else-if="figure === 'reps'" class="ll-figure">
-    <figcaption><strong>Fig. 4</strong> Bar speed for the clean in Fig. 1 and a made-up rep that’s 30% slower. Switch to percent to stretch both onto the same 101 steps.</figcaption>
+    <figcaption><strong>Fig. 5</strong> Bar speed for the clean in Fig. 1 and a made-up rep that’s 30% slower.</figcaption>
     <div class="ll-panel">
       <svg class="ll-chart" :viewBox="`0 0 ${RW} ${RH}`" role="img" :aria-label="percent ? 'Both reps stretched to 0 to 100 percent, their curves on top of each other' : 'Both reps in seconds, the slower one longer and lower'">
         <line v-for="v in [0, 1]" :key="v" class="ll-grid" :class="{ zero: v === 0 }" :x1="rplot.x" :x2="rplot.x + rplot.w" :y1="ry(v)" :y2="ry(v)"/>
@@ -468,35 +598,32 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
     </div>
   </figure>
 
-  <figure v-else-if="figure === 'hips'" class="ll-figure">
-    <figcaption><strong>Fig. 5</strong> The clean in Fig. 1, from the floor until the bar passes the knee. If the knee and hip opened together, the line would follow the dashed diagonal.</figcaption>
-    <div class="ll-panel ll-angles ll-hips">
-      <div class="ll-cam">
-        <video ref="hipVideo" class="ll-video" :src="videoUrl" :poster="posterUrl" muted playsinline preload="auto"
-          aria-label="The start of the power clean, from the floor to the knee"
-          @loadedmetadata="hipShow(hipNow)" @play="hipStarted" @pause="hipStopped"/>
-      </div>
-      <div class="ll-side">
-        <dl class="ll-stats" aria-live="polite">
-          <div><dt><i style="background: var(--ll-knee)" aria-hidden="true"/>Knee opened</dt><dd>{{ opened.knee >= 0 ? '+' : '' }}{{ Math.round(opened.knee) }}°</dd></div>
-          <div><dt><i style="background: var(--ll-hip)" aria-hidden="true"/>Hip opened</dt><dd>{{ opened.hip >= 0 ? '+' : '' }}{{ Math.round(opened.hip) }}°</dd></div>
-        </dl>
-        <svg class="ll-opening" :viewBox="`0 0 ${HS} ${HS}`" aria-hidden="true">
-          <line class="ll-zero" :x1="hx(HLO)" :x2="hx(HHI)" :y1="hy(0)" :y2="hy(0)"/>
-          <line class="ll-zero" :x1="hx(0)" :x2="hx(0)" :y1="hy(HLO)" :y2="hy(HHI)"/>
-          <line class="ll-together" :x1="hx(0)" :y1="hy(0)" :x2="hx(HHI)" :y2="hy(HHI)"/>
-          <text class="ll-dim" :x="hx(32)" :y="hy(38)" text-anchor="end">together</text>
-          <text class="ll-dim" :x="hx(HHI)" :y="HS - 4" text-anchor="end">knee opening →</text>
-          <text class="ll-dim" :x="hx(HLO) + 2" :y="hy(HHI) + 6">↑ hip opening</text>
-          <polyline class="ll-path ghost" :points="hipPath"/>
-          <polyline class="ll-path" :points="hipSoFar"/>
-          <circle class="ll-now" :cx="hx(opened.knee)" :cy="hy(opened.hip)" r="3"/>
-        </svg>
-        <div class="ll-transport">
-          <button class="raised ll-button" @click="hipPlay">{{ hipPlaying ? 'Pause' : 'Play' }}</button>
-          <input :value="hipNow" class="ll-scrub" type="range" :min="hipT0" :max="hipT1" step="0.005" aria-label="Point between the floor and the knee" @input="hipSeek">
-          <code>{{ hipNow >= hipT1 - 0.01 ? 'knee' : 'floor →' }}</code>
+  <figure v-else-if="figure === 'compare'" ref="compareFigure" class="ll-figure">
+    <figcaption><strong>Fig. 6</strong> Two recorded cleans at real speed, lined up on the moment the bar leaves the floor.</figcaption>
+    <div class="ll-panel">
+      <div class="ll-compare-videos">
+        <div v-for="(lift, i) in comparison" :key="lift.cls" class="ll-compare-lift">
+          <h3>{{ lift.name }}</h3>
+          <video :ref="el => { compareVideos[i] = el; }" :src="lift.video" :poster="lift.poster"
+            muted playsinline preload="metadata" :aria-label="lift.name"
+            @loadedmetadata="compareLoaded($event, i)" @ended="compareEnded"/>
+          <p>Peak <strong>{{ lift.peak.toFixed(2) }} m/s</strong></p>
         </div>
+      </div>
+      <svg class="ll-chart ll-compare-chart" viewBox="0 0 300 140" role="img" aria-label="Bar speed for both recorded cleans in seconds, lined up on lift-off">
+        <line v-for="v in [0, 0.5, 1, 1.5]" :key="v" class="ll-grid" x1="30" x2="290" :y1="compareY(v)" :y2="compareY(v)"/>
+        <text v-for="v in [0, 0.5, 1, 1.5]" :key="`v${v}`" class="ll-axis" x="25" :y="compareY(v) + 3" text-anchor="end">{{ v }}</text>
+        <text class="ll-axis" x="30" y="12">Bar speed (m/s)</text>
+        <text v-for="t in compareTicks" :key="`t${t}`" class="ll-axis" :x="compareX(t)" y="125" text-anchor="middle">{{ t }} s</text>
+        <text class="ll-axis" x="160" y="137" text-anchor="middle">Time since the bar left the floor</text>
+        <polyline v-for="lift in compareLines" :key="lift.cls" class="ll-rep" :class="lift.cls" :points="lift.points"/>
+        <line class="ll-compare-cursor" :x1="compareX(compareNow)" :x2="compareX(compareNow)" y1="24" y2="112"/>
+        <circle v-for="lift in compareDots" :key="lift.cls" :cx="compareX(compareNow)" :cy="compareY(lift.value)" r="3" class="ll-compare-dot" :class="lift.cls"/>
+      </svg>
+      <div class="ll-transport">
+        <button class="raised ll-button" @click="comparePlay">{{ comparePlaying ? 'Pause' : 'Play both' }}</button>
+        <input :value="compareNow" class="ll-scrub" type="range" :min="compareLo" :max="compareHi" step="0.01" aria-label="Time since the bar left the floor" @input="compareSeek">
+        <code>{{ compareNow.toFixed(2) }} s</code>
       </div>
     </div>
   </figure>
@@ -619,7 +746,7 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 .ll-verdict { padding: 0 6px; font-weight: bold; background: #c0392b; color: #fff !important; }
 .ll-verdict.ok { background: #1baf7a; }
 
-/* fig 3 */
+/* fig 4 */
 .ll-chart { display: block; width: 100%; max-width: 520px; margin: 0 auto; }
 .ll-grid { stroke: var(--d-line, #ccc); stroke-width: 1; opacity: .5; }
 .ll-grid.zero { opacity: 1; }
@@ -636,7 +763,7 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 .ll-readout dd { margin: 2px 0 0; font: bold 17px 'Courier New', monospace; }
 .ll-readout dd small { margin-left: 4px; font: 11px Tahoma, sans-serif; color: var(--muted); }
 
-/* fig 4: the clean in navy like fig 3's estimate, the slower rep in orange */
+/* fig 5: the clean in navy like fig 4's estimate, the slower rep in orange */
 .ll-rep { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .ll-rep.a { stroke: var(--navy, #000080); }
 .ll-rep.b { stroke: #c46a00; }
@@ -644,7 +771,7 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 :root[data-theme="dark"] .ll-rep.b { stroke: #ffb35c; }
 .ll-steps line { stroke: var(--muted); stroke-width: .5; }
 
-/* fig 5: fig 1's layout and colours, with the opening chart under the readouts */
+/* the bar-path chart uses the same tiles and colours as fig 1 */
 .ll-opening { display: block; width: 100%; height: 100%; min-height: 0; box-sizing: border-box; contain: size; background: var(--ll-tile); border: 1px solid var(--ll-edge); }
 @container (max-width: 420px) { .ll-opening { contain: none; height: auto; max-width: 260px; justify-self: center; } }
 .ll-dim { font: 7px Tahoma, sans-serif; fill: var(--ll-dim); }
@@ -652,4 +779,25 @@ onBeforeUnmount(() => cancelAnimationFrame(hipFrame));
 .ll-path { fill: none; stroke: var(--ll-hip); stroke-width: 2; stroke-linejoin: round; }
 .ll-path.ghost { opacity: .25; }
 .ll-now { fill: var(--ll-knee); stroke: var(--ll-tile); stroke-width: 1; }
+
+/* fig 3: the bar path in green, with its fastest point marked */
+.ll-bar-path .ll-path { stroke: var(--ll-bar); }
+.ll-bar-path .ll-now { fill: var(--ll-bar); }
+.ll-peak-mark { fill: none; stroke: var(--ll-dim); stroke-width: 1; }
+/* fig 6: both recorded lifts and their speed curves */
+.ll-compare-videos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ll-compare-lift { min-width: 0; }
+.ll-compare-lift h3 { margin: 0 0 6px; padding-left: 8px; border-left: 4px solid var(--navy, #000080); font-size: 12px; }
+.ll-compare-lift:nth-child(2) h3 { border-color: #c46a00; }
+.ll-compare-lift video { display: block; width: 100%; max-height: 320px; aspect-ratio: 9 / 16; background: #111; object-fit: contain; }
+.ll-compare-lift p { margin: 6px 0 0; font: 11px Tahoma, sans-serif; line-height: 1.5; color: var(--muted); }
+.ll-compare-lift strong { color: var(--ink); }
+.ll-compare-chart { margin: 16px auto 12px; }
+.ll-compare-cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 2; }
+.ll-compare-dot { fill: var(--navy, #000080); stroke: var(--paper); stroke-width: 1; }
+.ll-compare-dot.b { fill: #c46a00; }
+:root[data-theme="dark"] .ll-compare-lift:first-child h3 { border-color: #8ca0ff; }
+:root[data-theme="dark"] .ll-compare-dot.a { fill: #8ca0ff; }
+:root[data-theme="dark"] .ll-compare-lift:nth-child(2) h3 { border-color: #ffb35c; }
+:root[data-theme="dark"] .ll-compare-dot.b { fill: #ffb35c; }
 </style>

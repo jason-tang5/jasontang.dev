@@ -99,16 +99,20 @@ export const projects = [
       { subheading: 'Finding the bar' },
       'Training a barbell detector needs thousands of labelled videos, which I don’t have. So LiftLens looks for the plates instead: from the side, a plate is just a circle by your ankles, and a classic Hough transform finds it.',
       { figure: 'plate' },
+      { subheading: 'Drawing the bar path' },
+      // the numbers here come from the 105 kg clean in Fig. 3 (liftlens-path.mjs)
+      'From there LiftLens follows the plate through the lift, and its centre is the bar path. In this 105 kg clean the bar comes 3 cm back toward me off the floor, swings out again as it passes my hips, then loops 7 cm back in at the top.',
+      { figure: 'path' },
       { subheading: 'Reading the speed' },
       'Tracking jitters, and jitter turns into huge spikes in speed. Averaging smears out the peak you actually care about, so LiftLens fits a small curve around each frame instead. Every plate is 450 mm across, so the speed comes out in real metres per second with no setup.',
       { figure: 'smooth' },
       { subheading: 'Comparing reps' },
       'Every rep gets stretched to the same 101 steps, so a slow rep and a fast one line up moment by moment on the same chart.',
       { figure: 'reps' },
-      // the numbers here come from the clean in Fig. 1 (liftlens-clip.mjs and its export)
+      // measured speeds from liftlens-clip.mjs and liftlens-path.mjs
       { heading: 'What it showed me' },
-      'My hips were shooting up before the bar passed my knees. My knee angle opened 43° while my hip opened only 21°, so my legs straightened twice as fast as my back came up.',
-      { figure: 'hips' },
+      'The clean in Fig. 1 reached 1.31 m/s; the 105 kg clean reached 1.50 m/s. Putting the recordings beside the speed curves lets me compare where each lift picks up speed and where it slows down.',
+      { figure: 'compare' },
     ],
     funFact: 'Competition bumper plates all measure 450 mm across, from 10 kg to 25 kg. The plate works as a ruler whatever is loaded on the bar.',
   },
