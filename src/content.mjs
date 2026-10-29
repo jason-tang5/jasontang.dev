@@ -214,18 +214,24 @@ export const projects = [
       'I watched [3Blue1Brown’s neural network series](https://www.youtube.com/watch?v=aircAruvnKk&list=PLOH0RpNCcyWRxD8bYrbZbVZrto0U8axHR) and wanted to try it myself. PyTorch turns training a neural network into a few lines of code, but I wanted to know what those lines actually do, so I built the whole thing myself, from the numbers up to the GPU.',
     ],
     contribution: [
-      'A small deep learning library in Rust, with automatic gradients, CUDA kernels and TypeScript bindings. It reads handwritten digits with **97.8% accuracy**, and the GPU trains about **16× faster** than the CPU.',
+      'A small deep learning library in Rust, with automatic gradients, CUDA kernels and TypeScript bindings. It reads handwritten digits with **97.8% accuracy**, and the GPU trains about **16× faster** than the single-threaded CPU backend.',
     ],
     implementationTitle: 'How it works',
     implementation: [
+      { subheading: 'What it learns' },
+      'As in [3Blue1Brown’s lessons](https://www.3blue1brown.com/lessons/neural-networks), each neuron holds a number. A layer takes a weighted sum of the layer before plus a bias, which for the whole layer at once is one matrix multiply, then keeps each sum only if it’s positive and turns the rest into 0. That last step is called ReLU. Training boils how wrong the network is down to one number, the cost, and nudges all 235,146 weights a little downhill on it, one [shuffled batch](https://www.3blue1brown.com/lessons/backpropagation) of 128 digits at a time.',
+      { figure: 'layer' },
       { subheading: 'Working out gradients' },
-      'Every operation remembers how to undo its effect on the gradient. Calling backward walks that chain in reverse and adds up every contribution, so no gradient is ever worked out by hand.',
+      'Backpropagation is [the chain rule](https://www.3blue1brown.com/lessons/backpropagation-calculus) done as bookkeeping. Every operation stores its own small rule for passing the gradient back, and calling backward walks the chain in reverse. When a value feeds several places, its gradient is the sum over every path, so contributions are added, never overwritten.',
       { figure: 'graph' },
       { subheading: 'Running on the GPU' },
       'The matrix multiply kernel copies 16 × 16 tiles into fast shared memory and reuses each one before fetching the next, because on a GPU speed is mostly about memory, not math.',
       { figure: 'tiles' },
+      { subheading: 'Picking an optimizer' },
+      'The gradient says which way is downhill, and the optimizer decides how far to step. Plain SGD steps straight down the slope. Momentum keeps some of its speed from step to step, RMSProp gives every weight its own step size, and Adam does both. The framework ships SGD with momentum and Adam, the figure adds plain SGD and RMSProp for comparison, and which one wins depends on the shape of the loss.',
+      { figure: 'optim' },
       { subheading: 'Checking the math' },
-      'A gradient bug doesn’t crash anything, the model just learns badly. So every operation is checked against both PyTorch and TensorFlow, which is how I found out Keras adds epsilon in a different place.',
+      'A gradient bug doesn’t crash anything. The model just learns badly. So every operation is checked against both PyTorch and TensorFlow, which is how I found out Keras adds epsilon in a different place.',
       { figure: 'epsilon' },
     ],
     funFact: 'The whole framework is about 1,800 lines of Rust, and the CUDA kernels live in it as one big string. They’re compiled the first time the GPU is used, so it builds on a laptop with no CUDA toolkit or Visual Studio installed at all.',
@@ -236,14 +242,14 @@ export const projects = [
     kind: 'Digital hardware',
     date: 'Fall 2024',
     icon: '2048',
+    file: '2048.sof',
+    caption: '#8c2a1c',
     tech: ['Verilog', 'VHDL', 'Quartus', 'ModelSim'],
     // opens the playable version in the games folder
     game: '2048',
     // interactive figures under these sections, see FpgaFigures.vue
     // the implementation list can drop them in between its paragraphs too
     figures: { lead: 'register' },
-    file: '2048.sof',
-    caption: '#8c2a1c',
     summary: 'The tile-merging game, implemented in hardware on a DE1-SoC.',
     tagline: '2048 built on the DE1-SoC.',
     contribution: 'For ECE241, my partner and I built 2048 in Verilog on a DE1-SoC FPGA. It draws on a VGA display at 60 Hz, and you play it with a real PS/2 keyboard.',
@@ -274,14 +280,14 @@ export const projects = [
     kind: 'Game AI',
     date: 'Winter 2024',
     icon: 'reversi',
+    file: 'reversi.exe',
+    caption: '#2f6b45',
     tech: ['C'],
     // opens the playable version in the games folder
     game: 'reversi',
     // the board is its card's figure too, see ReversiFigures.vue. contribution places
     // it itself, between its two paragraphs
     figures: { lead: 'board' },
-    file: 'reversi.exe',
-    caption: '#2f6b45',
     summary: 'A terminal Reversi clone written in C, with an AI opponent, built for my Computer Fundamentals course (APS105).',
     tagline: 'Minimax Reversi in C.',
     // these are lists of paragraphs, { figure }, { list } and { heading } items, and
