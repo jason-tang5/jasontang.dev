@@ -4,6 +4,7 @@
 // how the site is wired up on cloudflare that you click through, and tiles with
 // the live scoreboard from /api/stats. each is a small win95 panel
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import AsciiImage from './AsciiImage.vue';
 import RetroIcon from './RetroIcon.vue';
 import { useLiveStats } from '../live-stats.js';
 import { registry } from '../registry.js';
@@ -24,6 +25,10 @@ const scenes = [
 ];
 const mini = ref({ cursor: { x: 60, y: 60 }, selected: null, win: null, grab: false, click: false });
 const deskStage = ref(null);
+// the desktop's own ascii sunset plays behind the icons, only while the figure is on screen
+const sunsetUrl = new URL('../../assets/vaporwave-sunset.mp4', import.meta.url).href;
+const sunsetPoster = new URL('../../assets/vaporwave-sunset-poster.png', import.meta.url).href;
+const deskOnScreen = ref(false);
 const clock = ref('');
 const tick = () => { clock.value = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
 let deskTimers = [], sceneIndex = 0, running = false, observer, clockTimer;
@@ -69,12 +74,20 @@ onMounted(() => {
   clockTimer = setInterval(tick, 15000);
   // held still with reduced motion: one window left open where the cursor put it
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !deskStage.value) {
+    deskOnScreen.value = true;
     mini.value.win = { ...scenes[0] };
     mini.value.cursor = { x: 50, y: 50 };
     return;
   }
-  if (!('IntersectionObserver' in window)) return start();
-  observer = new IntersectionObserver(([entry]) => (entry.isIntersecting ? start() : stop()));
+  if (!('IntersectionObserver' in window)) {
+    deskOnScreen.value = true;
+    return start();
+  }
+  observer = new IntersectionObserver(([entry]) => {
+    deskOnScreen.value = entry.isIntersecting;
+    if (entry.isIntersecting) start();
+    else stop();
+  });
   observer.observe(deskStage.value);
 });
 onBeforeUnmount(() => { stop(); observer?.disconnect(); clearInterval(clockTimer); });
@@ -136,6 +149,8 @@ const tiles = computed(() => {
   <figure v-if="figure === 'desktop'" class="pf-figure" :class="{ 'pf-preview': preview }">
     <div ref="deskStage" class="pf-mini pf-frame">
       <div class="pf-mini-desk">
+        <AsciiImage class="pf-mini-wall" :columns="150" :source="sunsetUrl" :poster="sunsetPoster" media-type="video"
+          description="" :enabled="true" :visible="deskOnScreen" aria-hidden="true"/>
         <button v-for="(id, k) in deskIcons" :key="id" class="pf-mini-icon" :class="{ picked: mini.selected === id }" :style="pct(iconAt(k))"
           :title="`Open ${registry[id].label}`" @click="emit('open', id)">
           <RetroIcon :name="registry[id].icon"/><span>{{ registry[id].label }}</span>
@@ -242,7 +257,9 @@ const tiles = computed(() => {
 
 /* fig 1: the desktop shrunk into a 16:10 screen, sized off the figure's width */
 .pf-mini { display: flex; flex-direction: column; aspect-ratio: 16 / 10; overflow: hidden; background: var(--desktop, #008080); user-select: none; }
-.pf-mini-desk { position: relative; flex: 1; }
+.pf-mini-desk { position: relative; flex: 1; isolation: isolate; }
+/* the sunset sits over the teal at .88, the way it does on the real desktop */
+.pf-mini-wall { position: absolute; inset: 0; z-index: -1; opacity: .88; pointer-events: none; }
 .pf-mini-icon {
   position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 10%; padding: 2px 0; border: 0; background: none;
   font: max(7px, 1.6cqw)/1.1 'Pixel MS Sans Serif', Tahoma, sans-serif; color: #fff; text-shadow: 1px 1px 0 #000; cursor: var(--classic-pointer, pointer);
