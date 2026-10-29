@@ -1,8 +1,8 @@
 <script setup>
 // the figures in the mini ml framework writeup (content.mjs, figures): the mnist mlp
 // training on real test digits while the cuda and cpu backends race, the backward
-// pass through x·x + x one gradient at a time, the tiled matmul kernel loading its
-// tiles phase by phase, and where pytorch and keras put adam's epsilon. the rules
+// pass through (x·w + x)·(x + w) one gradient at a time, the tiled matmul kernel loading its
+// tiles into shared memory phase by phase, and where pytorch and keras put adam's epsilon. the rules
 // follow ml-framework/crates/minitorch (autograd.rs, cuda.rs, optim.rs)
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { reducedMotion, useInView } from '../in-view.js';
@@ -111,79 +111,121 @@ onMounted(() => {
 });
 onBeforeUnmount(() => cancelAnimationFrame(raf));
 
-// ---- graph: y = x·x + x ----
-const x = ref(3);
+// ---- graph: y = (x·w + x)·(x + w), with w fixed at 2 ----
+const W = 2;
+const x = ref(4);
 const overwrite = ref(false);
 const step = ref(0);
-// each step lights some edges and may add a gradient contribution to x
+const vals = computed(() => {
+  const v = x.value, a = v * W, b = a + v, c = v + W;
+  return { x: v, w: W, a, b, c, y: b * c };
+});
+// each step lights some edges and may give a gradient contribution to a leaf, x or w
 const steps = computed(() => {
-  const v = x.value;
+  const { x: v, b, c } = vals.value;
+  const top = { y: 1, b: c, c: b };
   return [
-    { note: `Forward. x = ${fmt(v)}.`, show: ['x'] },
-    { note: `a = x · x = ${fmt(v * v)}. Both of mul’s inputs are x, so x gets two edges into it.`, show: ['x', 'a'], edges: ['x-a1', 'x-a2'] },
-    { note: `y = a + x = ${fmt(v * v + v)}. That’s a third edge out of x.`, show: ['x', 'a', 'y'], edges: ['a-y', 'x-y'] },
-    { note: 'Backward. Seed dy/dy = 1 and walk the graph in reverse.', show: ['x', 'a', 'y'], grads: { y: 1 } },
-    { note: 'add passes its gradient straight through: 1 to a.', back: ['a-y'], grads: { y: 1, a: 1 } },
-    { note: 'and 1 to x.', back: ['x-y'], grads: { y: 1, a: 1 }, give: 1 },
-    { note: `mul sends gradient × the other input to each input: 1 × ${fmt(v)} = ${fmt(v)} down the first edge…`, back: ['x-a1'], grads: { y: 1, a: 1 }, give: v },
-    { note: `…and ${fmt(v)} down the second.`, back: ['x-a2'], grads: { y: 1, a: 1 }, give: v },
+    { note: `Forward. x = ${fmt(v)} and w = ${W}.`, show: ['x', 'w'] },
+    { note: `a = x · w = ${fmt(v * W)}.`, show: ['a'], edges: ['x-a', 'w-a'] },
+    { note: `b = a + x = ${fmt(b)}. x is used a second time.`, show: ['b'], edges: ['a-b', 'x-b'] },
+    { note: `c = x + w = ${fmt(c)}. A third use of x, and a second of w.`, show: ['c'], edges: ['x-c', 'w-c'] },
+    { note: `y = b · c = ${fmt(b * c)}.`, show: ['y'], edges: ['b-y', 'c-y'] },
+    { note: 'Backward. Seed dy/dy = 1 and walk the graph in reverse.', grads: { y: 1 } },
+    { note: `mul sends gradient × the other input: 1 × c = ${fmt(c)} to b…`, back: ['b-y'], grads: { y: 1, b: c } },
+    { note: `…and 1 × b = ${fmt(b)} to c.`, back: ['c-y'], grads: top },
+    { note: `add passes its gradient straight through: ${fmt(b)} to x…`, back: ['x-c'], grads: top, give: { x: b } },
+    { note: `…and ${fmt(b)} to w.`, back: ['w-c'], grads: top, give: { w: b } },
+    { note: `b is an add too: ${fmt(c)} to a…`, back: ['a-b'], grads: { ...top, a: c } },
+    { note: `…and ${fmt(c)} to x.`, back: ['x-b'], grads: { ...top, a: c }, give: { x: c } },
+    { note: `a is a mul: ${fmt(c)} × w = ${fmt(c * W)} to x…`, back: ['x-a'], grads: { ...top, a: c }, give: { x: c * W } },
+    { note: `…and ${fmt(c)} × x = ${fmt(c * v)} to w.`, back: ['w-a'], grads: { ...top, a: c }, give: { w: c * v } },
   ];
 });
+// steps before this one are the forward pass
+const BACKWARD = 5;
 const at = computed(() => steps.value[step.value]);
-// what x's gradient holds so far: every contribution added, or only the last one
-const contributions = computed(() => steps.value.slice(0, step.value + 1).filter(s => s.give !== undefined).map(s => s.give));
-const xGrad = computed(() => {
-  const c = contributions.value;
+const sofar = computed(() => steps.value.slice(0, step.value + 1));
+// what each leaf's gradient holds so far: every contribution added, or only the last one
+const contributions = leaf => sofar.value.filter(s => s.give?.[leaf] !== undefined).map(s => s.give[leaf]);
+const gradOf = leaf => {
+  const c = contributions(leaf);
   if (!c.length) return null;
   return overwrite.value ? c[c.length - 1] : c.reduce((a, b) => a + b);
-});
+};
+const nodeGrad = id => (id === 'x' || id === 'w' ? gradOf(id) : at.value.grads?.[id] ?? null);
 const done = computed(() => step.value === steps.value.length - 1);
-const right = computed(() => 2 * x.value + 1);
-const shown = id => step.value >= 3 || at.value.show.includes(id);
-const lit = id => step.value >= 3 || at.value.edges?.includes(id);
+// dy/dx = (w + 1)(2x + w) and dy/dw = x(x + 2w + 1)
+const leaves = computed(() => [
+  { id: 'x', right: (W + 1) * (2 * x.value + W), formula: '(w + 1)(2x + w)' },
+  { id: 'w', right: x.value * (x.value + 2 * W + 1), formula: 'x(x + 2w + 1)' },
+]);
+const shown = id => step.value >= BACKWARD || sofar.value.some(s => s.show?.includes(id));
+const lit = id => step.value >= BACKWARD || sofar.value.some(s => s.edges?.includes(id));
 const back = id => at.value.back?.includes(id);
 const nodes = {
-  x: { x: 50, y: 92, label: 'x', value: () => x.value },
-  a: { x: 170, y: 36, label: 'mul', sub: 'a = x · x', value: () => x.value * x.value },
-  y: { x: 290, y: 92, label: 'add', sub: 'y = a + x', value: () => x.value * x.value + x.value },
+  w: { x: 40, y: 95, label: 'w' },
+  x: { x: 140, y: 95, label: 'x' },
+  a: { x: 240, y: 32, label: 'mul', sub: 'a = x · w' },
+  c: { x: 240, y: 162, label: 'add', sub: 'c = x + w' },
+  b: { x: 350, y: 62, label: 'add', sub: 'b = a + x' },
+  y: { x: 430, y: 130, label: 'mul', sub: 'y = b · c' },
 };
 const edges = [
-  { id: 'x-a1', d: 'M70 82 Q100 30 146 32' },
-  { id: 'x-a2', d: 'M72 92 Q120 70 148 44' },
-  { id: 'x-y', d: 'M74 98 H266' },
-  { id: 'a-y', d: 'M194 40 Q250 44 272 78' },
+  { id: 'w-a', d: 'M70 86 Q100 30 208 31' },
+  { id: 'w-c', d: 'M70 104 Q100 160 208 159' },
+  { id: 'x-a', d: 'M170 84 L208 46' },
+  { id: 'x-c', d: 'M170 106 L208 146' },
+  { id: 'x-b', d: 'M170 94 L318 66' },
+  { id: 'a-b', d: 'M270 38 L318 54' },
+  { id: 'b-y', d: 'M372 78 L402 113' },
+  { id: 'c-y', d: 'M270 160 L398 136' },
 ];
 function setX(v) { x.value = v; }
 
 // ---- tiles: C = A · B, 8 × 8, in 2 × 2 tiles (the real kernel uses 16 × 16) ----
 const N = 8, T = 2, phases = N / T;
-const out = ref([1, 2]);
-const phase = ref(0);
-const transposed = ref(false);
-const cell = 11;
+const out = ref([0, 0]);
+const tStep = ref(0);
+// the walkthrough: one answer, the block's strips, the reads without tiles, one step per
+// phase, then the total. phase is negative before the tiled steps and phases at the end
+const PHASE0 = 3, TLAST = PHASE0 + phases;
+const phase = computed(() => tStep.value - PHASE0);
+const cell = 11, GY = 30;
 const grids = { a: { x: 10, label: 'A' }, b: { x: 122, label: 'B' }, c: { x: 234, label: 'C' } };
-// which tile of each matrix is in shared memory this phase. with the transpose flag
-// the kernel wants Bᵀ's tile (k, j), which is B's tile (j, k) read across instead of down
-const aTile = computed(() => [out.value[0], phase.value]);
-const bTile = computed(() => (transposed.value ? [out.value[1], phase.value] : [phase.value, out.value[1]]));
-// every phase loads two tiles. without tiles, each of the block's T² threads reads a
-// whole row of A and column of B on its own
-const loads = computed(() => ({ sofar: 2 * T * T * (phase.value + 1), tiled: 2 * T * T * phases, naive: 2 * N * T * T }));
-function pick(i, j) { out.value = [i, j]; phase.value = 0; }
-const inTile = (r, c, t) => Math.floor(r / T) === t[0] && Math.floor(c / T) === t[1];
-const seenTile = (r, c, matrix) => {
-  for (let k = 0; k < phase.value; k++) {
-    const t = matrix === 'a' ? [out.value[0], k] : transposed.value ? [out.value[1], k] : [k, out.value[1]];
-    if (inTile(r, c, t)) return true;
-  }
-  return false;
-};
+// reads from main memory. without tiles, each of the block's T² threads reads a whole row
+// of A and column of B on its own. tiled, each phase loads two tiles once for everyone
+const naive = 2 * N * T * T, tiled = 2 * T * T * phases;
+const tiledSoFar = computed(() => 2 * T * T * Math.min(phases, Math.max(0, phase.value + 1)));
+const loading = computed(() => phase.value >= 0 && phase.value < phases);
+function pick(i, j) { out.value = [i, j]; }
 const cellClass = (m, r, c) => {
-  if (m === 'c') return { now: inTile(r, c, out.value), pickable: true };
-  const t = m === 'a' ? aTile.value : bTile.value;
-  return { now: inTile(r, c, t), seen: seenTile(r, c, m) };
+  const [bi, bj] = [out.value[0] * T, out.value[1] * T];
+  const inRows = Math.floor(r / T) === out.value[0], inCols = Math.floor(c / T) === out.value[1];
+  const one = tStep.value === 0;
+  if (m === 'c') return { pickable: true, now: one ? r === bi && c === bj : inRows && inCols };
+  // what this block needs: one row or column for the single answer, T of them after
+  if (!(m === 'a' ? (one ? r === bi : inRows) : (one ? c === bj : inCols))) return {};
+  // the phase that loads this cell's tile
+  const k = Math.floor((m === 'a' ? c : r) / T);
+  return { need: true, now: loading.value && k === phase.value, seen: phase.value >= 0 && k < phase.value };
 };
+// the top left corner of the tile of A and of B in shared memory this phase
+const tileAt = computed(() => ({
+  a: [grids.a.x + phase.value * T * cell, GY + out.value[0] * T * cell],
+  b: [grids.b.x + out.value[1] * T * cell, GY + phase.value * T * cell],
+}));
+const slots = { a: 132, b: 180 };
+const SLOT_Y = 134;
+const tileNote = computed(() => {
+  const p = phase.value;
+  if (tStep.value === 0) return `Each number in C comes from one row of A and one column of B: multiply them pair by pair and add it all up. That’s ${2 * N} numbers to read for one answer.`;
+  if (tStep.value === 1) return `On the GPU, a team of ${T * T} threads works out a ${T} × ${T} patch of C together. Between them they need ${T} rows of A and ${T} columns of B.`;
+  if (tStep.value === 2) return `The simple way: every thread fetches its own row and column from main memory. That’s ${T * T} × ${2 * N} = ${naive} reads, and each number gets fetched ${T} times by different threads.`;
+  if (p < phases) return `Tiled, step ${p + 1} of ${phases}: the team copies one ${T} × ${T} tile of A and one of B into shared memory, a small fast store right next to the cores. That’s ${2 * T * T} reads, and every thread does its multiplying from there.`;
+  return `Each number was fetched once and shared by the team: ${tiled} reads instead of ${naive}. The real kernel uses 16 × 16 tiles, so every fetch is reused 16 times and it reads 16× less.`;
+});
 const range = Array.from({ length: N }, (_, i) => i);
+const tileRange = Array.from({ length: T }, (_, i) => i);
 
 // ---- epsilon: one adam step with a steady gradient g, as in the test fixtures ----
 const LR = 0.01, B2 = 0.999, EPS = 1e-8;
@@ -251,38 +293,36 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
   </figure>
 
   <figure v-else-if="figure === 'graph'" class="mm-figure">
-    <figcaption><strong>Fig. 2</strong> The backward pass through y = x·x + x. Three gradients reach x, and they have to be added up.</figcaption>
+    <figcaption><strong>Fig. 2</strong> The backward pass through y = (x·w + x)·(x + w). x feeds three operations and w feeds two, so their gradients have to be added up.</figcaption>
     <div class="mm-panel">
-      <svg class="mm-graph" viewBox="0 0 340 128" aria-hidden="true">
+      <svg class="mm-graph" viewBox="0 0 470 196" aria-hidden="true">
         <defs><marker id="mm-arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L6 3L0 6z"/></marker></defs>
         <g class="mm-edges">
           <path v-for="e in edges" :key="e.id" :d="e.d" :class="{ lit: lit(e.id), back: back(e.id) }" marker-end="url(#mm-arrow)"/>
         </g>
-        <g v-for="(n, id) in nodes" :key="id" class="mm-node" :class="{ on: shown(id), hot: id === 'x' && at.give !== undefined }">
+        <g v-for="(n, id) in nodes" :key="id" class="mm-node" :class="{ on: shown(id), hot: at.give?.[id] !== undefined }">
           <rect :x="n.x - 30" :y="n.y - 15" width="60" height="30"/>
           <text :x="n.x" :y="n.sub ? n.y - 2 : n.y + 4">{{ n.label }}</text>
           <text v-if="n.sub" class="mm-sub" :x="n.x" :y="n.y + 9">{{ n.sub }}</text>
-          <text v-if="shown(id)" class="mm-val" :x="n.x" :y="n.y + 27">= {{ fmt(n.value()) }}</text>
-          <text v-if="id === 'x' ? xGrad !== null : at.grads?.[id] !== undefined" class="mm-grad" :x="n.x" :y="n.y - 21">
-            grad {{ id === 'x' ? fmt(xGrad) : at.grads[id] }}
-          </text>
+          <text v-if="shown(id)" class="mm-val" :x="n.x" :y="n.y + 27">= {{ fmt(vals[id]) }}</text>
+          <text v-if="nodeGrad(id) !== null" class="mm-grad" :x="n.x" :y="n.y - 21">grad {{ fmt(nodeGrad(id)) }}</text>
         </g>
       </svg>
-      <p class="mm-sum" aria-live="polite">
-        <span>x.grad =</span>
-        <template v-if="contributions.length">
-          <code>{{ overwrite ? fmt(contributions[contributions.length - 1]) : contributions.map(c => (c < 0 ? `(${fmt(c)})` : fmt(c))).join(' + ') }}</code>
-          <b v-if="contributions.length > 1 && !overwrite">= {{ fmt(xGrad) }}</b>
+      <p v-for="leaf in leaves" :key="leaf.id" class="mm-sum" aria-live="polite">
+        <span>{{ leaf.id }}.grad =</span>
+        <template v-if="contributions(leaf.id).length">
+          <code>{{ overwrite ? fmt(gradOf(leaf.id)) : contributions(leaf.id).map(c => (c < 0 ? `(${fmt(c)})` : fmt(c))).join(' + ') }}</code>
+          <b v-if="contributions(leaf.id).length > 1 && !overwrite">= {{ fmt(gradOf(leaf.id)) }}</b>
         </template>
         <code v-else>—</code>
-        <span v-if="done" class="mm-check" :class="{ bad: xGrad !== right }">{{ xGrad === right ? `✓ matches 2x + 1 = ${fmt(right)}` : `✗ should be 2x + 1 = ${fmt(right)}` }}</span>
+        <span v-if="done" class="mm-check" :class="{ bad: gradOf(leaf.id) !== leaf.right }">{{ gradOf(leaf.id) === leaf.right ? `✓ matches ${leaf.formula} = ${fmt(leaf.right)}` : `✗ should be ${leaf.formula} = ${fmt(leaf.right)}` }}</span>
       </p>
       <p class="mm-note" aria-live="polite"><b>{{ step + 1 }}/{{ steps.length }}</b> {{ at.note }}</p>
       <div class="mm-buttons">
         <button class="raised mm-button" :disabled="step === 0" @click="step--">Back</button>
         <button class="raised mm-button" :disabled="done" @click="step++">Step</button>
         <span class="mm-toggle" role="group" aria-label="x">
-          <button v-for="v in [-2, 1, 3]" :key="v" class="raised mm-button" :class="{ pressed: x === v }" :aria-pressed="x === v" @click="setX(v)">x = {{ v }}</button>
+          <button v-for="v in [-3, 1, 4]":key="v" class="raised mm-button" :class="{ pressed: x === v }" :aria-pressed="x === v" @click="setX(v)">x = {{ v }}</button>
         </span>
         <label class="mm-check-box"><input v-model="overwrite" type="checkbox"> Overwrite instead of add</label>
       </div>
@@ -290,32 +330,46 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
   </figure>
 
   <figure v-else-if="figure === 'tiles'" class="mm-figure">
-    <figcaption><strong>Fig. 3</strong> The tiled matmul. Each block of C loads one tile of A and one of B into shared memory per phase. Click a block of C.</figcaption>
+    <figcaption><strong>Fig. 3</strong> Why the matmul kernel works in tiles. Step through it, or click another 2 × 2 patch of C to follow that one.</figcaption>
     <div class="mm-panel">
       <div class="mm-scroll">
-        <svg class="mm-tiles" viewBox="0 0 334 112" role="group" aria-label="Matrices">
+        <svg class="mm-tiles" viewBox="0 0 334 182" role="group" aria-label="Matrices">
+          <text class="mm-mem" x="167" y="9">GPU main memory: big, but slow to read</text>
           <g v-for="(gd, m) in grids" :key="m">
-            <text class="mm-label" :x="gd.x + N * cell / 2" y="10">{{ m === 'b' && transposed ? 'B, read as Bᵀ' : gd.label }}</text>
+            <text class="mm-label" :x="gd.x + N * cell / 2" y="24">{{ gd.label }}</text>
             <template v-for="r in range" :key="r">
               <rect v-for="c in range" :key="c" class="mm-cell" :class="cellClass(m, r, c)"
-                :x="gd.x + c * cell" :y="16 + r * cell" :width="cell - 1" :height="cell - 1"
+                :x="gd.x + c * cell" :y="GY + r * cell" :width="cell - 1" :height="cell - 1"
                 @click="m === 'c' && pick(Math.floor(r / T), Math.floor(c / T))"/>
             </template>
           </g>
-          <text class="mm-op" x="106" y="64">·</text>
-          <text class="mm-op" x="218" y="64">=</text>
+          <text class="mm-op" x="106" :y="GY + 50">·</text>
+          <text class="mm-op" x="218" :y="GY + 50">=</text>
+          <g class="mm-shared" :class="{ on: loading }">
+            <rect class="mm-shelf" x="84" y="126" width="166" height="50"/>
+            <text class="mm-mem" x="167" y="170">shared memory: small, but fast</text>
+            <template v-if="loading">
+              <path v-for="(s, m) in slots" :key="m" class="mm-load"
+                :d="`M${tileAt[m][0] + cell} ${tileAt[m][1] + T * cell}L${s + cell - 1} ${SLOT_Y - 2}`"/>
+            </template>
+            <template v-for="(s, m) in slots" :key="m">
+              <template v-for="r in tileRange" :key="r">
+                <rect v-for="c in tileRange" :key="c" class="mm-cell" :class="{ now: loading }"
+                  :x="s + c * cell" :y="SLOT_Y + r * cell" :width="cell - 1" :height="cell - 1"/>
+              </template>
+            </template>
+            <text class="mm-op small" x="166" :y="SLOT_Y + 16">·</text>
+          </g>
         </svg>
       </div>
-      <p class="mm-note" aria-live="polite">
-        <b>Phase {{ phase + 1 }}/{{ phases }}</b>
-        Block ({{ out[0] }}, {{ out[1] }}) of C adds A’s tile ({{ aTile[0] }}, {{ aTile[1] }}) times
-        {{ transposed ? `B’s tile (${bTile[0]}, ${bTile[1]}), read across` : `B’s tile (${bTile[0]}, ${bTile[1]})` }}.
-        Reads from GPU memory: <b>{{ loads.sofar }}</b> so far, {{ loads.tiled }} for the whole block, against {{ loads.naive }} without tiles. With the real 16 × 16 tiles it’s 16 times fewer.
-      </p>
+      <div v-if="tStep >= 2" class="mm-bars">
+        <span>Without tiles</span><span class="mm-bar slow"><i style="width: 100%"/></span><code>{{ naive }} reads</code>
+        <span>Tiled</span><span class="mm-bar tiled"><i :style="{ width: `${tiledSoFar / naive * 100}%` }"/></span><code>{{ tiledSoFar }} reads</code>
+      </div>
+      <p class="mm-note" aria-live="polite"><b>{{ tStep + 1 }}/{{ TLAST + 1 }}</b> {{ tileNote }}</p>
       <div class="mm-buttons">
-        <button class="raised mm-button" :disabled="phase === 0" @click="phase--">Back</button>
-        <button class="raised mm-button" :disabled="phase === phases - 1" @click="phase++">Next phase</button>
-        <label class="mm-check-box"><input v-model="transposed" type="checkbox"> Transpose flag on B (backward pass)</label>
+        <button class="raised mm-button" :disabled="tStep === 0" @click="tStep--">Back</button>
+        <button class="raised mm-button" :disabled="tStep === TLAST" @click="tStep++">Step</button>
       </div>
     </div>
   </figure>
@@ -386,7 +440,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-curve code { font: bold 12px 'Courier New', monospace; color: var(--d-link, #000080); }
 .mm-curve small { color: var(--muted); }
 @container (max-width: 380px) { .mm-curve { grid-template-columns: minmax(0, 1fr); } }
-@media (prefers-reduced-motion: reduce) { .mm-wires, .mm-neuron, .mm-prob { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mm-wires, .mm-neuron, .mm-prob, .mm-bar i { transition: none; } }
 /* the card preview: exactly the frame, the network on top and the race beside the loss
    curve under it */
 .mm-preview .mm-panel { box-sizing: border-box; display: grid; grid-template: minmax(0, 1fr) auto auto / minmax(0, 1fr) minmax(0, 1fr); column-gap: 14px; height: 375px; }
@@ -400,7 +454,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-preview .mm-curve small, .mm-preview .mm-curve br, .mm-preview .mm-buttons { display: none; }
 
 /* fig 2 */
-.mm-graph { display: block; width: 100%; max-width: 480px; margin: 0 auto; }
+.mm-graph { display: block; width: 100%; max-width: 620px; margin: 0 auto; }
 .mm-edges path { fill: none; stroke: var(--d-line, #888); stroke-width: 2; stroke-dasharray: 4 3; }
 .mm-edges path.lit { stroke: var(--ink); stroke-dasharray: none; }
 .mm-edges path.back { stroke: #1baf7a; stroke-width: 3; stroke-dasharray: none; }
@@ -414,6 +468,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-node .mm-val { font: bold 9px 'Courier New', monospace; fill: var(--muted); }
 .mm-node .mm-grad { font: bold 9px 'Courier New', monospace; fill: #1baf7a; }
 .mm-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 10px 0 0; font-size: 13px; }
+.mm-sum + .mm-sum { margin-top: 4px; }
 .mm-check { font-weight: bold; color: #1baf7a; }
 .mm-check.bad { color: #c0392b; }
 
@@ -422,7 +477,14 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-tiles { display: block; width: 100%; min-width: 320px; max-width: 560px; margin: 0 auto; }
 .mm-label { font: bold 9px 'Pixel MS Sans Serif', Tahoma, sans-serif; fill: var(--ink); text-anchor: middle; }
 .mm-op { font: bold 18px 'Courier New', monospace; fill: var(--muted); text-anchor: middle; }
+.mm-op.small { font-size: 14px; }
+.mm-mem { font: 8px 'Courier New', monospace; fill: var(--muted); text-anchor: middle; }
+.mm-shelf { fill: none; stroke: var(--d-line, #999); stroke-width: 1; stroke-dasharray: 3 2; }
+.mm-shared.on .mm-shelf { stroke: #1baf7a; }
+.mm-load { fill: none; stroke: #1baf7a; stroke-width: 1.2; stroke-dasharray: 3 2; }
 .mm-cell { fill: var(--d-page-alt, #fffdf2); stroke: var(--d-line, #bbb); stroke-width: .5; }
+.mm-cell.need { fill: #dde3f7; }
+:root[data-theme="dark"] .mm-cell.need:not(.now):not(.seen) { fill: #2c3566; }
 .mm-cell.seen { fill: #b9e6d4; }
 .mm-cell.now { fill: #1baf7a; }
 .mm-cell.pickable { cursor: var(--classic-pointer, pointer); }
@@ -439,4 +501,7 @@ const pct = v => (v < 0.0001 ? `${(v * 1e6).toFixed(1)} ppm` : v < 0.01 ? `${(v 
 .mm-bar.keras i { background: #e8a33d; }
 :root[data-theme="dark"] .mm-bar i { background: #8ca0ff; }
 :root[data-theme="dark"] .mm-bar.keras i { background: #e8a33d; }
+.mm-bar.slow i, :root[data-theme="dark"] .mm-bar.slow i { background: #e8a33d; }
+.mm-bar.tiled i, :root[data-theme="dark"] .mm-bar.tiled i { background: #1baf7a; transition: width .3s; }
+.mm-bars + .mm-note { margin-top: 10px; }
 </style>

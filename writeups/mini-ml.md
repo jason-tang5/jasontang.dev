@@ -24,7 +24,7 @@ To prove it works, I trained it to read handwritten digits from MNIST, the class
 
 Training means nudging every weight in the direction that makes the model a little less wrong. The gradient tells you which way that is. Working it out by hand for hundreds of thousands of weights is impossible, so the library does it automatically.
 
-Every operation remembers what went into it and how to undo its effect on the gradient. Calling backward on the loss walks that chain in reverse and adds up every contribution. The adding matters: in x·x + x, x feeds in from three places, so at x = 3 its gradient is 3 + 3 + 1 = 7 (Fig. 2).
+Every operation remembers what went into it and how to undo its effect on the gradient. Calling backward on the loss walks that chain in reverse and adds up every contribution. The adding matters: in (x·w + x)·(x + w), x feeds in from three places, so at x = 4 and w = 2 its gradient is 12 + 6 + 12 = 30 (Fig. 2).
 
 *[Figure: graph]*
 
