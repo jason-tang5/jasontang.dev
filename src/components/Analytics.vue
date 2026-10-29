@@ -55,18 +55,24 @@ const cards = computed(() => {
   const games = (s.clippyWins || 0) + (s.clippyLosses || 0);
   const count = value => data.value ? number(value) : '—';
   return [
-    { label: 'Minesweeper beaten', value: count(s.minesweeperWins), icon: 'mine' },
-    { label: 'Breakout finished', value: count(s.breakoutWins), icon: 'game' },
-    { label: 'Highest Snake score', value: number(Math.max(live.value?.[boardKeys[days.value]]?.[0]?.score || 0, s.snakeHighScore || 0)), icon: 'snake' },
-    { label: 'Clippy win-lose', value: data.value ? `${number(s.clippyWins)}-${number(s.clippyLosses)}` : '—', icon: 'reversi',
+    { group: 'games', label: 'Minesweeper beaten', value: count(s.minesweeperWins), icon: 'mine' },
+    { group: 'games', label: 'Breakout finished', value: count(s.breakoutWins), icon: 'game' },
+    { group: 'games', label: 'Highest Snake score', value: number(Math.max(live.value?.[boardKeys[days.value]]?.[0]?.score || 0, s.snakeHighScore || 0)), icon: 'snake' },
+    { group: 'games', label: 'Clippy win-lose', value: data.value ? `${number(s.clippyWins)}-${number(s.clippyLosses)}` : '—', icon: 'reversi',
       note: games ? `Clippy wins ${Math.round(s.clippyWins / games * 100)}%` : 'No games yet' },
-    { label: 'Highest 2048 score', value: count(s.twenty48HighScore), icon: '2048' },
-    { label: 'Balloons popped', value: count(s.balloonsPopped), icon: 'balloon' },
-    { label: 'Fish fed', value: count(s.koiFed), icon: 'koi' },
-    { label: 'Fishbowl messages sent', value: count(s.chatMessages), icon: 'koi' },
-    { label: 'Tokens burnt by Clippy', value: count(s.tokensBurnt), icon: 'chip', note: 'on Workers AI' },
+    { group: 'games', label: 'Highest 2048 score', value: count(s.twenty48HighScore), icon: '2048' },
+    { group: 'fun', label: 'Balloons popped', value: count(s.balloonsPopped), icon: 'balloon' },
+    { group: 'fun', label: 'Fish fed', value: count(s.koiFed), icon: 'koi' },
+    { group: 'fishbowl', label: 'Fishbowl messages sent', value: count(s.chatMessages), icon: 'koi' },
+    { group: 'fishbowl', label: 'Tokens burnt by Clippy', value: count(s.tokensBurnt), icon: 'chip', note: 'on Workers AI' },
   ];
 });
+// the cards sit in groups, the games across the top and the smaller groups side by
+// side under them
+const groupTitles = { games: 'Games', fun: 'Just for fun', fishbowl: 'Fishbowl' };
+const grouped = list => Object.entries(groupTitles)
+  .map(([id, title]) => ({ id, title, cards: list.filter(card => card.group === id) }))
+  .filter(group => group.cards.length);
 // your own scores, kept in this browser by each game
 // Storage writes in this tab and storage events from other tabs invalidate these
 // immediately. Refresh/tab changes also reread values written outside the wrapper.
@@ -81,14 +87,14 @@ const yourCards = computed(() => {
   reread.value;
   const you = Number(read('reversi-you', '0')) || 0, clippy = Number(read('reversi-clippy', '0')) || 0;
   return [
-    { label: 'Minesweeper games beaten', value: number(yourMines.value.reduce((sum, l) => sum + l.wins, 0)), icon: 'mine', levels: yourMines.value },
-    { label: 'Your Snake best', value: number(read('snake-best', '0')), icon: 'snake' },
-    { label: 'Your 2048 best', value: number(read('2048-best', '0')), icon: '2048' },
-    { label: 'Balloons you popped', value: number(read('balloons-popped', '0')), icon: 'balloon' },
-    { label: 'Times you fed the fish', value: number(read('koi-fed', '0')), icon: 'koi' },
-    { label: 'You vs Clippy', value: `${you}-${clippy}`, icon: 'reversi', note: you + clippy ? `You win ${Math.round(you / (you + clippy) * 100)}%` : 'No games yet' },
-    { label: 'Fishbowl messages you sent', value: number(read('chat-sent', '0')), icon: 'koi' },
-    { label: 'Tokens you burnt', value: number(read('clippy-tokens', '0')), icon: 'chip', note: 'asking Clippy' },
+    { group: 'games', label: 'Minesweeper games beaten', value: number(yourMines.value.reduce((sum, l) => sum + l.wins, 0)), icon: 'mine', levels: yourMines.value },
+    { group: 'games', label: 'Your Snake best', value: number(read('snake-best', '0')), icon: 'snake' },
+    { group: 'games', label: 'Your 2048 best', value: number(read('2048-best', '0')), icon: '2048' },
+    { group: 'fun', label: 'Balloons you popped', value: number(read('balloons-popped', '0')), icon: 'balloon' },
+    { group: 'fun', label: 'Times you fed the fish', value: number(read('koi-fed', '0')), icon: 'koi' },
+    { group: 'games', label: 'You vs Clippy', value: `${you}-${clippy}`, icon: 'reversi', note: you + clippy ? `You win ${Math.round(you / (you + clippy) * 100)}%` : 'No games yet' },
+    { group: 'fishbowl', label: 'Fishbowl messages you sent', value: number(read('chat-sent', '0')), icon: 'koi' },
+    { group: 'fishbowl', label: 'Tokens you burnt', value: number(read('clippy-tokens', '0')), icon: 'chip', note: 'asking Clippy' },
   ];
 });
 // the same kind of cards for the behind the scenes numbers, over the chosen period
@@ -180,12 +186,17 @@ onBeforeUnmount(() => {
         <p v-if="liveError && !live" role="status">{{ liveError }}</p>
         <p v-else-if="!live" role="status">Loading scores...</p>
         <template v-if="cards.length">
-          <div class="score-cards">
-            <section v-for="card in cards" :key="card.label" class="score-card">
-              <RetroIcon :name="card.icon"/>
-              <strong>{{ card.value }}</strong>
-              <span>{{ card.label }}</span>
-              <small v-if="card.note">{{ card.note }}</small>
+          <div class="card-groups">
+            <section v-for="group in grouped(cards)" :key="group.id" class="card-group" :class="{ wide: group.id === 'games' }">
+              <h3>{{ group.title }}</h3>
+              <div class="score-cards">
+                <section v-for="card in group.cards" :key="card.label" class="score-card">
+                  <RetroIcon :name="card.icon"/>
+                  <strong>{{ card.value }}</strong>
+                  <span>{{ card.label }}</span>
+                  <small v-if="card.note">{{ card.note }}</small>
+                </section>
+              </div>
             </section>
           </div>
           <div class="visit-banner">
@@ -194,15 +205,20 @@ onBeforeUnmount(() => {
           </div>
         </template>
           <h2>Your scores</h2>
-          <div class="score-cards four-three">
-            <section v-for="card in yourCards" :key="card.label" class="score-card">
-              <RetroIcon :name="card.icon"/>
-              <strong>{{ card.value }}</strong>
-              <span>{{ card.label }}</span>
-              <small v-if="card.note">{{ card.note }}</small>
-              <ul v-if="card.levels" class="level-counts">
-                <li v-for="l in card.levels" :key="l.level"><span>{{ l.level }}</span><b>{{ number(l.wins) }}</b></li>
-              </ul>
+          <div class="card-groups">
+            <section v-for="group in grouped(yourCards)" :key="group.id" class="card-group" :class="{ wide: group.id === 'games' }">
+              <h3>{{ group.title }}</h3>
+              <div class="score-cards">
+                <section v-for="card in group.cards" :key="card.label" class="score-card">
+                  <RetroIcon :name="card.icon"/>
+                  <strong>{{ card.value }}</strong>
+                  <span>{{ card.label }}</span>
+                  <small v-if="card.note">{{ card.note }}</small>
+                  <ul v-if="card.levels" class="level-counts">
+                    <li v-for="l in card.levels" :key="l.level"><span>{{ l.level }}</span><b>{{ number(l.wins) }}</b></li>
+                  </ul>
+                </section>
+              </div>
             </section>
           </div>
         <p v-if="busy" role="status">Loading site history...</p>
@@ -293,10 +309,14 @@ onBeforeUnmount(() => {
 @keyframes online-blink { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .online-dot { animation: none; } }
 .score-cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* four across the top and three wider ones under them */
-.score-cards.four-three { grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.score-cards.four-three > * { grid-column: span 3; }
-.score-cards.four-three > :nth-child(n + 5) { grid-column: span 4; }
+/* the games across the full width, and the smaller groups two to a row under them.
+   each group's cards share its width evenly */
+.card-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin: 12px 0; }
+.card-group { display: flex; flex-direction: column; }
+.card-group.wide { grid-column: 1 / -1; }
+.card-group h3 { margin: 0; font: bold 12px 'Pixel MS Sans Serif', Tahoma, sans-serif; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+/* groups side by side end level, their cards stretched to the taller one */
+.card-group .score-cards { flex: 1; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); margin: 8px 0 10px; }
 .level-counts { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; max-width: 150px; font-size: 11px; }
 .level-counts li { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; border-top: 1px dotted var(--d-line, #999); }
 /* visitors by day and boards cleared side by side, stacked on a phone */
@@ -341,8 +361,10 @@ onBeforeUnmount(() => {
 .analytics-table { width: 100%; text-align: left; font-size: 12px; }
 .analytics-table td, .analytics-table th { border-bottom: 1px solid #ddd; }
 @media (max-width: 560px) {
-  .score-cards, .score-cards.three, .score-cards.four-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .score-cards.four-three > :nth-child(n) { grid-column: auto; }
+  .score-cards, .score-cards.three, .card-group .score-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-groups { grid-template-columns: minmax(0, 1fr); }
+  /* an odd card out at the end takes the whole row */
+  .card-group .score-cards > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media (max-width: 400px) { .analytics-page { padding: 18px 14px; } }
 </style>
