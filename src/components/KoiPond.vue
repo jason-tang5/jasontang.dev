@@ -7,6 +7,8 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { createKoiPond } from '../koi-pond.js';
 import { theme } from '../theme.js';
+import { track } from '../analytics.js';
+import { read, save } from '../storage.js';
 
 const props = defineProps({
   windowed: Boolean,
@@ -62,19 +64,25 @@ function move(event) {
   const rect = canvas.value.getBoundingClientRect();
   pond?.touch(event.clientX - rect.left, event.clientY - rect.top);
 }
+// every handful dropped counts toward the fish fed in analytics, the site's and yours
+function feed(x, y) {
+  pond?.feed(x, y);
+  track('koi-feed');
+  save('koi-fed', String((Number(read('koi-fed', '0')) || 0) + 1));
+}
 // points on the page, from whatever sits over a background pond
 function local(clientX, clientY) {
   const rect = canvas.value.getBoundingClientRect();
   return [clientX - rect.left, clientY - rect.top];
 }
 defineExpose({
-  feedAt: (x, y) => pond?.feed(...local(x, y)),
+  feedAt: (x, y) => feed(...local(x, y)),
   touchAt: (x, y) => pond?.touch(...local(x, y)),
 });
 function up(event) {
   if (!pressedAt || Math.hypot(event.clientX - pressedAt.x, event.clientY - pressedAt.y) > 5) return;
   const rect = canvas.value.getBoundingClientRect();
-  pond?.feed(event.clientX - rect.left, event.clientY - rect.top);
+  feed(event.clientX - rect.left, event.clientY - rect.top);
   pressedAt = null;
 }
 </script>

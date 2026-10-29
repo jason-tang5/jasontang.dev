@@ -48,7 +48,7 @@ export function createOptimisticStats(now = Date.now) {
     const counters = {
       visit: 'visitors', 'minesweeper-win': 'minesweeperWins', 'breakout-complete': 'breakoutWins',
       'reversi-lose': 'clippyWins', 'reversi-win': 'clippyLosses', '2048-win': 'twenty48Wins',
-      'balloon-pop': 'balloonsPopped', 'breakout-lose': 'breakout.losses',
+      'balloon-pop': 'balloonsPopped', 'koi-feed': 'koiFed', 'breakout-lose': 'breakout.losses',
       'mail-sent': 'mail.sent', 'mail-failed': 'mail.failed',
     };
     if (counters[event.name]) change(counters[event.name]);
