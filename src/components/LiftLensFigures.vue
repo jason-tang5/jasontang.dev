@@ -713,12 +713,23 @@ onBeforeUnmount(compareStop);
   .ll-compact .ll-charts svg { height: 100%; }
   .ll-compact .ll-transport code { display: none; }
 }
-/* the projects card's copy: exactly 600 by 375, the video full height on the left and
-   the two charts filling the rest, with no readouts or controls */
-.ll-preview .ll-angles { box-sizing: border-box; height: 375px; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-.ll-preview .ll-cam { height: 100%; aspect-ratio: 9 / 16; }
+/* the projects card's copy: exactly 600 by 375 but shown at about half size, so it's
+   drawn for a thumbnail. the video is cropped in on the lifter and the bar, and the two
+   charts fill the rest with thick lines and big titles and ticks, with no readouts or
+   controls */
+.ll-preview .ll-angles { box-sizing: border-box; height: 375px; grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.ll-preview .ll-cam { height: 100%; aspect-ratio: auto; overflow: hidden; }
+.ll-preview .ll-video { object-fit: cover; object-position: top; }
 .ll-preview .ll-side { grid-template-rows: minmax(0, 1fr); }
+.ll-preview .ll-chart-box { grid-template-columns: 46px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 22px; padding-top: 26px; }
+.ll-preview .ll-chart-box span { top: 0; left: 46px; font-size: 20px; }
+.ll-preview .ll-y, .ll-preview .ll-x { font-size: 16px; }
+.ll-preview .ll-y b { right: 5px; }
+.ll-preview .ll-x b { top: 3px; }
 .ll-preview .ll-stats, .ll-preview .ll-transport { display: none; }
+.ll-preview .ll-charts { gap: 12px; }
+.ll-preview .ll-charts polyline { stroke-width: 3.5; }
+.ll-preview .ll-cursor { stroke-width: 2; }
 
 /* fig 2 */
 /* the lifter sits back in grey so the plates and the candidate circle read first */
