@@ -31,7 +31,6 @@ export const apps = [
   app('stickies', 'Sticky Notes', 'sticky', 340, 520, 280, 300),
   app('music', 'Music', 'music', 360, 490, 335, 200),
   app('terminal', 'Terminal', 'terminal', 600, 420, 300, 260),
-  app('pond', 'Koi Pond', 'koi', 560, 420, 300, 240),
   app('snake', 'Snake', 'snake', 400, 700, 340, 560),
   app('minesweeper', 'Minesweeper', 'mine', 300, 400, 250, 330),
   app('reversi', 'Reversi', 'reversi', 420, 660, 350, 480),
@@ -43,7 +42,7 @@ export const apps = [
 // the apps that live inside the games and fun stuff folders instead of on the desktop
 export const folders = {
   games: ['contact', 'minesweeper', 'snake', 'reversi', '2048'],
-  funstuff: ['pictures', 'stickies', 'music', 'terminal', 'pond'],
+  funstuff: ['pictures', 'stickies', 'music', 'terminal'],
 };
 // contact's breakout is in games and the terminal is in fun stuff, but both keep their desktop icons
 const tucked = ['settings', 'mail', 'computer', ...Object.values(folders).flat()].filter(id => !['contact', 'terminal'].includes(id));

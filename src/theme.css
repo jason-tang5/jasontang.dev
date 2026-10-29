@@ -584,15 +584,6 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   opacity: 1;
 }
 
-/* the koi pond app: the same pond filling its window above the status bar */
-.pond-water {
-  display: block;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  cursor: var(--classic-pointer, pointer);
-}
-
 /* icons fill top to bottom, then wrap to the next column like real windows.
    App.vue snaps dragged icons to this same grid, so keep the sizes in sync */
 .desktop-grid {

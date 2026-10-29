@@ -1,18 +1,19 @@
 # jasontang.dev
 
-my portfolio, dressed up as a windows 95 desktop. vue 3 + vite, running on cloudflare workers.
+my windows 95 desktop.
 
-```sh
-npm install
-npm run dev     # local dev server
-npm test        # unit tests
-npm run build   # builds into dist/
-```
+**[come poke around →](https://jasontang.dev)**
 
-pushing to `main` deploys it. most of the text lives in `src/content.mjs`.
+there's a portfolio in here, but also a few distractions. open a folder, drag a window around, put on some music. i wanted this to feel like a place you could spend a little time in.
 
-MSN Messenger adds a public visitor chat room. Run `npm run dev:chat` for the local
-chat server; see [CHAT.md](CHAT.md) for production setup, moderation and tests.
+## take a look around
+
+- **projects** — things i've built, with interactive graphics explaining how they work.
+- **fishbowl** — say hi, feed fish. a shared chat room with koi swimming behind the conversation and clippy keeping everyone company.
+- **games** — snake, minesweeper, 2048, and reversi against clippy. contact is a game of breakout, too.
+- **fun stuff** — photos, music, sticky notes, and a terminal.
+
+built with vue 3 and vite, running on cloudflare workers. still adding little things as i think of them.
 
 ## credits
 
@@ -20,6 +21,7 @@ chat server; see [CHAT.md](CHAT.md) for production setup, moderation and tests.
 - some win98 control styling borrowed from [98.css](https://github.com/jdan/98.css) (mit, `licenses/98css-MIT.txt`)
 - windows 95/98 cursors by darix555, public domain (`licenses/win98-cursors-public-domain.txt`)
 - the wallpaper is a vaporwave sunset gif from tenor, rendered as ascii with [react-video-ascii](https://www.npmjs.com/package/react-video-ascii). source link in `assets/wallpaper-source.txt`
+- koi pond visuals inspired by [dao ho](https://www.daoho.dev/), with the idea of ascii creatures swimming on canvas from [stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks)
 
 ## inspiration
 
