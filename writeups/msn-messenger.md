@@ -61,7 +61,3 @@ A dropped connection can lose the acknowledgement after a message has already be
 Messages starting with @Clippy call Gemma 4 through Workers AI. His prompt includes a guide to the site, bounded recent conversation history and live site statistics. He can give directions and answer questions; he cannot operate the desktop.
 
 The room allows one AI request at a time, caps requests at 500 per UTC day, and asks for replies of at most 200 tokens with a 20-second timeout. Token usage is recorded for Analytics.
-
-## What I learned
-
-The chat and the pond share a window, but need different kinds of state. The room keeps durable records so reconnects and hibernation are safe. The fish keep a local simulation that can be rebuilt whenever the canvas mounts. Making both work together also means deciding which clicks belong to the water and which belong to the conversation.

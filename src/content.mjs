@@ -88,10 +88,10 @@ export const projects = [
     // 5-10 words for its card in the projects folder
     tagline: 'Computer vision that coaches your Olympic lifts.',
     why: [
-      'Olympic lifts are one of the best things you can do as an athlete, and the gold standard is a power clean at 1.5× bodyweight. My replays showed something was off but not what, so I built something to measure it.',
+      'Olympic lifts are one of the best things you can do as an athlete, but also one of the hardest to learn. The gold standard is a power clean at 1.5× bodyweight. Why not build something to make learning them easier?',
     ],
     contribution: [
-      'Film a snatch or a clean from the side, or just use your webcam. A pose model finds your joints, LiftLens finds the bar, and you get joint angles, bar path and bar speed for every rep.',
+      'Film a snatch or a clean from the side, then upload to LiftLens. A pose model finds your joints, LiftLens finds the bar, and you get joint angles, bar path and bar speed for every rep.',
       { figure: 'angles' },
     ],
     implementationTitle: 'How it works',
@@ -109,7 +109,6 @@ export const projects = [
       { heading: 'What it showed me' },
       'My hips were shooting up before the bar passed my knees. My knee angle opened 43° while my hip opened only 21°, so my legs straightened twice as fast as my back came up.',
       { figure: 'hips' },
-      'I film every heavy session now. Still chasing that 1.5× bodyweight clean.',
     ],
     funFact: 'Competition bumper plates all measure 450 mm across, from 10 kg to 25 kg. The plate works as a ruler whatever is loaded on the bar.',
   },
@@ -153,8 +152,6 @@ export const projects = [
       { heading: 'Clippy lives here too' },
       'Messages starting with @Clippy call Gemma 4 through Workers AI. His prompt includes a guide to the site, bounded recent conversation history and live site statistics. He can give directions and answer questions; he cannot operate the desktop.',
       'The room allows one AI request at a time, caps requests at 500 per UTC day, and asks for replies of at most 200 tokens with a 20-second timeout. Token usage is recorded for Analytics.',
-      { heading: 'What I learned' },
-      'The chat and the pond share a window, but need different kinds of state. The room keeps durable records so reconnects and hibernation are safe. The fish keep a local simulation that can be rebuilt whenever the canvas mounts. Making both work together also means deciding which clicks belong to the water and which belong to the conversation.',
     ],
   },
   {
@@ -246,9 +243,13 @@ export const projects = [
       'A small FSM turns W, A, S and D into moves and swallows the key-up codes, so one press is always exactly one move.',
       { figure: 'fsm' },
       ['The ', { open: 'games', text: 'Games' }, ' folder has a browser version rebuilt from the same design.'],
+      { heading: 'What I learned' },
+      { bullets: true, list: [
+        'Break complex problems into small, explicit steps.',
+        'Keep responsibilities separate so bugs are easier to isolate.',
+        'Test edge cases early, before building more on top.',
+      ] },
     ],
-    lessonsTitle: 'What I learned',
-    lessons: 'Integrate early. Every module passed its own testbench, but the bugs lived in the wires between them.',
     funFact: 'The presentation for this project was due the same day as my interview with AMD, so I presented it to my interviewer as well! It went well enough, I spent the next 16 months interning there.',
   },
   {

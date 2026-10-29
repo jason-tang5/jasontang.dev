@@ -539,7 +539,10 @@ function balloonDone(event, id) {
               <AboutFacts :facts="profile.facts"/>
               <!-- what i'm building right now, the clean from the liftlens writeup -->
               <LiftLensFigures figure="angles" compact>
-                <template #caption><span class="about-quote"><span>{{ profile.quote[0] }}</span> <span>{{ profile.quote[1] }}<span class="typed-cursor" aria-hidden="true">_</span></span></span></template>
+                <template #caption>
+                  <span class="about-quote"><span>{{ profile.quote[0] }}</span> <span>{{ profile.quote[1] }}<span class="typed-cursor" aria-hidden="true">_</span></span></span>
+                  <a href="#app=liftlens"><strong>LiftLens</strong></a> 100kg @ 1.3m/s
+                </template>
               </LiftLensFigures>
             </section>
           </div>
