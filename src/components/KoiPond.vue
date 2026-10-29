@@ -18,7 +18,8 @@ const props = defineProps({
   scale: { type: Number, default: 1 },
   // more things to dim the fish under, the way the desktop does its icons, like the
   // fishbowl's messages. each is only dimmed where it shows inside its veilClip
-  // ancestor, so a message scrolled out of the conversation leaves the water alone
+  // ancestor, so a message scrolled out of the conversation leaves the water alone,
+  // and one with a data-veil-pad starts fading that many px further out
   veil: { type: String, default: '' },
   veilClip: { type: String, default: '' },
 });
@@ -40,9 +41,9 @@ function veils() {
     return { left, top, width: Math.min(box.right, clip.right) - left, height: Math.min(box.bottom, clip.bottom) - top };
   };
   const boxes = (selector, pad, hollow) => (selector ? [...canvas.value.parentElement.querySelectorAll(selector)] : [])
-    .map(rect)
-    .filter(box => box.width > 0 && box.height > 0)
-    .map(box => ({ x: box.left - origin.left - pad.x, y: box.top - origin.top - pad.y, width: box.width + pad.x * 2, height: box.height + pad.y * 2, hollow }));
+    .map(el => ({ box: rect(el), pad: el.dataset.veilPad ? { x: +el.dataset.veilPad, y: +el.dataset.veilPad } : pad }))
+    .filter(({ box }) => box.width > 0 && box.height > 0)
+    .map(({ box, pad }) => ({ x: box.left - origin.left - pad.x, y: box.top - origin.top - pad.y, width: box.width + pad.x * 2, height: box.height + pad.y * 2, hollow }));
   return [...boxes('.desktop-shortcut', { x: 7, y: 8 }, false), ...boxes('[data-window]', { x: 0, y: 0 }, true), ...boxes(props.veil, { x: 4, y: 3 }, false)];
 }
 

@@ -43,15 +43,15 @@ try {
     const page = await context.newPage(); page.on('pageerror', err => errors.push(err.message));
     await page.goto(`${base}/#app=chat`);
     const app = page.locator('[data-window="chat"]');
-    await expect(app.getByLabel('Your display name')).toBeVisible();
+    await expect(app.getByLabel('Display name')).toBeVisible();
     return { context, page, app };
   }
   const alice = await visitor();
   await alice.app.screenshot({ path: `${output}/sign-in.png` });
   async function join(visitor, name) {
-    await visitor.app.getByLabel('Your display name').fill(name);
-    await visitor.app.getByRole('button', { name: 'Sign in to the room' }).click();
-    await expect(visitor.app.locator('.msn-identity')).toContainText('Connected');
+    await visitor.app.getByLabel('Display name').fill(name);
+    await visitor.app.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(visitor.app.locator('.msn-footer')).toContainText('Connected');
   }
   await join(alice, 'Alice');
   const bob = await visitor(); await join(bob, 'Bob');
@@ -64,7 +64,7 @@ try {
   await expect(alice.app.getByRole('alert')).toContainText('Keep it friendly');
   await expect(alice.app.locator('.msn-pending')).toHaveCount(0);
   await expect(alice.app.getByLabel('Your message')).toHaveValue('you are a sh1t');
-  await expect(alice.app.locator('.msn-identity')).toContainText('Connected');
+  await expect(alice.app.locator('.msn-footer')).toContainText('Connected');
   await expect(bob.app.getByRole('log')).not.toContainText('sh1t');
   const html = '<img src=x onerror="window.chatXss=true">';
   await send(bob, html);
@@ -96,12 +96,12 @@ try {
   await expect(bob.app.getByRole('button', { name: 'Send', exact: true })).toBeEnabled({ timeout: 10000 });
   await bob.app.getByLabel('Your message').fill('An unfinished thought');
   await bob.page.evaluate(() => window.__chatSockets.at(-1).close());
-  await expect(bob.app.locator('.msn-identity')).toContainText('Reconnecting');
-  await expect(bob.app.locator('.msn-identity')).toContainText('Connected', { timeout: 15000 });
+  await expect(bob.app.locator('.msn-footer')).toContainText('Reconnecting');
+  await expect(bob.app.locator('.msn-footer')).toContainText('Connected', { timeout: 15000 });
   await expect(bob.app.getByLabel('Your message')).toHaveValue('An unfinished thought');
   await alice.page.reload();
   await expect(alice.app.locator('.msn-identity')).toContainText('Alice');
-  await expect(alice.app.locator('.msn-identity')).toContainText('Connected');
+  await expect(alice.app.locator('.msn-footer')).toContainText('Connected');
   await expect(alice.app.getByRole('log')).toContainText(html);
   const cookies = await alice.context.cookies();
   assert.ok(cookies.find(c => c.name === 'chat_session')?.httpOnly);
@@ -164,7 +164,7 @@ try {
   assert.equal(overflow, false);
   await alice.app.screenshot({ path: `${output}/mobile.png` });
   await alice.app.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(alice.app.getByLabel('Your display name')).toBeVisible();
+  await expect(alice.app.getByLabel('Display name')).toBeVisible();
   await alice.app.screenshot({ path: `${output}/mobile-sign-in.png` });
   assert.deepEqual(errors, []);
   console.log('PASS: real WebSocket delivery, history, sessions, reconnect, text safety, rate limits, deletion, mute, ban, kill switch, admin auth, origin checks, mobile layout and sign-out.');
