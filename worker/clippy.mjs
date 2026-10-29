@@ -39,7 +39,7 @@ export function siteFacts({ live, recent, chatting, now = Date.now() } = {}) {
   if (recent) {
     const daily = recent.daily || [];
     lines.push(`Visits: ${number(recent.visitors)} in the last 90 days, ${number(visitsSince(daily, 30, now))} in the last 30 days, ${number(visitsSince(daily, 7, now))} in the last 7 days.`);
-    lines.push(`Last 90 days: ${number(recent.balloonsPopped)} balloons popped in About Me, ${number(recent.breakout?.losses)} Breakout balls lost, ${number(recent.minesweeperWins)} Minesweeper boards cleared, ${number(recent.breakoutWins)} Breakout boards cleared, best 2048 score ${number(recent.twenty48HighScore)}, Clippy's Reversi record ${number(recent.clippyWins)} wins and ${number(recent.clippyLosses)} losses.`);
+    lines.push(`Last 90 days: ${number(recent.balloonsPopped)} balloons popped in About Me, ${number(recent.koiFed)} handfuls of food fed to the koi, ${number(recent.breakout?.losses)} Breakout balls lost, ${number(recent.minesweeperWins)} Minesweeper boards cleared, ${number(recent.breakoutWins)} Breakout boards cleared, best 2048 score ${number(recent.twenty48HighScore)}, Clippy's Reversi record ${number(recent.clippyWins)} wins and ${number(recent.clippyLosses)} losses.`);
     lines.push(`Fishbowl in the last 90 days: ${number(recent.chatMessages)} messages sent, and Clippy's replies burnt ${number(recent.tokensBurnt)} Workers AI tokens.`);
     const windows = recent.windows?.slice(0, 3).map(w => `${w.label} (${number(w.count)})`).join(', ');
     if (windows) lines.push(`Most opened windows in the last 90 days: ${windows}.`);
