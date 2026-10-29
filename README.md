@@ -4,8 +4,6 @@ my windows 95 desktop.
 
 **[come poke around →](https://jasontang.dev)**
 
-there's a portfolio in here, but also a few distractions. open a folder, drag a window around, put on some music. i wanted this to feel like a place you could spend a little time in.
-
 ## take a look around
 
 - **projects** — things i've built, with interactive graphics explaining how they work.
