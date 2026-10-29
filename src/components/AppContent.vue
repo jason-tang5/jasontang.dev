@@ -110,17 +110,18 @@ function showHero(index) {
 }
 const scrollHero = direction => showHero((heroAim ?? heroCurrent.value) + direction);
 
-// a card is as wide as the window's height leaves room for (about 230px kept for the
-// writing and padding), never wider than the window. the row gets enough room at each
+// a card is as wide as the window's height leaves room for (about 260px kept for the
+// title bar, writing and padding), never wider than the window. the row gets enough room at each
 // end for the first and last cards to sit in the middle too, so whichever card is
 // showing is centred with the edges of its neighbours peeking in either side. each
-// figure, drawn 600px wide, is then zoomed to its card
+// figure, drawn 600 by 375, is then zoomed to fit its box. in a short window the box
+// gives up some height, so the figure shrinks to fit it and sits in the middle
 function fitHeroCards() {
   const row = heroRow.value;
   if (!row?.children.length) return;
   const wrap = row.parentElement;
   const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
-  const ideal = Math.max(316, Math.min((wrap.clientHeight - 228) * 1.6 + 16, wrap.clientWidth - 36));
+  const ideal = Math.max(316, Math.min((wrap.clientHeight - 258) * 1.6 + 16, wrap.clientWidth - 36));
   // at least 20px of each neighbour stays in view
   const width = Math.min(ideal, row.clientWidth - (gap + 20) * 2);
   const side = (row.clientWidth - width) / 2;
@@ -128,8 +129,14 @@ function fitHeroCards() {
   row.style.setProperty('--hero-pad', `${side}px`);
   const first = row.children[0].offsetLeft;
   heroStops.value = [...row.children].map(card => card.offsetLeft - first);
-  const figure = row.querySelector('.hero-figure');
-  if (figure?.clientWidth) row.style.setProperty('--hero-zoom', figure.clientWidth / 600);
+  for (const figure of row.querySelectorAll('.hero-figure')) {
+    if (figure.clientWidth) figure.style.setProperty('--hero-zoom', Math.min(figure.clientWidth / 600, figure.clientHeight / 375));
+  }
+  // in a short window the tech row shrinks first. a chip it can't show in full is hidden,
+  // so the row loses whole chips rather than showing some cut in half
+  for (const tech of row.querySelectorAll('.hero-tech')) {
+    for (const chip of tech.children) chip.style.visibility = chip.offsetTop + chip.offsetHeight > tech.clientHeight ? 'hidden' : '';
+  }
   updateHeroEnds();
 }
 watch(heroRow, (row, _, onCleanup) => {
@@ -564,6 +571,15 @@ function balloonDone(event, id) {
         @click.capture="heroSwallowClick" @dragstart.prevent>
         <article v-for="p in projects" :key="p.id" class="hero-card raised" role="listitem">
           <button class="hero-card-open" :aria-label="`Open ${p.name}`" @click="emit('open', p.id)"/>
+          <div class="top-bar hero-title" :style="{ background: p.caption }" aria-hidden="true">
+            <RetroIcon :name="p.icon" small/>
+            <span class="window-name">{{ p.file }}</span>
+            <span class="triple-button">
+              <span class="control"><span class="min-symbol"/></span>
+              <span class="control"><span class="max-symbol"/></span>
+              <span class="control">×</span>
+            </span>
+          </div>
           <div class="hero-figure" aria-hidden="true" inert>
             <div class="hero-figure-scale">
               <component :is="figureFor[f]" v-for="f in [p.figures?.lead ?? []].flat().slice(0, 1)" :key="p.id + f" :figure="f" preview/>

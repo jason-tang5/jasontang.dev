@@ -81,6 +81,10 @@ export const projects = [
     kind: 'Computer vision',
     date: 'Fall 2026',
     icon: 'barbell',
+    // its card in the projects folder shows the figure in a little window: this file
+    // name in a title bar of this colour, muted like the win95 colour schemes
+    file: 'liftlens.exe',
+    caption: '#9c5a14',
     tech: ['Python', 'OpenCV', 'PyTorch', 'ONNX Runtime', 'TypeScript', 'Next.js', 'FastAPI', 'Redis', 'Docker'],
     // interactive figures, see LiftLensFigures.vue. contribution and implementation place them
     figures: { lead: 'angles' },
@@ -122,6 +126,8 @@ export const projects = [
     kind: 'Interactive web',
     date: 'Fall 2026',
     icon: 'koi',
+    file: 'fishbowl.exe',
+    caption: '#0b5e7a',
     app: 'chat',
     tech: ['JavaScript', 'Vue', 'Canvas 2D', 'Cloudflare Workers', 'Durable Objects', 'WebSockets', 'SQLite', 'Workers AI', 'Turnstile', 'Playwright'],
     figures: { lead: 'fishbowl' },
@@ -164,6 +170,8 @@ export const projects = [
     kind: 'Web development',
     date: 'Fall 2026',
     icon: 'computer',
+    file: 'portfolio.exe',
+    caption: '#000080',
     tech: ['Vue', 'JavaScript', 'Cloudflare Workers', 'Durable Objects', 'Workers KV', 'Vite', 'Playwright'],
     // interactive figures, see PortfolioFigures.vue. lead sits under the what i built
     // heading before the text and plays on its card in the projects folder too. the
@@ -195,6 +203,8 @@ export const projects = [
     kind: 'Machine learning',
     date: 'Summer 2026',
     icon: 'chip',
+    file: 'mini-ml.exe',
+    caption: '#5b4a94',
     tech: ['Rust', 'CUDA', 'TypeScript', 'PyTorch', 'TensorFlow'],
     // interactive figures, see MlFigures.vue. the implementation list places the rest
     figures: { lead: 'train' },
@@ -232,6 +242,8 @@ export const projects = [
     // interactive figures under these sections, see FpgaFigures.vue
     // the implementation list can drop them in between its paragraphs too
     figures: { lead: 'register' },
+    file: '2048.sof',
+    caption: '#8c2a1c',
     summary: 'The tile-merging game, implemented in hardware on a DE1-SoC.',
     tagline: '2048 built on the DE1-SoC.',
     contribution: 'For ECE241, my partner and I built 2048 in Verilog on a DE1-SoC FPGA. It draws on a VGA display at 60 Hz, and you play it with a real PS/2 keyboard.',
@@ -268,6 +280,8 @@ export const projects = [
     // the board is its card's figure too, see ReversiFigures.vue. contribution places
     // it itself, between its two paragraphs
     figures: { lead: 'board' },
+    file: 'reversi.exe',
+    caption: '#2f6b45',
     summary: 'A terminal Reversi clone written in C, with an AI opponent, built for my Computer Fundamentals course (APS105).',
     tagline: 'Minimax Reversi in C.',
     // these are lists of paragraphs, { figure }, { list } and { heading } items, and

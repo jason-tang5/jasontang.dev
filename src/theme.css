@@ -2030,11 +2030,12 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 /* the folder is one row of cards scrolling sideways, one centred at a time. every
    card is the same size and grows with the window: the project's lead figure, in its
    preview layout of exactly 600x375 with its own sunken frame and no controls, zoomed
-   to the card's width in a 16:10 box (the zoom is set from the script), then the name,
+   to the card's width in a 16:10 box under the card's title bar (the zoom is set from the script), then the name,
    season, one line and the tech chips pinned to the bottom. the card is as wide as the
    window's height leaves room for and never wider than the window (set from the
-   script). in a short window the figure gives up height so the card still fits above
-   the dots. the row snaps a card to its middle */
+   script). in a short window the tech chips give up their height first, then the
+   figure, so the card still fits above the dots. the name and line always stay. the
+   row snaps a card to its middle */
 .projects-hero-wrap {
   position: relative;
   flex: 1;
@@ -2068,7 +2069,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 .hero-dots { background: var(--d-page, #f5f4ed); padding-top: 0; }
 .hero-card {
   position: relative;
-  flex: 0 0 var(--hero-card, clamp(316px, (100cqh - 228px) * 1.6 + 16px, 100cqw - 36px));
+  flex: 0 0 var(--hero-card, clamp(316px, (100cqh - 258px) * 1.6 + 16px, 100cqw - 36px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2096,6 +2097,26 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   cursor: pointer;
 }
 .hero-card-open:focus-visible { outline: none; }
+/* each card is a little window: the project's file name in a title bar of its own
+   colour (content.mjs) across the top, with the desktop's window buttons just for
+   show. it runs out over the card's padding to its edges, like a real window's */
+.hero-title {
+  flex-shrink: 0;
+  height: 22px;
+  margin: -6px -6px 0;
+  color: #fff;
+  cursor: inherit;
+}
+.hero-title .control {
+  width: 16px;
+  height: 14px;
+  font-size: 15px;
+  line-height: 12px;
+}
+.hero-title .min-symbol { width: 7px; height: 2px; margin-top: 6px; }
+.hero-title .max-symbol { width: 8px; height: 6px; border-top-width: 2px; }
+/* the tech chips take a thousand times its share of the squeeze, so they have all but
+   gone before the figure gives up any height. once they're at nothing, it takes the rest */
 .hero-figure {
   position: relative;
   flex: 0 1 auto;
@@ -2106,6 +2127,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 .hero-figure-scale {
   width: 600px;
+  margin-inline: auto;
   zoom: var(--hero-zoom, .5);
   pointer-events: none;
 }
@@ -2131,6 +2153,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 /* beats the figures' own scoped margins */
 .hero-figure .hero-figure-scale > figure { margin: 0; }
 .hero-figure-scale figcaption { display: none; }
+.hero-copy { flex-shrink: 0; }
 .hero-copy h2 {
   display: flex;
   align-items: baseline;
@@ -2142,8 +2165,10 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 /* the season after the name, on the same line */
 .hero-copy time { font: 11px Tahoma, sans-serif; color: var(--muted); }
 .hero-copy p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; }
-/* over the card's open button, so hovering a chip still ticks. a click opens it too */
-.hero-tech { position: relative; z-index: 2; margin-top: auto; font-size: 11px; cursor: pointer; }
+/* over the card's open button, so hovering a chip still ticks. a click opens it too.
+   it's the first thing to shrink in a short window, losing whole chips (the script hides
+   any it can't show in full) down to nothing. the padding leaves room for a chip's lift */
+.hero-tech { position: relative; z-index: 2; flex: 0 1000 auto; min-height: 0; overflow: hidden; margin-top: auto; padding-top: 1px; font-size: 11px; cursor: pointer; }
 .hero-arrow.raised {
   position: absolute;
   z-index: 2;
