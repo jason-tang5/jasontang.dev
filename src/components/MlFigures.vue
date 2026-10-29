@@ -96,16 +96,17 @@ const stages = [
   { id: 'back', name: 'Backward', until: 0.9 }, { id: 'step', name: 'Adam step', until: 1 },
 ];
 const stageIndex = computed(() => (finished.value ? -1 : stages.findIndex(s => batchPhase.value < s.until)));
-const stageNote = computed(() => {
-  if (finished.value) return `Done. ${accs[EPOCHS - 1]}% right on the 10,000 test digits.`;
-  const l = sample.value.label;
-  return [
-    `A ${l} goes in, one digit of a batch of 128.`,
-    `The loss is −log of the chance it gave ${l}.`,
-    'Gradients flow back to every weight.',
-    'Adam nudges all 235,146 weights.',
-  ][stageIndex.value];
-});
+// what's happening in stage i (-1 once training's done) for a digit l
+const noteFor = (i, l) => (i < 0 ? `Done. ${accs[EPOCHS - 1]}% right on the 10,000 test digits.` : [
+  `A ${l} goes in, one digit of a batch of 128.`,
+  `The loss is −log of the chance it gave ${l}.`,
+  'Gradients flow back to every weight.',
+  'Adam nudges all 235,146 weights.',
+][i]);
+const stageNote = computed(() => noteFor(finished.value ? -1 : stageIndex.value, sample.value.label));
+// every note, hidden under the one showing, so the line is always as tall as the longest
+// and the page doesn't jump when a note wraps
+const noteSizers = [-1, 0, 1, 2, 3].map(i => noteFor(i, 8));
 // column j lights as the forward pass reaches it: 1 to 3 are the hidden layers, 4 the outputs
 const layerOn = j => batchPhase.value < 0 || batchPhase.value >= j * 0.1;
 const wireClass = k => {
@@ -680,7 +681,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
         <ol class="mm-phases" aria-label="Each batch">
           <li v-for="(s, i) in stages" :key="s.id" :class="[s.id, { on: stageIndex === i }]"><span>{{ s.name }}</span></li>
         </ol>
-        <p>{{ stageNote }}</p>
+        <p class="mm-stack"><span v-for="n in noteSizers" :key="n" class="mm-sizer" aria-hidden="true">{{ n }}</span><span>{{ stageNote }}</span></p>
       </div>
       <div class="mm-race">
         <span>GPU</span><span class="mm-bar"><i :style="{ width: `${gpuEpochs * 10}%` }"/></span><code>{{ Math.floor(gpuEpochs) }}/10 epochs</code>
@@ -699,9 +700,14 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
           <circle v-for="(p, e) in lossPts.slice(0, trained)" :key="e" :cx="p[0]" :cy="p[1]" :r="e === trained - 1 ? 3 : 1.6"/>
         </svg>
         <p>
-          <template v-if="trained">Epoch {{ trained }} · loss <code>{{ losses[trained - 1].toFixed(4) }}</code> · test accuracy <code>{{ accs[trained - 1] }}%</code></template>
-          <template v-else>Epoch 0 · untrained, so a guess out of 10</template>
-          <br><small>{{ sim.toFixed(2) }} s on an RTX 4080 laptop GPU. One CPU thread needs {{ (CPU * EPOCHS).toFixed(1) }} s for all 10 epochs, about 16× longer.</small>
+          <!-- both versions of the epoch line hidden underneath, so it keeps its height -->
+          <span class="mm-stack">
+            <span class="mm-sizer" aria-hidden="true">Epoch 10 · loss <code>0.0000</code> · test accuracy <code>00.00%</code></span>
+            <span class="mm-sizer" aria-hidden="true">Epoch 0 · untrained, so a guess out of 10</span>
+            <span v-if="trained">Epoch {{ trained }} · loss <code>{{ losses[trained - 1].toFixed(4) }}</code> · test accuracy <code>{{ accs[trained - 1] }}%</code></span>
+            <span v-else>Epoch 0 · untrained, so a guess out of 10</span>
+          </span>
+          <small>{{ sim.toFixed(2) }} s on an RTX 4080 laptop GPU. One CPU thread needs {{ (CPU * EPOCHS).toFixed(1) }} s for all 10 epochs, about 16× longer.</small>
         </p>
       </div>
       <div class="mm-buttons">
@@ -1028,7 +1034,11 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
 :root[data-theme="dark"] .mm-out:not(.target) .mm-prob { fill: #8ca0ff; }
 /* the four parts of a batch as a row of chips, lit one at a time in their wires' colours */
 .mm-stage { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 10px; }
-.mm-stage p { margin: 0; font-size: 13px; }
+.mm-stage p { flex: 1 1 220px; margin: 0; font-size: 13px; }
+/* the text showing and hidden copies of its other versions, all in one grid cell */
+.mm-stack { display: grid; }
+.mm-stack > * { grid-area: 1 / 1; }
+.mm-sizer { visibility: hidden; }
 .mm-phases { display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 11px; }
 .mm-phases li { --c: var(--navy, #000080); display: flex; align-items: center; }
 .mm-phases li:not(:last-child)::after { content: '→'; margin: 0 2px; color: var(--muted); }
