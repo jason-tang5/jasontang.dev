@@ -10,7 +10,7 @@
 
 ## Why I built it
 
-PyTorch turns training a neural network into a few lines of code. I wanted to know what those lines actually do, so I built the whole thing myself, from the numbers up to the GPU.
+I watched [3Blue1Brown’s neural network series](https://www.youtube.com/watch?v=aircAruvnKk&list=PLOH0RpNCcyWRxD8bYrbZbVZrto0U8axHR) and wanted to try it myself. PyTorch turns training a neural network into a few lines of code, but I wanted to know what those lines actually do, so I built the whole thing myself, from the numbers up to the GPU.
 
 ## What I built
 
@@ -30,7 +30,7 @@ Every operation remembers what went into it and how to undo its effect on the gr
 
 ### Running on the GPU
 
-A GPU is thousands of small cores doing the same thing at once, which is exactly what multiplying big grids of numbers needs. I wrote every CUDA kernel, the code that runs on those cores, by hand.
+A GPU is thousands of small cores doing the same thing at once, which is exactly what multiplying big grids of numbers needs. The code that runs on those cores is called a CUDA kernel.
 
 The most important one is matrix multiply. Reading from the GPU’s main memory is slow, so the kernel copies 16 × 16 tiles into fast shared memory and lets a block of threads reuse each tile many times before fetching the next (Fig. 3). Transpose flags let the same kernel run the backward pass without copying anything.
 

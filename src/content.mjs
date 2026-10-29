@@ -201,10 +201,10 @@ export const projects = [
     summary: 'A small ML framework in Rust, from tensors to GPU training.',
     tagline: 'Machine learning from scratch in Rust.',
     why: [
-      'PyTorch turns training a neural network into a few lines of code. I wanted to know what those lines actually do, so I built the whole thing myself, from the numbers up to the GPU.',
+      'I watched [3Blue1Brown’s neural network series](https://www.youtube.com/watch?v=aircAruvnKk&list=PLOH0RpNCcyWRxD8bYrbZbVZrto0U8axHR) and wanted to try it myself. PyTorch turns training a neural network into a few lines of code, but I wanted to know what those lines actually do, so I built the whole thing myself, from the numbers up to the GPU.',
     ],
     contribution: [
-      'A small deep learning library in Rust, with automatic gradients, hand-written CUDA kernels and TypeScript bindings. It reads handwritten digits with **97.8% accuracy**, and the GPU trains about **16× faster** than the CPU.',
+      'A small deep learning library in Rust, with automatic gradients, CUDA kernels and TypeScript bindings. It reads handwritten digits with **97.8% accuracy**, and the GPU trains about **16× faster** than the CPU.',
     ],
     implementationTitle: 'How it works',
     implementation: [
@@ -212,7 +212,7 @@ export const projects = [
       'Every operation remembers how to undo its effect on the gradient. Calling backward walks that chain in reverse and adds up every contribution, so no gradient is ever worked out by hand.',
       { figure: 'graph' },
       { subheading: 'Running on the GPU' },
-      'I wrote every CUDA kernel by hand. Matrix multiply copies 16 × 16 tiles into fast shared memory and reuses each one before fetching the next, because on a GPU speed is mostly about memory, not math.',
+      'The matrix multiply kernel copies 16 × 16 tiles into fast shared memory and reuses each one before fetching the next, because on a GPU speed is mostly about memory, not math.',
       { figure: 'tiles' },
       { subheading: 'Checking the math' },
       'A gradient bug doesn’t crash anything, the model just learns badly. So every operation is checked against both PyTorch and TensorFlow, which is how I found out Keras adds epsilon in a different place.',
