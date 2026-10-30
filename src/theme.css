@@ -4515,15 +4515,8 @@ label.mail-label {
 
 /* the sliding photos get layers of their own, so they move without redrawing their
    letters and filters every frame */
-.pictures-stage:is(.swiping, .settling) > .pictures-hero {
+.pictures-stage.swiping > .pictures-hero {
   will-change: transform;
-}
-
-.pictures-stage.settling > .pictures-hero {
-  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-@media (prefers-reduced-motion: reduce) {
-  .pictures-stage.settling > .pictures-hero { transition: none; }
 }
 
 /* the neighbour sliding in shows just its photo and caption, the controls are the
