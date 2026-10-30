@@ -242,14 +242,22 @@ const [balloonBody, balloonEdge] = balloonColors[0];
         <path fill="#555" d="M6 11h2v10H6zM24 11h2v10h-2z"/>
         <path stroke="none" fill="#777" d="M9 9h1v14H9zM21 9h1v14h-1z"/>
       </g>
-      <!-- the digit guesser: a 7 drawn in white on a black pad in a grey frame, with a
-           green tick for the guess -->
+      <!-- the digit guesser: a grey drawing pad lit on its top left like the other
+           windows, with a 7 drawn on the sunken black pad in soft white strokes like the
+           mnist digits, and a rounded green badge ticking off the guess -->
       <g v-else-if="name === 'digits'">
-        <path fill="#c0c0c0" d="M2 3h27v25H2z"/>
-        <path fill="#000" stroke="none" d="M5 6h21v19H5z"/>
-        <path fill="#fff" stroke="none" d="M9 9h12v3H9zM18 12h3v3h-3zM17 15h3v3h-3zM16 18h3v3h-3zM15 21h3v3h-3z"/>
-        <path fill="#1baf7a" d="M21 21h9v9h-9z"/>
-        <path fill="#fff" stroke="none" d="M23 25h1v1h-1zM24 26h1v1h-1zM25 25h1v1h-1zM26 24h1v1h-1zM27 23h1v1h-1z"/>
+        <path fill="#808080" d="M4 4h26v26H4z"/>
+        <path fill="#c0c0c0" d="M2 2h26v26H2z"/>
+        <path stroke="#fff" d="M3 3h24M3 3v24"/>
+        <path fill="#808080" stroke="none" d="M5 5h20v1H5zM5 6h1v19H5z"/>
+        <path fill="#fff" stroke="none" d="M6 24h19v1H6zM24 6h1v18h-1z"/>
+        <path fill="#000" stroke="none" d="M6 6h18v18H6z"/>
+        <path fill="#fff" stroke="none" d="M9 8h12v3H9zM18 11h3v2h-3zM17 13h3v2h-3zM16 15h3v2h-3zM15 17h3v2h-3zM14 19h3v2h-3zM13 21h3v2h-3z"/>
+        <path fill="#8a8a8a" stroke="none" d="M8 9h1v2H8zM10 7h10v1H10zM21 8h1v3h-1zM17 12h1v1h-1zM21 11h1v1h-1zM16 14h1v1h-1zM20 13h1v1h-1zM15 16h1v1h-1zM19 15h1v1h-1zM14 18h1v1h-1zM18 17h1v1h-1zM13 20h1v1h-1zM17 19h1v1h-1zM12 22h1v1h-1zM16 21h1v1h-1z"/>
+        <path fill="#1baf7a" d="M21 20h8v1h1v8h-1v1h-8v-1h-1v-8h1z"/>
+        <path fill="#6fdcb0" stroke="none" d="M21 21h7v1h-7zM21 22h1v6h-1z"/>
+        <path fill="#10805a" stroke="none" d="M28 22h1v7h-1zM22 28h6v1h-6z"/>
+        <path fill="#fff" stroke="none" d="M22 24h1v2h-1zM23 25h1v2h-1zM24 26h1v2h-1zM25 25h1v2h-1zM26 24h1v2h-1zM27 23h1v2h-1z"/>
       </g>
       <!-- a green board with the four opening discs in the middle -->
       <g v-else-if="name === 'reversi'">
