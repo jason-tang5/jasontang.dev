@@ -718,7 +718,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(oRaf); resizer?.disconnect(); theme
   </figure>
 
   <figure v-else-if="figure === 'draw'" class="mm-figure">
-    <figcaption><strong>Fig. 2</strong> Draw a digit.</figcaption>
+    <figcaption><strong>Fig. 2</strong> Try it out! Draw a digit from 0 to 9 and the network guesses it as you go. This is the same network the framework trained, running right in your browser.</figcaption>
     <div class="mm-panel"><DigitPad class="mm-draw"/></div>
   </figure>
 

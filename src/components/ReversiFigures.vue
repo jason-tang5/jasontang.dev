@@ -245,14 +245,14 @@ const previewBoard = computed(() => {
 const treeNote = computed(() => {
   const p = peeked.value;
   const g = tree.value.find(t => t.m === greedyPick.value), d = tree.value.find(t => t.m === deepPick.value);
-  if (p?.r !== undefined) return `Clippy plays ${nameOf(p.m)}, you answer ${nameOf(p.r)}: the board is worth ${signed(tree.value.find(t => t.m === p.m).replies.find(x => x.r === p.r).score)} to Clippy.`;
+  if (p?.r !== undefined) return `The AI plays ${nameOf(p.m)}, you answer ${nameOf(p.r)}: the board is worth ${signed(tree.value.find(t => t.m === p.m).replies.find(x => x.r === p.r).score)} to the AI.`;
   if (p) {
     const c = tree.value.find(t => t.m === p.m);
     return `${nameOf(c.m)} scores ${signed(c.now)} right away. ${c.replies.length ? `Your best answer, ${nameOf(c.replies[0].r)}, takes it to ${signed(c.worst)}.` : 'You would have to pass.'}`;
   }
   return deep.value
-    ? `Looking two moves ahead, Clippy plays ${nameOf(d.m)}: its worst case, ${signed(d.worst)}, beats ${nameOf(g.m)}’s worst case of ${signed(g.worst)}.`
-    : `Looking one move ahead, Clippy grabs ${nameOf(g.m)} for ${signed(g.now)}, the best score right now. Switch to two to see your reply.`;
+    ? `Looking two moves ahead, the AI plays ${nameOf(d.m)}: its worst case, ${signed(d.worst)}, beats ${nameOf(g.m)}’s worst case of ${signed(g.worst)}.`
+    : `Looking one move ahead, the AI grabs ${nameOf(g.m)} for ${signed(g.now)}, the best score right now. Switch to two to see your reply.`;
 });
 function newTree() {
   treeBoard.value = randomPosition(figureRandom, 10 + Math.floor(figureRandom() * 20), disagrees);
@@ -320,9 +320,9 @@ function newTree() {
   </figure>
 
   <figure v-else-if="figure === 'eval'" class="rx-figure">
-    <figcaption><strong>Fig. 3</strong> Clippy scoring its moves.</figcaption>
+    <figcaption><strong>Fig. 3</strong> The AI scoring its moves.</figcaption>
     <div class="rx-panel rx-split rx-eval">
-      <div class="rx-board" role="group" aria-label="Clippy's legal moves">
+      <div class="rx-board" role="group" aria-label="The AI's legal moves">
         <button v-for="(cell, i) in evalBoard" :key="i" :disabled="scoreAt[i] === undefined"
           :class="['rx-cell', 'felt', { legal: scoreAt[i] !== undefined, picked: shown.m === i, best: bestScored.m === i, flip: shownFlips.includes(i) }]"
           :aria-label="scoreAt[i] !== undefined ? `${nameOf(i)}: ${signed(scoreAt[i])}` : nameOf(i)" @click="pickedMove = i">
@@ -366,7 +366,7 @@ function newTree() {
           <g class="rx-edges" aria-hidden="true">
             <path v-for="e in edges" :key="e.key" :class="{ lit: e.lit, dim: e.dim }" :d="e.d"/>
           </g>
-          <g class="rx-node root"><rect x="220" y="6" width="120" height="28"/><text x="280" y="24">Clippy to move</text></g>
+          <g class="rx-node root"><rect x="220" y="6" width="120" height="28"/><text x="280" y="24">AI to move</text></g>
           <template v-for="(c, k) in candidates" :key="c.m">
             <g class="rx-node" :class="{ on: c.m === chosen, peek: peeked?.m === c.m && peeked?.r === undefined }" role="button" tabindex="0" :aria-label="`${nameOf(c.m)}: now ${signed(c.now)}, worst case ${signed(c.worst)}`"
               @click="peeked = { m: c.m }" @keydown.enter.space.prevent="peeked = { m: c.m }">
