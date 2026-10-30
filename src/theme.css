@@ -3284,13 +3284,13 @@ fieldset {
 
     /* the shortcuts box's spot, kept clear at the top of the sheet so my name starts
        right at the top beside it, or drops under it when there isn't room. it's the
-       box's 338 by 66, which starts 14px above and right of the text, plus a gap */
+       box's 274 by 66, which starts 14px above and right of the text, plus a gap */
     .about-copy::before {
       content: '';
       float: right;
-      width: 338px;
+      width: 274px;
       height: 60px;
-      margin: 0 -14px 0 10px;
+      margin: 0 -14px 0 14px;
     }
 
     /* the shortcuts box pinned in the sheet's top right corner, 8px in from its
