@@ -93,6 +93,14 @@ function updateHeroEnds() {
   heroAtStart.value = row.scrollLeft < 2;
   heroAtEnd.value = row.scrollLeft > row.scrollWidth - row.clientWidth - 2;
   heroCurrent.value = nearestStop(row.scrollLeft);
+  // a card grows as it's scrolled toward the middle, full size there and a little
+  // smaller once it's a whole card away, so the one being looked at stands out
+  const stops = heroStops.value;
+  const spacing = stops[1] - stops[0] || row.clientWidth;
+  [...row.children].forEach((card, i) => {
+    const away = Math.min(1, Math.abs((stops[i] ?? 0) - row.scrollLeft) / spacing);
+    card.style.setProperty('--hero-scale', 1 - 0.08 * away);
+  });
 }
 // scrolling fires faster than the screen draws, so the dots catch up once a frame
 let heroScrollFrame = 0;

@@ -2079,10 +2079,12 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   overflow: hidden;
   scroll-snap-align: center;
   background: var(--surface);
+  /* how near the middle it's scrolled (set from the script) */
+  scale: var(--hero-scale, 1);
   transition: translate .15s;
   /* each card is its own layer, so the row slides them along without redrawing the
      zoomed figures inside every frame */
-  will-change: translate;
+  will-change: translate, scale;
 }
 .hero-card:hover { translate: 0 -3px; }
 .hero-card:has(.hero-card-open:focus-visible) { outline: 2px dotted var(--ink); outline-offset: 2px; }
@@ -2149,7 +2151,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 .hero-card:hover .hero-view,
 .hero-card:has(.hero-card-open:focus-visible) .hero-view { opacity: 1; translate: 0 0; }
-@media (prefers-reduced-motion: reduce) { .hero-view { transition: none; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .hero-view, .hero-card { transition: none; } .hero-view { translate: 0 0; } }
 /* beats the figures' own scoped margins */
 .hero-figure .hero-figure-scale > figure { margin: 0; }
 .hero-figure-scale figcaption { display: none; }
