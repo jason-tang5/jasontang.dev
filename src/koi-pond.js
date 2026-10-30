@@ -8,9 +8,9 @@
 // the swimming, feeding and ripples are plain functions on a plain object (createPond,
 // stepPond, feedPond) so they can be tested in node. createKoiPond draws them.
 
-const SPACING = 6; // px between the spine points the body is drawn along
-const SPINE = 77; // spine points, so a koi is about SPACING * SPINE = 462px long
-const BODY = 51; // of those, the ones under the body. the rest carry the tail fin, half as long
+export const SPACING = 6; // px between the spine points the body is drawn along
+export const SPINE = 77; // spine points, so a koi is about SPACING * SPINE = 462px long
+export const BODY = 51; // of those, the ones under the body. the rest carry the tail fin, half as long
 const SEE_FOOD = 640; // px a koi notices pellets from
 const BITE = 18; // px from the mouth close enough to eat
 const PELLET_LIFE = 14; // seconds before an uneaten pellet sinks out of sight
@@ -95,6 +95,39 @@ export function feedPond(pond, x, y, count = 4) {
 // a pellet hitting the water sends out a little ripple of its own
 const land = (pond, f) => pond.ripples.push({ x: f.x, y: f.y, age: 0, size: 0.7 });
 
+// turns a koi toward the angle it wants and swims it on for dt seconds. a koi gets
+// excited quickly when it's rushing (after food) and calms down slowly after. excited
+// koi turn harder and beat their tails faster and wider, surging forward on each
+// stroke. near (0 to 1) is how close it is to what it's after: it slows down and turns
+// tighter as it closes in. returns how fast it's going. the figures' koi swim with
+// this too (figure-koi.js)
+export function swimKoi(k, want, dt, { rushing = false, near = 0 } = {}) {
+  k.excite = clamp(k.excite + (rushing ? dt * 2.5 : -dt * 0.5), 0, 1);
+  const stroke = 1 + 0.5 * k.excite * Math.max(0, Math.sin(k.phase));
+  const speed = k.speed * (1 + 2.4 * k.excite) * stroke * (1 - 0.6 * near);
+  // away from food, never tighter than a circle about 40% of its length across, so
+  // even an excited koi swings round in a wide arc instead of folding back on itself
+  const turnRate = Math.min(0.7 + 1.8 * k.excite, speed / (90 * k.size * (1 - 0.8 * near)));
+  k.heading += clamp(turnTo(k.heading, want), -turnRate * dt, turnRate * dt);
+  k.x += Math.cos(k.heading) * speed * dt;
+  k.y += Math.sin(k.heading) * speed * dt;
+  k.phase += dt * (3.5 + 6.5 * k.excite);
+
+  // the head drops a spine point every SPACING px it swims, so the body follows the
+  // path the head took and keeps its length
+  const spacing = SPACING * k.size;
+  const lead = k.spine[0];
+  const gone = Math.hypot(k.x - lead.x, k.y - lead.y);
+  if (gone >= spacing) {
+    const steps = Math.floor(gone / spacing);
+    for (let n = 1; n <= steps; n++) {
+      k.spine.unshift({ x: lead.x + (k.x - lead.x) / gone * spacing * n, y: lead.y + (k.y - lead.y) / gone * spacing * n });
+    }
+    k.spine.length = SPINE;
+  }
+  return speed;
+}
+
 // moves everything on by dt seconds
 export function stepPond(pond, dt) {
   pond.time += dt;
@@ -160,35 +193,9 @@ export function stepPond(pond, dt) {
       want = Math.atan2(Math.sin(want) * (1 - push) + awayY * push, Math.cos(want) * (1 - push) + awayX * push);
     }
 
-    // a koi gets excited quickly when it spots food and calms down slowly after.
-    // excited koi turn harder and beat their tails faster and wider, surging
-    // forward on each stroke
-    k.excite = clamp(k.excite + (target ? dt * 2.5 : -dt * 0.5), 0, 1);
-    const stroke = 1 + 0.5 * k.excite * Math.max(0, Math.sin(k.phase));
     // closing in on a pellet it slows down and turns tighter, nibbling its way between
     // the scattered food instead of looping wide round each one
-    const near = target ? clamp(1 - best / 150, 0, 1) : 0;
-    const speed = k.speed * (1 + 2.4 * k.excite) * stroke * (1 - 0.6 * near);
-    // away from food, never tighter than a circle about 40% of its length across, so
-    // even an excited koi swings round in a wide arc instead of folding back on itself
-    const turnRate = Math.min(0.7 + 1.8 * k.excite, speed / (90 * k.size * (1 - 0.8 * near)));
-    k.heading += clamp(turnTo(k.heading, want), -turnRate * dt, turnRate * dt);
-    k.x += Math.cos(k.heading) * speed * dt;
-    k.y += Math.sin(k.heading) * speed * dt;
-    k.phase += dt * (3.5 + 6.5 * k.excite);
-
-    // the head drops a spine point every SPACING px it swims, so the body follows the
-    // path the head took and keeps its length
-    const spacing = SPACING * k.size;
-    const lead = k.spine[0];
-    const gone = Math.hypot(k.x - lead.x, k.y - lead.y);
-    if (gone >= spacing) {
-      const steps = Math.floor(gone / spacing);
-      for (let n = 1; n <= steps; n++) {
-        k.spine.unshift({ x: lead.x + (k.x - lead.x) / gone * spacing * n, y: lead.y + (k.y - lead.y) / gone * spacing * n });
-      }
-      k.spine.length = SPINE;
-    }
+    const speed = swimKoi(k, want, dt, { rushing: Boolean(target), near: target ? clamp(1 - best / 150, 0, 1) : 0 });
 
     // Surface disturbances, staggered independently for each koi. A koi rushing
     // for food churns the water far more often, and a little harder.
@@ -255,7 +262,7 @@ export function halfWidth(t) {
   return 0.12;
 }
 
-function swimmingSpine(k) {
+export function swimmingSpine(k) {
     // Interpolate between stored path samples every display frame, rather than
     // holding the body still until the head crosses the next six-pixel sample.
     const fraction = clamp(Math.hypot(k.x - k.spine[0].x, k.y - k.spine[0].y) / (SPACING * k.size), 0, 1);
@@ -280,7 +287,7 @@ function swimmingSpine(k) {
 
 }
 
-const palettes = {
+export const palettes = {
   dark: {
     water: '#1c1b19',
     body: '#88837d',
@@ -354,44 +361,13 @@ const mix = (a, b, t) => {
   return `#${[ch(16), ch(8), ch(0)].map(c => c.toString(16).padStart(2, '0')).join('')}`;
 };
 
-// draws the pond on a canvas and runs it. returns { feed, touch, setDark, destroy }.
-// touch(x, y) adds to the mouse trail, a line of bright spots that shrink over a second
-// like the sunset wallpaper's.
-// veils, if given, returns boxes ({ x, y, width, height } on the canvas) to dim the
-// squares under, so the desktop icons and their labels can be read over the fish.
-// a hollow box (a window, which hides the pond under it anyway) only washes the
-// squares around its edge. look 'msn' swaps in the fishbowl's msn colours, and count and
-// scale, if given, set how many koi there are and how big
-export function createKoiPond(canvas, { dark = false, veils = () => [], look = '', count, scale = 1 } = {}) {
-  const ctx = canvas.getContext('2d');
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const CELL = 11; // px per grid square
-  const paletteFor = isDark => palettes[look ? `${look}${isDark ? 'Dark' : 'Light'}` : isDark ? 'dark' : 'light'];
-  let palette = paletteFor(dark);
-  let width = 0;
-  let height = 0;
-  let pond = null;
-  let frame = 0;
-  let last = 0;
-  const trail = [];
-  const TRAIL_LIFE = 1000;
-
-  function resize() {
-    const rect = canvas.getBoundingClientRect();
-    const ratio = devicePixelRatio || 1;
-    width = Math.max(1, Math.round(rect.width));
-    height = Math.max(1, Math.round(rect.height));
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (!pond) pond = createPond({ width, height, scale, count: count ?? clamp(Math.round(width * height / 260000) + 3, 6, 10) });
-    else resizePond(pond, width, height);
-  }
-
+// draws koi as a grid of shaded squares with letters in them, CELL px a square. the
+// pond uses it, and so do the fishbowl writeup's figures, which have its koi swimming
+// in them (figure-koi.js)
+export function koiPainter(ctx, CELL) {
+  let palette, width, height, opacity = 1;
   function cell(col, row, fill, glyph, ink, alpha = 1) {
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * opacity;
     if (fill) {
       ctx.fillStyle = fill;
       ctx.fillRect(col * CELL + 1, row * CELL + 1, CELL - 2, CELL - 2);
@@ -431,7 +407,12 @@ export function createKoiPond(canvas, { dark = false, veils = () => [], look = '
     return { t: at, side: side * distance, distance };
   }
 
-  function drawKoi(k) {
+  // k's palette, the canvas's size in px, and how see-through the whole koi is
+  function drawKoi(k, colours, w, h, alpha = 1) {
+    palette = colours;
+    width = w;
+    height = h;
+    opacity = alpha;
     const WIDEST = 60 * k.size;
     const swayed = swimmingSpine(k);
 
@@ -549,14 +530,56 @@ export function createKoiPond(canvas, { dark = false, veils = () => [], look = '
           head.y + fy * CELL * (0.6 + n * 0.7) + sy * s * (WIDEST * 0.35 + n * CELL * (0.5 + wiggle)), lean, palette.line, 0.35);
       }
     }
+    opacity = 1;
   }
+
+  return { cell, mark, drawKoi };
+}
+
+// draws the pond on a canvas and runs it. returns { feed, touch, setDark, destroy }.
+// touch(x, y) adds to the mouse trail, a line of bright spots that shrink over a second
+// like the sunset wallpaper's.
+// veils, if given, returns boxes ({ x, y, width, height } on the canvas) to dim the
+// squares under, so the desktop icons and their labels can be read over the fish.
+// a hollow box (a window, which hides the pond under it anyway) only washes the
+// squares around its edge. look 'msn' swaps in the fishbowl's msn colours, and count and
+// scale, if given, set how many koi there are and how big
+export function createKoiPond(canvas, { dark = false, veils = () => [], look = '', count, scale = 1 } = {}) {
+  const ctx = canvas.getContext('2d');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const CELL = 11; // px per grid square
+  const paletteFor = isDark => palettes[look ? `${look}${isDark ? 'Dark' : 'Light'}` : isDark ? 'dark' : 'light'];
+  let palette = paletteFor(dark);
+  let width = 0;
+  let height = 0;
+  let pond = null;
+  let frame = 0;
+  let last = 0;
+  const trail = [];
+  const TRAIL_LIFE = 1000;
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = devicePixelRatio || 1;
+    width = Math.max(1, Math.round(rect.width));
+    height = Math.max(1, Math.round(rect.height));
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (!pond) pond = createPond({ width, height, scale, count: count ?? clamp(Math.round(width * height / 260000) + 3, 6, 10) });
+    else resizePond(pond, width, height);
+  }
+
+  const { mark, drawKoi } = koiPainter(ctx, CELL);
 
   function draw() {
     ctx.globalAlpha = 1;
     ctx.fillStyle = palette.water;
     ctx.fillRect(0, 0, width, height);
 
-    for (const k of pond.koi) drawKoi(k);
+    for (const k of pond.koi) drawKoi(k, palette, width, height);
 
     // each pellet is a little o floating on top of the fish, snapped to the grid. one
     // still falling drops in from above, speeding up as it goes
