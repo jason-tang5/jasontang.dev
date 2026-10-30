@@ -43,17 +43,15 @@ export const apps = [
 // the apps that live inside the games and fun stuff folders instead of on the desktop
 export const folders = {
   games: ['contact', 'minesweeper', 'snake', 'reversi', '2048', 'digits'],
-  funstuff: ['pictures', 'stickies', 'music', 'terminal'],
+  funstuff: ['blog', 'pictures', 'stickies', 'music', 'terminal'],
 };
 const tucked = ['settings', 'mail', 'computer', ...Object.values(folders).flat()];
-// contact's breakout is in games and the terminal is in fun stuff, but both stay in the start menu
-const menuToo = ['contact', 'terminal'];
 // all apps holds everything, including what's inside the other folders
 folders.computer = apps.map(a => a.id).filter(id => id !== 'computer');
 
 for (const a of apps) {
-  a.desktop = !tucked.includes(a.id) && a.id !== 'blog'; // gets a desktop icon. the blog is only in the start menu and all apps
-  a.menu = !tucked.includes(a.id) || menuToo.includes(a.id); // shows up in the start menu
+  a.desktop = !tucked.includes(a.id); // gets a desktop icon
+  a.menu = !tucked.includes(a.id); // shows up in the start menu
   a.fixedSize = false;
   a.locked = a.id === 'mail'; // can't be opened until something unlocks it
   a.sheet = a.id in folders; // on a phone, opens partway up the screen instead of filling it
