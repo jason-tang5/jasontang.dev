@@ -258,8 +258,8 @@ const tiles = computed(() => {
 /* fig 1: the desktop shrunk into a 16:10 screen, sized off the figure's width */
 .pf-mini { display: flex; flex-direction: column; aspect-ratio: 16 / 10; overflow: hidden; background: var(--desktop, #008080); user-select: none; }
 .pf-mini-desk { position: relative; flex: 1; isolation: isolate; }
-/* the sunset sits over the teal at .88, the way it does on the real desktop */
-.pf-mini-wall { position: absolute; inset: 0; z-index: -1; opacity: .88; pointer-events: none; }
+/* the sunset sits over the teal at .88 in the theme's colouring, the way it does on the real desktop */
+.pf-mini-wall { position: absolute; inset: 0; z-index: -1; opacity: .88; pointer-events: none; filter: var(--sunset-filter); }
 .pf-mini-icon {
   position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 10%; padding: 2px 0; border: 0; background: none;
   font: max(7px, 1.6cqw)/1.1 'Pixel MS Sans Serif', Tahoma, sans-serif; color: #fff; text-shadow: 1px 1px 0 #000; cursor: var(--classic-pointer, pointer);

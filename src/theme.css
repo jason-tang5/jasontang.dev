@@ -576,6 +576,10 @@ body:has(.about-app.over-balloon) .hammer-cursor {
   opacity: .88;
 }
 
+/* the sunset plays as it is at night. by day it's a touch brighter and hazier */
+:root { --sunset-filter: brightness(1.5) contrast(.85) saturate(1.2); }
+:root[data-theme="dark"] { --sunset-filter: none; }
+
 /* the koi pond wallpaper fills the desktop at full strength */
 .koi-pond.desktop-wallpaper {
   display: block;
