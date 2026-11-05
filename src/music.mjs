@@ -78,6 +78,7 @@ export const weebShiTracks = [
   { uri: 'spotify:track:43QChW7cZQdAmWbmamy2mZ', title: 'ひとりごと', duration: 277444 },
   { uri: 'spotify:track:5XLXrm5JVMdOus1fWmTOFw', title: 'Beneath the Mask', duration: 277880 },
   { uri: 'spotify:track:0SKhEuGd5Z3AiH8voxSYyZ', title: 'GATE OF STEINER', duration: 254773 },
+  { uri: 'spotify:track:19XtWJTyMKMfLYUec3FlHx', title: '雲を抜け風下へ私だけ', duration: 238398 },
   { uri: 'spotify:track:6TT1rkkXEDaITj1xSOovbY', title: 'Zoltraak', duration: 141453 },
   { uri: 'spotify:track:5N5iImDfoQ4IF3YvXBpxPX', title: '上', duration: 241080 },
   { uri: 'spotify:track:4cHqWNDNrgCu6PbUZcgUxP', title: '99.9', duration: 188706 },
