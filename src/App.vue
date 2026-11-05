@@ -1345,11 +1345,11 @@ onBeforeUnmount(() => {
 
       <aside v-if="tip" class="first-tip raised" aria-label="Welcome">
         <div class="tip-heading">
-          <strong>{{ visitorNumber && !fromInternmatch ? `Welcome, visitor #${visitorNumber}!` : 'Welcome!' }}</strong>
+          <strong>{{ fromInternmatch ? 'Hi Google!' : visitorNumber ? `Welcome, visitor #${visitorNumber}!` : 'Welcome!' }}</strong>
           <button aria-label="Dismiss welcome message" @click="dismissTip">×</button>
         </div>
         <p v-if="fromInternmatch">
-          {{ internmatchNumber ? `You're visitor #${internmatchNumber}` : 'Thanks for visiting' }} from {{ internmatch }}. Have a look around!
+          {{ internmatchNumber ? `You're visitor #${internmatchNumber}` : 'Thanks for visiting' }} from {{ internmatch }}!
         </p>
         <strong class="tip-subheading">Where to?</strong>
         <ul class="tip-paths">
