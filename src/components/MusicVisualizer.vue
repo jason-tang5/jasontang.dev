@@ -5,9 +5,13 @@ import { read, save } from '../storage.js';
 import { buzz } from '../haptics.js';
 
 const props = defineProps({ playing: Boolean });
+// the fold switch in the header tucks the display away to just that strip. the cd
+// player resizes its window to match when it hears the fold event
+const emit = defineEmits(['fold']);
 const modes = ['bars', 'wave', 'scope'];
 const savedMode = read('cd-display', 'bars');
 const mode = ref(modes.includes(savedMode) ? savedMode : 'bars');
+const folded = ref(read('cd-display-folded', 'no') === 'yes');
 const canvas = ref(null);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const levels = new Float32Array(20);
@@ -26,6 +30,17 @@ function choose(value) {
   save('cd-display', value);
   buzz(8);
   render(performance.now());
+}
+function toggleFold() {
+  folded.value = !folded.value;
+  save('cd-display-folded', folded.value ? 'yes' : 'no');
+  buzz(8);
+  emit('fold', folded.value);
+  if (folded.value) stop();
+  else {
+    wake = performance.now();
+    start();
+  }
 }
 function ripple(event) {
   const rect = canvas.value.getBoundingClientRect();
@@ -110,7 +125,7 @@ function loop(now) {
   if (!reducedMotion.matches && (props.playing || energy > 0.005 || ripples.length)) start();
 }
 function start() {
-  if (!frame && visible && !document.hidden) frame = requestAnimationFrame(loop);
+  if (!frame && !folded.value && visible && !document.hidden) frame = requestAnimationFrame(loop);
 }
 function stop() { cancelAnimationFrame(frame); frame = 0; }
 function resize() {
@@ -135,6 +150,7 @@ onMounted(() => {
   reducedMotion.addEventListener('change', motionChange);
   resize();
   start();
+  if (folded.value) emit('fold', true);
 });
 onBeforeUnmount(() => {
   stop();
@@ -147,13 +163,14 @@ onBeforeUnmount(() => {
 
 <template>
   <!-- the slot takes whatever height is left, so the panel inside can snap down to its header -->
-  <div class="cd-visualizer-slot">
+  <div class="cd-visualizer-slot" :class="{ folded }">
   <section class="cd-visualizer raised" aria-label="TANGO stereo display">
     <div class="cd-visualizer-heading">
       <span class="cd-visualizer-screw" aria-hidden="true"/>
       <!-- the same red maker's badge as the contact cabinet and the snake handheld -->
       <strong><span class="arcade-badge cd-visualizer-badge">TANGO</span> <span class="cd-visualizer-model">STEREO DISPLAY</span></strong>
       <span class="cd-visualizer-state"><i :class="{ on: playing }" aria-hidden="true"/>{{ playing ? 'PLAY' : 'PAUSED' }}</span>
+      <button class="cd-visualizer-fold" :aria-expanded="!folded" :aria-label="folded ? 'Show stereo display' : 'Hide stereo display'" @click="toggleFold"><i :class="{ on: !folded }" aria-hidden="true"/>{{ folded ? 'SHOW' : 'HIDE' }}</button>
       <span class="cd-visualizer-screw" aria-hidden="true"/>
     </div>
     <button class="cd-visualizer-screen inset" aria-label="Send a ripple through the visualizer" @click="ripple">

@@ -7,3 +7,7 @@ export const cdCue = ref(null);
 export function cueTrack(slug) {
   cdCue.value = { slug };
 }
+
+// the title of the song the cd player is playing right now, or null when it's paused,
+// ejected or closed. Music.vue keeps it up to date, the about page's quote watches it
+export const cdPlaying = ref(null);

@@ -2,9 +2,9 @@
 // the cd player. it drives spotify's embed through their iframe api, which only
 // loads the first time you press play. while it plays, little pixel notes float
 // up off the disc.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { defaultDisc, findTrack, musicDiscs } from '../music.mjs';
-import { cdCue } from '../cd-cue.js';
+import { cdCue, cdPlaying } from '../cd-cue.js';
 import { loadSpotifyApi } from '../spotify.js';
 import { createPlaybackEndTracker } from '../playback-end.mjs';
 import { noteGlyphs, noteColors } from '../notes.mjs';
@@ -14,7 +14,34 @@ import { play } from '../sound.js';
 import { buzz } from '../haptics.js';
 import { read, save } from '../storage.js';
 
-defineProps({ win: Object });
+const props = defineProps({ win: Object });
+const cdApp = ref(null);
+
+// the stereo display folding away takes its space with it: the window shrinks by
+// whatever's left empty under the header strip, and grows back by that much when it
+// opens again, even after a reload. a maximized window or a phone keeps its size
+let foldedBy = Number(read('cd-display-folded-by', '0')) || 0;
+function fitDisplay(folded) {
+  const w = props.win;
+  if (!w || w.maximized || matchMedia('(max-width: 700px)').matches) return;
+  nextTick(() => {
+    const root = cdApp.value;
+    const slot = root?.querySelector('.cd-visualizer-slot');
+    if (!slot) return;
+    if (folded) {
+      const spare = Math.floor(root.getBoundingClientRect().bottom - slot.getBoundingClientRect().bottom);
+      const height = Math.max(w.minHeight || 0, w.height - Math.max(0, spare));
+      foldedBy += w.height - height;
+      w.height = height;
+      save('cd-display-folded-by', String(foldedBy));
+    } else {
+      const room = (document.querySelector('.desktop')?.clientHeight || innerHeight) - w.y;
+      w.height = Math.min(room, w.height + (foldedBy || 160));
+      foldedBy = 0;
+      save('cd-display-folded-by', '0');
+    }
+  });
+}
 
 const selected = ref(0);
 const position = ref(0);
@@ -317,6 +344,8 @@ function playCue() {
   else initialize();
 }
 watch(cdCue, playCue);
+// tell the rest of the site what's playing, for the about page's quote
+watch(() => (!paused.value && !discEjected.value ? current.value.title : null), title => { cdPlaying.value = title; }, { immediate: true });
 
 onMounted(() => {
   window.addEventListener('site-sound', siteSound);
@@ -331,11 +360,12 @@ onBeforeUnmount(() => {
   clearTimeout(startupTimer);
   clearInterval(noteTimer);
   controller?.destroy();
+  cdPlaying.value = null;
 });
 </script>
 
 <template>
-  <div class="app-layout cd-app">
+  <div ref="cdApp" class="app-layout cd-app">
     <div class="cd-face">
       <button class="cd-disc-slot" :class="{ ejected: discEjected, clicked: discClicked, playing: !paused && !discEjected }"
         :aria-label="discEjected ? 'Insert CD' : 'Eject CD'" :aria-pressed="discEjected" :disabled="discEjected && !discs[browsing].uri" @click="toggleDisc">
@@ -445,7 +475,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- a strip under the player on desktop, the rest of the screen on phones -->
-    <MusicVisualizer :playing="!paused"/>
+    <MusicVisualizer :playing="!paused" @fold="fitDisplay"/>
 
     <span class="sr-only" role="status">{{ message }} {{ current.title }}. {{ paused ? 'Paused' : 'Playing' }}. </span>
   </div>

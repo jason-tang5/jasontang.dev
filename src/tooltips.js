@@ -1,6 +1,8 @@
 // win95 style tooltips in place of the browser's own. any title="" on the page is
 // moved to data-tip as soon as it appears (so the native one never shows), and
-// hovering it for a moment shows a small pixel box by the pointer instead.
+// hovering it for a moment shows a small pixel box by the pointer instead. an element
+// with data-tip-bomb shows just a bomb in its box that goes off as it opens, and keeps
+// its text for screen readers
 const delay = 500;
 let box;
 let target = null;
@@ -41,6 +43,13 @@ function place() {
 function show() {
   if (!target?.isConnected || !target.dataset.tip) return;
   box.textContent = target.dataset.tip;
+  // fresh each time, so the bomb goes off again on every hover
+  if ('tipBomb' in target.dataset) {
+    const bomb = document.createElement('span');
+    bomb.className = 'pixel-tip-bomb';
+    bomb.innerHTML = '<i>💣</i><i>💥</i>';
+    box.replaceChildren(bomb);
+  }
   box.hidden = false;
   place();
 }

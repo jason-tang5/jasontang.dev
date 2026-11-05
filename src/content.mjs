@@ -21,12 +21,16 @@ export const profile = {
     // best lifts in lb, each weight in the pixel font after the lift's name
     { label: 'Lifts (lb)', lifts: [['clean', '265'], ['squat', '405'], ['bench', '265'], ['pull-up', '+100']] },
     { label: 'Peak league rank', text: '**grandmaster** 528 LP (tft **master**)' },
-    // opens the cd player on JANE DOE, from the chainsaw man movie
-    { label: 'Favorite manga', text: '[Chainsaw Man](/#app=music&track=jane-doe)', books: true },
+    // opens the cd player on JANE DOE, from the chainsaw man movie. its tooltip is just a
+    // bomb that blows up, for reze. the tip text is only for screen readers
+    { label: 'Favorite manga', text: '[Chainsaw Man](/#app=music&track=jane-doe)', books: true, tip: 'Play JANE DOE', bomb: true },
   ],
   // from haikyuu, over the liftlens figure at the bottom of the about page. one line
   // when it fits, otherwise it breaks between the two halves
   quote: ['talent is something you make bloom,', 'instinct is something you polish'],
+  // the haikyuu song from yuki hayashi's soundtrack on the weeb shi disc. clicking the
+  // quote plays it, and its cursor turns into a note while it's playing
+  quoteTrack: '上',
   education: 'BASc, Computer Engineering · September 2023 – May 2028',
   skills: ['Python', 'TypeScript', 'JavaScript', 'Rust', 'C++', 'Ruby', 'SQL', 'Vue.js', 'Node.js', 'PostgreSQL', 'CUDA', 'Verilog'],
 };

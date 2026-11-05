@@ -1,8 +1,10 @@
 <script setup>
 // picks what goes inside each window based on its type. the small apps live
 // right here, the bigger ones have their own components.
-import { defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { profile, projects } from '../content.mjs';
+import { trackSlug } from '../music.mjs';
+import { cdPlaying } from '../cd-cue.js';
 import { folders, registry } from '../registry.js';
 import { isUnlocked } from '../unlocks.js';
 import AsciiImage from './AsciiImage.vue';
@@ -280,12 +282,15 @@ const places = [
     title: 'Other places',
     items: [
       { id: 'analytics', path: 'Portfolio:\\Analytics' },
+      { id: 'music', path: 'Portfolio:\\Fun Stuff\\Music' },
       { id: 'funstuff', path: 'Portfolio:\\Fun Stuff' },
       { id: 'games', path: 'Portfolio:\\Games' },
     ],
   },
 ];
 const hoveredPlace = ref(null);
+// the quote's song is on in the cd player
+const quotePlaying = computed(() => cdPlaying.value === profile.quoteTrack);
 
 const resumeUrl =`${import.meta.env.BASE_URL}assets/Jason_Tang_Resume.pdf`;
 const portraitUrl = new URL('../../assets/profile.jpg', import.meta.url).href;
@@ -556,7 +561,7 @@ function balloonDone(event, id) {
               <!-- what i'm building right now, the 105 kg clean from the liftlens writeup -->
               <LiftLensFigures figure="angles" compact>
                 <template #caption>
-                  <span class="about-quote"><span>{{ profile.quote[0] }}</span> <span>{{ profile.quote[1] }}<span class="typed-cursor" aria-hidden="true">_</span></span></span>
+                  <a class="about-quote" :class="{ playing: quotePlaying }" :href="`/#app=music&track=${trackSlug(profile.quoteTrack)}`" :title="`Play ${profile.quoteTrack}`"><span>{{ profile.quote[0] }}</span> <span>{{ profile.quote[1] }}<span class="typed-cursor" aria-hidden="true">{{ quotePlaying ? '♪' : '_' }}</span></span></a>
                   <a href="#app=liftlens"><strong>LiftLens</strong></a> 105kg @ 1.5m/s
                 </template>
               </LiftLensFigures>

@@ -2603,13 +2603,34 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 }
 
 /* the haikyuu quote as the liftlens figure's header, with the same blinking underscore
-   as the typed line under my name. always two lines, one half of it each */
+   as the typed line under my name. always two lines, one half of it each. it's a quiet
+   link to its song: plain text until you hover it, and while the song plays the cursor
+   is a note that bobs instead of blinking */
 .about-quote {
   display: block;
   margin: 10px 0 28px;
   font-size: 13px;
   line-height: 1.7;
   color: var(--ink);
+  text-decoration: none;
+}
+
+.about-quote:hover > span {
+  text-decoration: underline dotted;
+}
+
+.about-quote.playing .typed-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  animation: quote-note 0.6s steps(2) infinite alternate;
+}
+
+@keyframes quote-note {
+  to { transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-quote.playing .typed-cursor { animation: none; }
 }
 
 .about-quote > span {
@@ -6160,6 +6181,16 @@ label.mail-label {
 .cd-visualizer-state { display: flex; align-items: center; gap: 4px; font-size: 8px; }
 .cd-visualizer-state i { width: 5px; height: 5px; background: #405247; box-shadow: inset 1px 1px #17261c; }
 .cd-visualizer-state i.on { background: #83e5ac; box-shadow: 0 0 4px #83e5ac66; }
+/* the fold switch looks like the play light beside it: a square led and a word, lit
+   while the display is out. it's a button, but without a bevel */
+.cd-visualizer-fold { display: flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink); font: 8px 'Pixel MS Sans Serif', Tahoma, sans-serif; cursor: pointer; }
+.cd-visualizer-fold:focus-visible { outline: 1px dotted var(--ink); outline-offset: 2px; }
+.cd-visualizer-fold i { width: 5px; height: 5px; background: #52302c; box-shadow: inset 1px 1px #261512; }
+.cd-visualizer-fold i.on { background: #ff6b57; box-shadow: 0 0 4px #ff6b5766; }
+/* folded, the panel is just its header strip and the slot only as tall as that */
+.cd-visualizer-slot.folded { flex: 0 0 auto; min-height: 0; container-type: normal; }
+.cd-visualizer-slot.folded .cd-visualizer { height: auto; }
+.cd-visualizer-slot.folded :is(.cd-visualizer-screen, .cd-visualizer-controls) { display: none; }
 .cd-visualizer-screen { position: relative; display: block; flex: 1; min-height: 0; width: 100%; padding: 2px; background: #090e10; overflow: hidden; }
 .cd-visualizer-screen:focus-visible { outline: 1px dotted var(--ink); outline-offset: 2px; }
 .cd-visualizer-hint { position: absolute; bottom: 5px; right: 6px; color: #8caba0; background: #090e10cc; padding: 1px 4px; font: bold 9px 'Courier New', monospace; letter-spacing: 1px; pointer-events: none; }
@@ -6983,6 +7014,48 @@ label.mail-label {
 
 .pixel-tip[hidden] {
   display: none;
+}
+
+/* the bomb in chainsaw man's tooltip: it shakes on its fuse, then blows up into an
+   explosion that stays lit. both sit in one fixed slot so the box never changes size */
+.pixel-tip-bomb {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 1em;
+  vertical-align: -1px;
+}
+
+.pixel-tip-bomb i {
+  position: absolute;
+  inset: 0;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.pixel-tip-bomb i:first-child { animation: tip-bomb-fuse 0.7s steps(7) forwards; }
+.pixel-tip-bomb i:last-child { opacity: 0; animation: tip-bomb-blast 0.45s 0.7s steps(5) forwards; }
+
+@keyframes tip-bomb-fuse {
+  20% { transform: rotate(-14deg); }
+  40% { transform: rotate(14deg); }
+  60% { transform: rotate(-14deg); }
+  80% { transform: rotate(14deg) scale(1.15); }
+  99% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes tip-bomb-blast {
+  0% { opacity: 1; transform: scale(0.6); }
+  50% { opacity: 1; transform: scale(1.5); }
+  100% { opacity: 1; transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-tip-bomb i:first-child { animation: none; opacity: 0; }
+  .pixel-tip-bomb i:last-child { animation: none; opacity: 1; }
 }
 
 :root[data-theme="dark"] {

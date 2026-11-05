@@ -2,7 +2,8 @@
 // the about page's quick facts: a label column and the fact beside it, with each
 // scholarship on its own line next to a little ribbon medal, and the
 // favourite books as pixel font links, each with a tiny book in front, and the lifts
-// with their weights in the pixel font
+// with their weights in the pixel font. a fact with a tip gets a tooltip, and with
+// bomb set that tooltip blows one up (tooltips.js)
 import InlineText from './InlineText.vue';
 
 defineProps({ facts: { type: Array, required: true } });
@@ -16,6 +17,7 @@ defineProps({ facts: { type: Array, required: true } });
         <span v-if="fact.lifts" class="fact-lifts">
           <span v-for="[lift, weight] in fact.lifts" :key="lift">{{ lift }} <b>{{ weight }}</b></span>
         </span>
+        <span v-else-if="fact.tip" :title="fact.tip" :data-tip-bomb="fact.bomb ? '' : undefined"><InlineText :text="fact.text"/></span>
         <InlineText v-else-if="fact.text" :text="fact.text"/>
         <span v-for="award in fact.awards" :key="award" class="fact-award">
           <svg viewBox="0 0 9 12" aria-hidden="true" shape-rendering="crispEdges">
