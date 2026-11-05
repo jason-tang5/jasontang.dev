@@ -119,6 +119,7 @@ const daily = computed(() => {
 const peak = computed(() => Math.max(1, ...daily.value.map(row => row.visits)));
 const sections = computed(() => data.value ? [
   // the last number is the section's bar color, --bar-1 to --bar-7 below
+  ['Sources', data.value.referrers, 1],
   ['Windows opened', data.value.windows, 3],
   ['Breakout funnel', data.value.funnel, 7], ['Mail errors', data.value.mail.errors, 2],
 ] : []);

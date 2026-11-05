@@ -90,3 +90,11 @@ test('chat messages and clippy tokens are summarized, but the page cannot send t
   assert.equal(s.tokensBurnt, 310);
   assert.equal(validateEvent({ visit: 'abcdefgh12', name: 'clippy-tokens', value: 1e6 }), null);
 });
+test('sources fold www, link wrappers and t.co into one name each', () => {
+  const visit = (referrer, count) => ({ name: 'visit', count, total: 0, device: 'desktop', referrer });
+  const result = summarize([visit('www.google.com', 2), visit('google.com', 1), visit('l.instagram.com', 4), visit('t.co', 1), visit('resume', 1), visit('', 5)]);
+  assert.deepEqual(result.referrers, [
+    { label: 'direct', count: 5 }, { label: 'instagram.com', count: 4 }, { label: 'google.com', count: 3 },
+    { label: 'x.com', count: 1 }, { label: 'resume', count: 1 },
+  ]);
+});

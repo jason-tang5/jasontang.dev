@@ -40,6 +40,14 @@ export const eventNames = [
 //   chat-message    a visitor's message in the fishbowl
 //   clippy-tokens   one of clippy's workers ai replies. value is the tokens it took
 
+// a visit's source, shortened so the same site counts once: www.google.com and
+// google.com are both google.com, and the link wrappers instagram and facebook use
+// (l.instagram.com, lm.facebook.com) count as the site itself. t.co is x's
+export function sourceName(source = '') {
+  const name = String(source).toLowerCase().replace(/^(www|m|l|lm)\./, '');
+  return name === 't.co' ? 'x.com' : name;
+}
+
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
   status,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
@@ -132,6 +140,17 @@ function foldStickies(opens) {
   return folded;
 }
 
+// visits with no referrer and no ?ref= are direct: typed in, bookmarked, or opened
+// from an app that doesn't say where it came from
+function foldSources(referrers) {
+  const folded = new Map();
+  for (const [label, count] of referrers) {
+    const key = sourceName(label) || 'direct';
+    folded.set(key, (folded.get(key) || 0) + count);
+  }
+  return folded;
+}
+
 const sortedEntries = map => [...map].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
 
 // turns the raw rows into what the analytics window and the report show
@@ -170,7 +189,7 @@ export function summarize(rows, daily = []) {
     windows: sortedEntries(foldStickies(opens)),
     blogPosts: sortedEntries(by('blog-post', 'detail')),
     devices: sortedEntries(by('visit', 'device')),
-    referrers: sortedEntries(by('visit', 'referrer')).map(({ label, count: c }) => ({ label: label || 'direct', count: c })),
+    referrers: sortedEntries(foldSources(by('visit', 'referrer'))),
     // each step is counted once per visit on the site, so they're visitors
     funnel: [
       { label: 'Visited the site', count: visitors },

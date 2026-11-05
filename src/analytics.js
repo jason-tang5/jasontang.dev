@@ -5,6 +5,7 @@
 // worker/analytics.mjs, which lists every event name.
 
 import { localAnalytics } from './local-analytics.js';
+import { sourceName } from '../worker/analytics.mjs';
 // only the real site counts, so local testing doesn't show up in the numbers
 const live = location.hostname === 'jasontang.dev';
 
@@ -21,13 +22,17 @@ function send(event) {
 function start() {
   if (visit) return;
   visit = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join('');
-  let referrer = '';
-  try {
+  // a link can name its own source (jasontang.dev/?ref=resume), which wins over the
+  // referrer since most apps don't send one. otherwise it's the referring site
+  const query = new URLSearchParams(location.search);
+  let referrer = (query.get('ref') || query.get('utm_source') || '').toLowerCase().replace(/[^a-z0-9.-]/g, '-');
+  if (!referrer) try {
     const host = document.referrer && new URL(document.referrer).hostname;
-    if (host && host !== location.hostname) referrer = host.toLowerCase().slice(0, 80);
+    if (host && host !== location.hostname) referrer = host;
   } catch {
     // no referrer
   }
+  referrer = sourceName(referrer).slice(0, 80);
   const entry = new URLSearchParams(location.hash.slice(1)).get('app') || '';
   const event = {
     name: 'visit',
