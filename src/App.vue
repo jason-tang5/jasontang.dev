@@ -948,6 +948,9 @@ const fromInternmatch = (() => {
   return host === internmatch && !read('internmatch-greeted');
 })();
 const internmatchNumber = ref(0);
+// three of the internmatch visits were me testing on 2026-11-05. the analytics only
+// go back 90 days, so they stop being counted after 2027-02-03
+const myInternmatchVisits = Date.now() < Date.parse('2027-02-04') ? 3 : 0;
 if (fromInternmatch) {
   save('internmatch-greeted', 'yes');
   tip.value = true;
@@ -958,7 +961,8 @@ async function countVisitor() {
     if (fromInternmatch) {
       const response = await fetch('/api/analytics?days=90', { cache: 'no-store' });
       const sources = (await response.json()).referrers ?? [];
-      internmatchNumber.value = (sources.find(source => source.label === internmatch)?.count ?? 0) + 1;
+      const count = sources.find(source => source.label === internmatch)?.count ?? 0;
+      internmatchNumber.value = Math.max(0, count - myInternmatchVisits) + 1;
     } else if (tip.value && !visitorNumber.value) {
       const response = await fetch('/api/stats', { cache: 'no-store' });
       const { visitors } = await response.json();
