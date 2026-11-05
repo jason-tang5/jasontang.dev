@@ -17,30 +17,38 @@ import { read, save } from '../storage.js';
 const props = defineProps({ win: Object });
 const cdApp = ref(null);
 
-// the stereo display folding away takes its space with it: the window shrinks by
-// whatever's left empty under the header strip, and grows back by that much when it
-// opens again, even after a reload. a maximized window or a phone keeps its size
-let foldedBy = Number(read('cd-display-folded-by', '0')) || 0;
+// the stereo display folding away takes its space with it. both sizes are worked out
+// fresh each time from the layout, so resizing in between or clicking fast can't drift:
+//   folded  the window fits the player and the strip exactly, and can't be dragged
+//           shorter than that while it stays folded
+//   open    the display gets back the height it had when it folded (or the room a
+//           taller window already has), on top of that fitted height
+// a maximized window or a phone keeps its size and just folds the panel
+const displayHeight = () => Number(read('cd-display-height', '152')) || 152;
 function fitDisplay(folded) {
   const w = props.win;
-  if (!w || w.maximized || matchMedia('(max-width: 700px)').matches) return;
-  nextTick(() => {
-    const root = cdApp.value;
-    const slot = root?.querySelector('.cd-visualizer-slot');
-    if (!slot) return;
-    if (folded) {
-      const spare = Math.floor(root.getBoundingClientRect().bottom - slot.getBoundingClientRect().bottom);
-      const height = Math.max(w.minHeight || 0, w.height - Math.max(0, spare));
-      foldedBy += w.height - height;
-      w.height = height;
-      save('cd-display-folded-by', String(foldedBy));
-    } else {
-      const room = (document.querySelector('.desktop')?.clientHeight || innerHeight) - w.y;
-      w.height = Math.min(room, w.height + (foldedBy || 160));
-      foldedBy = 0;
-      save('cd-display-folded-by', '0');
-    }
-  });
+  const slot = () => cdApp.value?.querySelector('.cd-visualizer-slot');
+  if (!w || w.maximized || matchMedia('(max-width: 700px)').matches || !slot()) return;
+  // the empty space under the slot, below zero when the window is too short for it
+  const spare = () => cdApp.value.getBoundingClientRect().bottom - slot().getBoundingClientRect().bottom;
+  w.baseMinHeight ??= w.minHeight;
+  if (folded) {
+    // still laid out open here: remember how tall the display was, once it's a real size
+    if (slot().offsetHeight > 60) save('cd-display-height', String(slot().offsetHeight));
+    nextTick(() => {
+      if (!slot()) return;
+      const fit = Math.max(w.baseMinHeight || 0, Math.ceil(w.height - spare()));
+      w.height = fit;
+      w.minHeight = fit;
+    });
+  } else {
+    // still laid out folded here, so this is the fitted height
+    const fit = Math.ceil(w.height - spare());
+    const target = Math.max(w.height, fit - slot().offsetHeight + displayHeight());
+    const room = (document.querySelector('.desktop')?.clientHeight || innerHeight) - w.y;
+    w.minHeight = w.baseMinHeight;
+    w.height = Math.max(w.minHeight || 0, Math.min(room, target));
+  }
 }
 
 const selected = ref(0);

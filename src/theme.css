@@ -706,6 +706,7 @@ body:has(.about-app.over-balloon) .hammer-cursor {
 .first-tip p {
   line-height: 1.5;
   margin: 8px 0;
+  overflow-wrap: anywhere;
 }
 
 /* the welcome note's ways in. the links are plain underlined text, like a help file */

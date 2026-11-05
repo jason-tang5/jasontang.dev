@@ -928,8 +928,47 @@ function openStarterNote() {
   win.width = 260;
   win.height = 460;
   win.x = area.width - win.width - 24;
-  win.y = innerWidth > 1100 && tip.value ? 190 : 25;
+  // the internmatch line makes the welcome note taller
+  win.y = innerWidth > 1100 && tip.value ? (fromInternmatch ? 250 : 190) : 25;
   return id;
+}
+
+// the welcome note says which visitor you are, counting every visit the live stats
+// have seen. the number is kept so it stays the same on later loads. someone coming
+// from google's internmatch is counted among visits from there instead (the last 90
+// days of analytics sources), and gets the welcome note back even if they closed it
+// before. a link ending in ?ref=internmatch.googleplex.com counts as coming from there
+// too, under the same source name in analytics. a visit isn't counted until its first
+// click, so you're one past the count
+const internmatch = 'internmatch.googleplex.com';
+const visitorNumber = ref(Number(read('visitor-number')) || 0);
+const fromInternmatch = (() => {
+  let host = new URLSearchParams(location.search).get('ref') || '';
+  if (!host) try { host = new URL(document.referrer).hostname; } catch {}
+  return host === internmatch && !read('internmatch-greeted');
+})();
+const internmatchNumber = ref(0);
+if (fromInternmatch) {
+  save('internmatch-greeted', 'yes');
+  tip.value = true;
+}
+
+async function countVisitor() {
+  try {
+    if (fromInternmatch) {
+      const response = await fetch('/api/analytics?days=90', { cache: 'no-store' });
+      const sources = (await response.json()).referrers ?? [];
+      internmatchNumber.value = (sources.find(source => source.label === internmatch)?.count ?? 0) + 1;
+    } else if (tip.value && !visitorNumber.value) {
+      const response = await fetch('/api/stats', { cache: 'no-store' });
+      const { visitors } = await response.json();
+      if (!Number.isFinite(visitors)) return;
+      visitorNumber.value = visitors + 1;
+      save('visitor-number', String(visitorNumber.value));
+    }
+  } catch {
+    // no number, the note just says welcome
+  }
 }
 
 function dismissTip() {
@@ -1229,6 +1268,7 @@ onMounted(() => {
   window.addEventListener('hashchange', hashOpen);
   window.addEventListener('site-notice', noticeEvent);
   window.addEventListener('site-sound', soundChanged);
+  countVisitor();
 });
 
 onBeforeUnmount(() => {
@@ -1305,9 +1345,12 @@ onBeforeUnmount(() => {
 
       <aside v-if="tip" class="first-tip raised" aria-label="Welcome">
         <div class="tip-heading">
-          <strong>Welcome!</strong>
+          <strong>{{ visitorNumber && !fromInternmatch ? `Welcome, visitor #${visitorNumber}!` : 'Welcome!' }}</strong>
           <button aria-label="Dismiss welcome message" @click="dismissTip">×</button>
         </div>
+        <p v-if="fromInternmatch">
+          {{ internmatchNumber ? `You're visitor #${internmatchNumber}` : 'Thanks for visiting' }} from {{ internmatch }}. Have a look around!
+        </p>
         <strong class="tip-subheading">Where to?</strong>
         <ul class="tip-paths">
           <li>In a hurry? <button class="tip-link" @click="open('resume')">Resume</button> · <button class="tip-link" @click="open('projects')">Projects</button></li>
