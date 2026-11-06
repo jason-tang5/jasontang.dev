@@ -914,7 +914,6 @@ const starterTips = [
   'Drag and resize windows',
   'Right-click for more options',
   'Check out the blog, games, analytics, and the chat room',
-  'Try contacting me :)',
   'This note is editable!',
 ];
 
