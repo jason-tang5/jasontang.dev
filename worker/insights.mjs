@@ -1,54 +1,18 @@
-// the analytics window's insights tab: funnels, journeys and retention, served at
+// the analytics window's insights tab: journeys and retention, served at
 // GET /api/insights?days=30. apart from the main summary so the window only asks for
 // them while the tab is open. nothing new is recorded for these, they're other ways of
 // reading the same events (worker/analytics.mjs):
 //
-//   funnels    a few paths through the site, and how many visits reach each step in
-//              order, so the drop-off between steps shows where people give up
-//   journeys   the windows each visit opened, in order, and the most common paths
+//   journeys   the windows each visit opened, in order, and the most common paths.
+//              the rows are one per visit and window, with the first time it opened.
+//              sampling keeps or drops whole visits, so a kept visit's whole path is
+//              there, weighted by how many visits it stands in for
+//   opened from  where windows get opened from: the desktop, the start menu, a link
+//              in another window and so on, with the windows each one opens most
 //   retention  visitors grouped by the week they first came, and how many came back
 //              in the weeks after. visitor ids are new each month, so a visitor coming
 //              back across the turn of a month looks like someone new
-//
-// the visit rows are one per visit, event and detail, with the first time that visit
-// did it. sampling keeps or drops whole visits, so a kept visit's whole path is there,
-// weighted by how many visits it stands in for
 import { dataset, periods, sql } from './analytics.mjs';
-
-// each step is any one of its events, [name] or [name, detail]
-export const funnels = [
-  {
-    id: 'contact',
-    title: 'Getting in touch',
-    steps: [
-      { label: 'Visited the site', events: [['visit']] },
-      { label: 'Opened Contact', events: [['open', 'contact']] },
-      { label: 'Started Breakout', events: [['breakout-start']] },
-      { label: 'Got past Breakout', events: [['breakout-win'], ['breakout-mercy']] },
-      { label: 'Opened Mail', events: [['open', 'mail']] },
-      { label: 'Sent a message', events: [['mail-sent']] },
-    ],
-  },
-  {
-    id: 'hiring',
-    title: 'Hiring',
-    steps: [
-      { label: 'Visited the site', events: [['visit']] },
-      { label: 'Opened Projects', events: [['open', 'projects']] },
-      { label: 'Opened Resume', events: [['open', 'resume']] },
-      { label: 'Opened Contact', events: [['open', 'contact']] },
-    ],
-  },
-  {
-    id: 'reading',
-    title: 'Reading',
-    steps: [
-      { label: 'Visited the site', events: [['visit']] },
-      { label: 'Opened Blog', events: [['open', 'blog']] },
-      { label: 'Read a post', events: [['blog-post']] },
-    ],
-  },
-];
 
 // enough for a lot more traffic than the site gets. past it, the oldest visits drop out
 export const rowLimit = 50000;
@@ -60,60 +24,41 @@ export const retentionWeeks = 4;
 export function insightQueries(days) {
   if (!periods.includes(days)) throw new RangeError('Pick 7, 30 or 90 days.');
   const since = `timestamp > NOW() - INTERVAL '${days}' DAY`;
-  const names = [...new Set(['open', ...funnels.flatMap(f => f.steps.flatMap(s => s.events.map(([name]) => name)))])];
   return {
-    visits: `SELECT blob3 AS visit, blob1 AS name, blob2 AS detail, min(timestamp) AS at, max(_sample_interval) AS weight
-      FROM ${dataset} WHERE ${since} AND blob1 IN (${names.map(n => `'${n}'`).join(', ')})
-      GROUP BY visit, name, detail ORDER BY at DESC LIMIT ${rowLimit} FORMAT JSON`,
+    opens: `SELECT blob3 AS visit, blob2 AS detail, min(timestamp) AS at, max(_sample_interval) AS weight
+      FROM ${dataset} WHERE ${since} AND blob1 = 'open'
+      GROUP BY visit, detail ORDER BY at DESC LIMIT ${rowLimit} FORMAT JSON`,
+    // opens from before via was recorded have none, and are left out
+    sources: `SELECT blob10 AS via, blob2 AS detail, SUM(_sample_interval) AS opens
+      FROM ${dataset} WHERE ${since} AND blob1 = 'open' AND blob10 != ''
+      GROUP BY via, detail FORMAT JSON`,
     returns: `SELECT blob9 AS visitor, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day
       FROM ${dataset} WHERE ${since} AND blob1 = 'visit' AND blob9 != ''
       GROUP BY visitor, day LIMIT ${rowLimit} FORMAT JSON`,
   };
 }
 
-// the rows gathered into visits, each with its events
-function byVisit(rows) {
+// the most common orders windows get opened in. every sticky note is its own window,
+// so they all count as the sticky notes app. the site opens about me itself on a fresh
+// visit, and visits from before that stopped being counted start with it, so a journey
+// that starts with about me starts after it
+export function journeys(rows, top = 10) {
   const visits = new Map();
   for (const row of rows) {
-    const visit = visits.get(row.visit) || { weight: Number(row.weight) || 1, events: [] };
+    if (!row.detail) continue;
+    const visit = visits.get(row.visit) || { weight: Number(row.weight) || 1, opens: [] };
     // the timestamps are all "YYYY-MM-DD hh:mm:ss", so they sort as text
-    visit.events.push({ name: row.name, detail: row.detail || '', at: String(row.at) });
+    visit.opens.push({ id: row.detail.startsWith('sticky-') ? 'stickies' : row.detail, at: String(row.at) });
     visits.set(row.visit, visit);
   }
-  return [...visits.values()];
-}
-
-// how many visits reach each step of each funnel
-export function walkFunnels(visits) {
-  return funnels.map(({ id, title, steps }) => {
-    const counts = steps.map(() => 0);
-    for (const { weight, events } of visits) {
-      let after = '';
-      for (const [i, step] of steps.entries()) {
-        const times = events
-          .filter(e => e.at >= after && step.events.some(([name, detail]) => e.name === name && (detail === undefined || e.detail === detail)))
-          .map(e => e.at)
-          .sort();
-        if (!times.length) break;
-        counts[i] += weight;
-        after = times[0];
-      }
-    }
-    return { id, title, steps: steps.map((step, i) => ({ label: step.label, count: Math.round(counts[i]) })) };
-  });
-}
-
-// the most common orders windows get opened in. every sticky note is its own window,
-// so they all count as the sticky notes app
-export function journeys(visits, top = 10) {
   const paths = new Map();
   let opened = 0;
-  for (const { weight, events } of visits) {
-    const windows = events
-      .filter(e => e.name === 'open' && e.detail)
+  for (const { weight, opens } of visits.values()) {
+    const windows = opens
       .sort((a, b) => a.at.localeCompare(b.at))
-      .map(e => (e.detail.startsWith('sticky-') ? 'stickies' : e.detail))
-      .filter((id, i, list) => id !== list[i - 1]);
+      .map(open => open.id)
+      .filter((id, i, list) => id !== list[i - 1])
+      .filter((id, i) => !(i === 0 && id === 'about'));
     if (!windows.length) continue;
     opened += weight;
     const path = windows.slice(0, journeyLength);
@@ -125,6 +70,26 @@ export function journeys(visits, top = 10) {
   }
   const list = [...paths.values()].sort((a, b) => b.count - a.count).slice(0, top).map(p => ({ ...p, count: Math.round(p.count) }));
   return { opened: Math.round(opened), paths: list };
+}
+
+// each place windows get opened from, most first, with its top windows
+export function openedFrom(rows, top = 3) {
+  const sources = new Map();
+  for (const row of rows) {
+    const count = Number(row.opens) || 0;
+    const id = row.detail?.startsWith('sticky-') ? 'stickies' : row.detail;
+    const source = sources.get(row.via) || { via: row.via, count: 0, windows: new Map() };
+    source.count += count;
+    source.windows.set(id, (source.windows.get(id) || 0) + count);
+    sources.set(row.via, source);
+  }
+  return [...sources.values()]
+    .sort((a, b) => b.count - a.count)
+    .map(s => ({
+      via: s.via,
+      count: Math.round(s.count),
+      windows: [...s.windows].sort((a, b) => b[1] - a[1]).slice(0, top).map(([id, count]) => ({ id, count: Math.round(count) })),
+    }));
 }
 
 const dayMs = 86400000;
@@ -177,14 +142,13 @@ export async function insights(request, env, { fetcher = fetch, now = Date.now()
   try {
     const options = { accountId: env.CLOUDFLARE_ACCOUNT_ID, token: env.ANALYTICS_TOKEN, fetcher };
     const q = insightQueries(days);
-    const [rows, returns] = await Promise.all([sql(q.visits, options), sql(q.returns, options)]);
-    const visits = byVisit(rows);
+    const [opens, sources, returns] = await Promise.all([sql(q.opens, options), sql(q.sources, options), sql(q.returns, options)]);
     return json({
       days,
-      funnels: walkFunnels(visits),
-      journeys: journeys(visits),
+      journeys: journeys(opens),
+      openedFrom: openedFrom(sources),
       retention: retention(returns, now),
-      complete: rows.length < rowLimit && returns.length < rowLimit,
+      complete: opens.length < rowLimit && returns.length < rowLimit,
     });
   } catch (error) {
     console.error(error);

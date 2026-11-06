@@ -27,7 +27,7 @@ export const eventNames = [
   '2048-win', // made the 2048 tile, once per game
   '2048-score', // a finished 2048 game (game over or restarted). value is the score
   'visit', // first interaction of a page load. detail is the window it opened on
-  'open', // a window opened. detail is its app id
+  'open', // a window opened. detail is its app id, via where it was opened from (blob10)
   'blog-post', // a blog post read. detail is its slug
   'breakout-start', // started playing breakout
   'breakout-lose', // lost the ball. value is how many times this visit
@@ -62,19 +62,23 @@ const slug = /^[a-z0-9-]{0,80}$/;
 // checks an event from the site. returns the data point to write, or null
 export function validateEvent(body) {
   if (!body || typeof body !== 'object') return null;
-  const { visit, name, detail = '', value = 0, device = '', referrer = '' } = body;
+  const { visit, name, detail = '', value = 0, device = '', referrer = '', via = '' } = body;
   if (typeof visit !== 'string' || !/^[a-z0-9]{8,24}$/.test(visit)) return null;
   if (!eventNames.includes(name)) return null;
   if (typeof detail !== 'string' || !slug.test(detail)) return null;
   if (!['', 'phone', 'desktop'].includes(device)) return null;
   if (typeof referrer !== 'string' || !/^[a-z0-9.-]{0,80}$/.test(referrer)) return null;
+  if (typeof via !== 'string' || !slug.test(via)) return null;
   if (typeof value !== 'number') return null;
   const number = value;
   if (!Number.isFinite(number) || number < 0 || number > 1e6) return null;
+  const blobs = [name, detail, visit, device, referrer];
+  // blobs 6 to 9 are the visit's place and visitor id, so an open's via goes after them
+  if (name === 'open') blobs.push('', '', '', '', via);
   return {
     // the visit is the index so sampling keeps or drops whole visits together
     indexes: [visit],
-    blobs: [name, detail, visit, device, referrer],
+    blobs,
     doubles: [number],
   };
 }

@@ -115,7 +115,8 @@ test('visits get their location from cloudflare, never from the page', async () 
   assert.deepEqual(points[0].blobs.slice(5, 8), ['CA', 'Ontario', 'Toronto']);
   assert.match(points[0].blobs[8], /^[0-9a-f]{16}$/);
   assert.ok(!points[0].blobs.join('|').includes('203.0.113.7'));
-  assert.equal(points[1].blobs.length, 5);
+  // an open has no place or visitor id, only the empty slots before its via
+  assert.deepEqual(points[1].blobs.slice(5, 9), ["", "", "", ""]);
   assert.deepEqual(place(undefined), ['', '', '']);
   assert.deepEqual(place({ country: 'XX', city: 'x'.repeat(200) }), ['', '', 'x'.repeat(80)]);
 });
@@ -171,4 +172,13 @@ test('sources and days count unique visitors, and the page cannot pick its own i
   await analytics(req, env);
   assert.match(sent[0].visitor, /^[0-9a-f]{16}$/);
   assert.notEqual(sent[0].visitor, 'ffffffffffffffff');
+});
+
+test('an open keeps where it came from in its own blob, and nothing else does', () => {
+  const open = validateEvent({ visit: 'abcd123456', name: 'open', detail: 'projects', via: 'about' });
+  assert.equal(open.blobs.length, 10);
+  assert.equal(open.blobs[9], 'about');
+  assert.equal(validateEvent({ visit: 'abcd123456', name: 'open', detail: 'projects' }).blobs[9], '');
+  assert.equal(validateEvent({ visit: 'abcd123456', name: 'snake-score', value: 3, via: 'about' }).blobs.length, 5);
+  assert.equal(validateEvent({ visit: 'abcd123456', name: 'open', detail: 'projects', via: '<b>' }), null);
 });

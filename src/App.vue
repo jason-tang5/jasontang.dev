@@ -117,7 +117,7 @@ const canOpen = id => Boolean(registry[id]) && (!registry[id].locked || isUnlock
 // contact asks for this after a win, or from its go to mail button, or with a
 // message when it gives mail away after three losses in a row
 function unlock(id, message) {
-  open(id);
+  open(id, true, true, 'contact');
   if (message) showNotice('Mail unlocked', message);
 }
 
@@ -154,7 +154,10 @@ function hashApp() {
   return id;
 }
 
-function open(id, updateUrl = true, sound = true) {
+// via is where an open came from, for the insights tab's opened from: desktop (the
+// icons and the desktop's menu), start, taskbar, welcome (the welcome note), link
+// (arriving on a #app= url), or the window it was clicked in, like about
+function open(id, updateUrl = true, sound = true, via = 'other') {
   id = canonicalApp(id);
   if (!canOpen(id)) return;
 
@@ -176,7 +179,7 @@ function open(id, updateUrl = true, sound = true) {
     win = reactive(win);
     if (sound) play('open');
     // windows put back after a refresh were opened on an earlier visit, so skip them
-    if (!restoring) trackOnce('open', id);
+    if (!restoring) trackOnce('open', id, 0, { via });
     windows.push(win);
   }
 
@@ -233,7 +236,7 @@ function maximize(id) {
 // clicking the active window's taskbar button minimizes it, like real windows
 function taskClick(id) {
   if (active.value === id && !get(id).minimized) minimize(id);
-  else open(id);
+  else open(id, true, true, 'taskbar');
 }
 
 // the taskbar text is a size bigger until the buttons overflow and it has to scroll
@@ -458,7 +461,7 @@ async function stickyClick(event) {
 function stickyAction(action, id) {
   const group = [...stickyWins.value];
   stickyMenu.value = null;
-  if (action === 'open') open(id);
+  if (action === 'open') open(id, true, true, 'taskbar');
   // oldest first, so the one that was on top ends up on top and focused
   else if (action === 'show') group.sort((a, b) => a.z - b.z).forEach(w => open(w.id, false, false));
   else group.forEach(w => close(w.id));
@@ -481,9 +484,9 @@ watch(() => stickyWins.value.length, count => { if (!count) stickyMenu.value = n
 function taskMenuAction(action) {
   const { id } = taskMenu.value;
   taskMenu.value = null;
-  if (action === 'restore') open(id);
+  if (action === 'restore') open(id, true, true, 'taskbar');
   else if (action === 'minimize') minimize(id);
-  else if (action === 'maximize') { open(id); maximize(id); }
+  else if (action === 'maximize') { open(id, true, true, 'taskbar'); maximize(id); }
   else close(id);
 }
 function taskMenuKeys(event) {
@@ -548,8 +551,8 @@ function cascade() {
 function contextAction(action) {
   contextMenu.value = null;
   if (action === 'arrange') Object.keys(iconCells).forEach(id => delete iconCells[id]);
-  else if (action === 'note') open(addNote());
-  else if (action === 'properties') open('settings');
+  else if (action === 'note') open(addNote(), true, true, 'desktop');
+  else if (action === 'properties') open('settings', true, true, 'desktop');
   else if (action === 'cascade') cascade();
   else if (action === 'minimize') minimizeAll();
   else if (action === 'autohide') setAutoHide(!autoHide.value);
@@ -838,7 +841,7 @@ function selectShortcut(event, id) {
   if (performance.now() - dragEndedAt < 150) return;
   selected.value = [id];
   // touch and pen open on a single tap, detail 0 means it came from the keyboard
-  if (iconPointer === 'touch' || iconPointer === 'pen' || event.detail === 0) open(id);
+  if (iconPointer === 'touch' || iconPointer === 'pen' || event.detail === 0) open(id, true, true, 'desktop');
 }
 
 // ---- drag selection ----
@@ -989,7 +992,7 @@ function reset() {
   savedLayout = {};
   remove('windows');
   startOpen.value = false;
-  open('about');
+  open('about', true, true, 'start');
   announcement.value = 'Desktop reset. Saved notes were kept.';
 }
 
@@ -1195,9 +1198,20 @@ function measure() {
   if (!compact.value) windows.forEach(w => Object.assign(w, clampBounds(w, area)));
 }
 
+// a #app= link clicked inside a window counts as opened from that window. anything
+// else that changes the hash, like typing it or going back, is a link
+let linkFrom = null;
+const viaWindow = id => (id.startsWith('sticky-') ? 'stickies' : id);
+function noteLinkClick(event) {
+  const link = event.target.closest?.('a[href*="#app="]');
+  const win = link?.closest('[data-window]')?.dataset.window;
+  linkFrom = link ? { via: win ? viaWindow(win) : 'link', at: performance.now() } : null;
+}
 function hashOpen() {
   const id = hashApp();
-  if (canOpen(id)) open(id, false);
+  const via = linkFrom && performance.now() - linkFrom.at < 1000 ? linkFrom.via : 'link';
+  linkFrom = null;
+  if (canOpen(id)) open(id, false, true, via);
 }
 
 // the show desktop button is a toggle, like windows: the first click minimizes
@@ -1247,8 +1261,12 @@ onMounted(() => {
     restoring = false;
   }
   const id = hashApp();
-  if (canOpen(id)) open(id, false, false);
-  else if (fresh) open('about', false, false);
+  if (canOpen(id)) open(id, false, false, 'link');
+  else if (fresh) {
+    restoring = true;
+    open('about', false, false);
+    restoring = false;
+  }
   else {
     active.value = nextVisible(windows);
     if (active.value) {
@@ -1271,6 +1289,7 @@ onMounted(() => {
   document.addEventListener('pointermove', taskbarPointerMove);
   document.addEventListener('pointerdown', taskbarPointerDown);
   window.addEventListener('hashchange', hashOpen);
+  document.addEventListener('click', noteLinkClick, true);
   window.addEventListener('site-notice', noticeEvent);
   window.addEventListener('site-sound', soundChanged);
   countVisitor();
@@ -1294,6 +1313,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', taskbarPointerDown);
   clearTimeout(hideTimer);
   window.removeEventListener('hashchange', hashOpen);
+  document.removeEventListener('click', noteLinkClick, true);
   window.removeEventListener('site-notice', noticeEvent);
   window.removeEventListener('site-sound', soundChanged);
 });
@@ -1334,7 +1354,7 @@ onBeforeUnmount(() => {
           @pointercancel="iconUp"
           @lostpointercapture="iconUp"
           @click="selectShortcut($event, app.id)"
-          @dblclick="open(app.id)"
+          @dblclick="open(app.id, true, true, 'desktop')"
         >
           <RetroIcon :name="app.icon"/>
           <span>{{ app.label }}</span>
@@ -1358,9 +1378,9 @@ onBeforeUnmount(() => {
         </p>
         <strong class="tip-subheading">Where to?</strong>
         <ul class="tip-paths">
-          <li>In a hurry? <button class="tip-link" @click="open('resume')">Resume</button> · <button class="tip-link" @click="open('projects')">Projects</button></li>
-          <li>Too quiet? <button class="tip-link" @click="open('music')">Play some music</button></li>
-          <li>Lonely? <button class="tip-link" @click="open('chat')">Talk to Clippy</button></li>
+          <li>In a hurry? <button class="tip-link" @click="open('resume', true, true, 'welcome')">Resume</button> · <button class="tip-link" @click="open('projects', true, true, 'welcome')">Projects</button></li>
+          <li>Too quiet? <button class="tip-link" @click="open('music', true, true, 'welcome')">Play some music</button></li>
+          <li>Lonely? <button class="tip-link" @click="open('chat', true, true, 'welcome')">Talk to Clippy</button></li>
           <li>Just looking? Take your time!</li>
         </ul>
       </aside>
@@ -1391,7 +1411,7 @@ onBeforeUnmount(() => {
           :active="active === win.id && visible(win)"
           :wallpaper="wallpaper"
           :visible="visible(win)"
-          @open="open"
+          @open="id => open(id, true, true, viaWindow(win.id))"
           @close="close"
           @unlock="unlock"
           @wallpaper="setWallpaper"
@@ -1530,18 +1550,18 @@ onBeforeUnmount(() => {
             v-else
             role="menuitem"
             @pointerenter="$event.pointerType === 'mouse' && (startSub = null)"
-            @click="open(app.id)"
+            @click="open(app.id, true, true, 'start')"
           >
             <RetroIcon :name="app.icon"/>
             <span>{{ app.label }}</span>
           </button>
         </template>
         <hr>
-        <button role="menuitem" @click="open('computer')">
+        <button role="menuitem" @click="open('computer', true, true, 'start')">
           <RetroIcon name="computer"/>
           <span>All Apps</span>
         </button>
-        <button role="menuitem" @click="open('settings')">
+        <button role="menuitem" @click="open('settings', true, true, 'start')">
           <RetroIcon name="settings"/>
           <span>Desktop Settings</span>
         </button>
@@ -1562,12 +1582,12 @@ onBeforeUnmount(() => {
       @keydown="subKeys"
     >
       <div class="start-entries">
-        <button role="menuitem" @click="open(startSub)">
+        <button role="menuitem" @click="open(startSub, true, true, 'start')">
           <RetroIcon :name="registry[startSub].icon"/>
           <span>Open {{ registry[startSub].label }}</span>
         </button>
         <hr>
-        <button v-for="item in subFolders[startSub]" :key="item.id" role="menuitem" @click="open(item.id)">
+        <button v-for="item in subFolders[startSub]" :key="item.id" role="menuitem" @click="open(item.id, true, true, 'start')">
           <RetroIcon :name="item.icon"/>
           <span>{{ item.label }}</span>
         </button>

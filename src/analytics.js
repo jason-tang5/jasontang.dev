@@ -64,9 +64,9 @@ export function track(name, detail = '', value = 0, extra = {}) {
 
 // the same, but at most once per visit for this name and detail. the funnel counts
 // visitors, so opening contact twice still counts once
-export function trackOnce(name, detail = '', value = 0) {
+export function trackOnce(name, detail = '', value = 0, extra = {}) {
   const key = `${name}:${detail}`;
   if (sentOnce.has(key)) return;
   sentOnce.add(key);
-  track(name, detail, value);
+  track(name, detail, value, extra);
 }
