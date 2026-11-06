@@ -18,6 +18,7 @@ built with vue 3 and vite, running on cloudflare workers. still adding little th
 - window chrome and palette adapted from don chia's [vuejs-os-template](https://github.com/DonChiaQE/vuejs-os-template) (mit, `licenses/vuejs-os-template-MIT.txt`)
 - some win98 control styling borrowed from [98.css](https://github.com/jdan/98.css) (mit, `licenses/98css-MIT.txt`)
 - windows 95/98 cursors by darix555, public domain (`licenses/win98-cursors-public-domain.txt`)
+- country flags in the analytics window from [flag-icons](https://github.com/lipis/flag-icons) (mit, `licenses/flag-icons-MIT.txt`)
 - the wallpaper is a vaporwave sunset gif from tenor, rendered as ascii with [react-video-ascii](https://www.npmjs.com/package/react-video-ascii). source link in `assets/wallpaper-source.txt`
 - koi pond visuals inspired by [dao ho](https://www.daoho.dev/), with the idea of ascii creatures swimming on canvas from [stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks)
 

@@ -180,19 +180,25 @@ export function countryName(code) {
 
 // visits by country, by region and by city, each biggest first. a region or city
 // carries what it's in, so two Londons stay apart. visits from before locations were
-// recorded, or that cloudflare couldn't place, are unknown
+// recorded, or that cloudflare couldn't place, are unknown. every row keeps its
+// country code (blank when unknown) for the flag beside it
 export function summarizePlaces(places = []) {
   const countries = new Map(), regions = new Map(), cities = new Map();
-  const add = (map, key, count) => map.set(key, (map.get(key) || 0) + count);
+  const add = (map, label, code, count) => {
+    const row = map.get(label) || { label, country: code, count: 0 };
+    row.count += count;
+    map.set(label, row);
+  };
   for (const row of places) {
     const count = Number(row.visits) || 0;
-    const country = row.country ? countryName(row.country) : '';
-    add(countries, country || 'Unknown', count);
-    add(regions, row.region ? [row.region, country].filter(Boolean).join(', ') : 'Unknown', count);
-    add(cities, row.city ? [row.city, row.region || country].filter(Boolean).join(', ') : 'Unknown', count);
+    const code = row.country || '';
+    const country = code ? countryName(code) : '';
+    add(countries, country || 'Unknown', code, count);
+    add(regions, row.region ? [row.region, country].filter(Boolean).join(', ') : 'Unknown', row.region ? code : '', count);
+    add(cities, row.city ? [row.city, row.region || country].filter(Boolean).join(', ') : 'Unknown', row.city ? code : '', count);
   }
-  const rounded = map => sortedEntries(map).map(row => ({ ...row, count: Math.round(row.count) }));
-  return { countries: rounded(countries), regions: rounded(regions), cities: rounded(cities) };
+  const sorted = map => [...map.values()].sort((a, b) => b.count - a.count).map(row => ({ ...row, count: Math.round(row.count) }));
+  return { countries: sorted(countries), regions: sorted(regions), cities: sorted(cities) };
 }
 
 // turns the raw rows into what the analytics window and the report show

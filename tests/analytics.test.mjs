@@ -60,7 +60,7 @@ test('the summary route returns everything and rejects invalid periods and metho
   } };
   const result = await (await analytics(request('/api/analytics'), env, options)).json();
   assert.equal(calls, 3);
-  assert.deepEqual(result.cities, [{ label: 'Toronto, Ontario', count: 5 }]);
+  assert.deepEqual(result.cities, [{ label: 'Toronto, Ontario', country: 'CA', count: 5 }]);
   assert.equal(result.visitors, 5);
   assert.equal(result.mail.errors[0].count, 2);
   assert.equal(result.referrers[0].label, 'direct');
@@ -124,7 +124,7 @@ test('places are counted by country, region and city, with unknowns kept', () =>
     { country: 'CA', region: 'Ontario', city: 'London', visits: 1 },
     { country: '', region: '', city: '', visits: 4 },
   ]);
-  assert.deepEqual(result.countries, [{ label: 'Canada', count: 5 }, { label: 'Unknown', count: 4 }, { label: 'United Kingdom', count: 2 }]);
-  assert.deepEqual(result.regions[0], { label: 'Ontario, Canada', count: 5 });
+  assert.deepEqual(result.countries, [{ label: 'Canada', country: 'CA', count: 5 }, { label: 'Unknown', country: '', count: 4 }, { label: 'United Kingdom', country: 'GB', count: 2 }]);
+  assert.deepEqual(result.regions[0], { label: 'Ontario, Canada', country: 'CA', count: 5 });
   assert.deepEqual(result.cities.map(c => c.label), ['Unknown', 'Toronto, Ontario', 'London, England', 'Waterloo, Ontario', 'London, Ontario']);
 });

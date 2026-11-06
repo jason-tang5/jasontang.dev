@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import RetroIcon from './RetroIcon.vue';
 import PixelPie from './PixelPie.vue';
 import Leaderboard from './Leaderboard.vue';
+import LocationCard from './LocationCard.vue';
 import { boardKeys, useLiveStats } from '../live-stats.js';
 import { read, save, storageRevision } from '../storage.js';
 import { onLocalAnalytics } from '../local-analytics.js';
@@ -117,19 +118,19 @@ const daily = computed(() => {
   return first > 0 ? all.slice(first) : all;
 });
 const peak = computed(() => Math.max(1, ...daily.value.map(row => row.visits)));
-// where visits come from: the ten biggest of each, the rest added up in a last row
+// the ten biggest sources, the rest added up in a last row
 const top = (rows = [], label = 'others') => rows.length > 10
   ? [...rows.slice(0, 9), { label: `${rows.length - 9} ${label}`, count: rows.slice(9).reduce((sum, row) => sum + row.count, 0) }]
   : rows;
-const sections = computed(() => data.value ? [
-  // the last number is the section's bar color, --bar-1 to --bar-7 below
-  ['Sources', top(data.value.referrers, 'other sources'), 1],
-  ['Countries', top(data.value.countries, 'other countries'), 4],
-  ['Regions', top(data.value.regions, 'other regions'), 5],
-  ['Cities', top(data.value.cities, 'other cities'), 6],
-  ['Windows opened', data.value.windows, 3],
-  ['Breakout funnel', data.value.funnel, 7], ['Mail errors', data.value.mail.errors, 2],
-] : []);
+const sections = computed(() => {
+  if (!data.value) return [];
+  return [
+    // the last number is the section's bar color, --bar-1 to --bar-7 below
+    ['Sources', top(data.value.referrers, 'other sources'), 1],
+    ['Windows opened', data.value.windows, 3],
+    ['Breakout funnel', data.value.funnel, 7], ['Mail errors', data.value.mail.errors, 2],
+  ];
+});
 async function get(url) {
   const response = await fetch(url, { redirect: 'error', cache: 'no-store' });
   const result = await response.json();
@@ -272,7 +273,8 @@ onBeforeUnmount(() => {
           </div>
           <h2>Devices</h2>
           <PixelPie :rows="data.devices" label="Devices"/>
-          <section v-for="[title, rows, color] in sections" :key="title">
+          <template v-for="[title, rows, color] in sections" :key="title">
+          <section>
             <h2>{{ title }}</h2><p v-if="!rows.length">No events yet.</p>
             <div v-for="row in rows" :key="row.label" class="analytics-bar-row" :style="{ '--bar': `var(--bar-${color})` }">
               <div><span>{{ row.label || 'Unknown' }}{{ row.label === 'sticky notes' ? '*' : '' }}</span><strong>{{ number(row.count) }}</strong></div>
@@ -280,6 +282,8 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="rows.some(row => row.label === 'sticky notes')" class="analytics-note">*Every sticky note is its own window, so they're added together here.</p>
           </section>
+          <LocationCard v-if="title === 'Sources'" :countries="data.countries" :regions="data.regions" :cities="data.cities"/>
+          </template>
         </template>
       </template>
     </main>
