@@ -180,8 +180,8 @@ export function countryName(code) {
 
 // visits by country, by region and by city, each biggest first. a region or city
 // carries what it's in, so two Londons stay apart. visits from before locations were
-// recorded, or that cloudflare couldn't place, are unknown. every row keeps its
-// country code (blank when unknown) for the flag beside it
+// recorded, or that cloudflare couldn't place, are left out of that list. every row
+// keeps its country code for the flag beside it
 export function summarizePlaces(places = []) {
   const countries = new Map(), regions = new Map(), cities = new Map();
   const add = (map, label, code, count) => {
@@ -193,9 +193,9 @@ export function summarizePlaces(places = []) {
     const count = Number(row.visits) || 0;
     const code = row.country || '';
     const country = code ? countryName(code) : '';
-    add(countries, country || 'Unknown', code, count);
-    add(regions, row.region ? [row.region, country].filter(Boolean).join(', ') : 'Unknown', row.region ? code : '', count);
-    add(cities, row.city ? [row.city, row.region || country].filter(Boolean).join(', ') : 'Unknown', row.city ? code : '', count);
+    if (country) add(countries, country, code, count);
+    if (row.region) add(regions, [row.region, country].filter(Boolean).join(', '), code, count);
+    if (row.city) add(cities, [row.city, row.region || country].filter(Boolean).join(', '), code, count);
   }
   const sorted = map => [...map.values()].sort((a, b) => b.count - a.count).map(row => ({ ...row, count: Math.round(row.count) }));
   return { countries: sorted(countries), regions: sorted(regions), cities: sorted(cities) };

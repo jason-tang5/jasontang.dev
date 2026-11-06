@@ -116,7 +116,7 @@ test('visits get their location from cloudflare, never from the page', async () 
   assert.deepEqual(place(undefined), ['', '', '']);
   assert.deepEqual(place({ country: 'XX', city: 'x'.repeat(200) }), ['', '', 'x'.repeat(80)]);
 });
-test('places are counted by country, region and city, with unknowns kept', () => {
+test('places are counted by country, region and city, leaving out visits with no place', () => {
   const result = summarizePlaces([
     { country: 'CA', region: 'Ontario', city: 'Toronto', visits: 3 },
     { country: 'CA', region: 'Ontario', city: 'Waterloo', visits: 1 },
@@ -124,7 +124,7 @@ test('places are counted by country, region and city, with unknowns kept', () =>
     { country: 'CA', region: 'Ontario', city: 'London', visits: 1 },
     { country: '', region: '', city: '', visits: 4 },
   ]);
-  assert.deepEqual(result.countries, [{ label: 'Canada', country: 'CA', count: 5 }, { label: 'Unknown', country: '', count: 4 }, { label: 'United Kingdom', country: 'GB', count: 2 }]);
+  assert.deepEqual(result.countries, [{ label: 'Canada', country: 'CA', count: 5 }, { label: 'United Kingdom', country: 'GB', count: 2 }]);
   assert.deepEqual(result.regions[0], { label: 'Ontario, Canada', country: 'CA', count: 5 });
-  assert.deepEqual(result.cities.map(c => c.label), ['Unknown', 'Toronto, Ontario', 'London, England', 'Waterloo, Ontario', 'London, Ontario']);
+  assert.deepEqual(result.cities.map(c => c.label), ['Toronto, Ontario', 'London, England', 'Waterloo, Ontario', 'London, Ontario']);
 });

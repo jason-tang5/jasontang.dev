@@ -8,7 +8,7 @@ Nothing is sent until your first click, tap or key press. Then the site makes a 
 
 `track(name, detail, value)` records one of 20 events, like `open` or `breakout-win`, with an optional number such as how long the win took. Funnel steps (start Breakout, unlock Mail, send a message) count once per visit with `trackOnce`. A `heartbeat` every 30 seconds and a `leave` feed "online now". Events go out with `navigator.sendBeacon`, which survives the page closing, and only from `jasontang.dev`.
 
-The visit event also gets a rough location, added by the Worker rather than your browser. Cloudflare already works out a country, region and city from every connection (`request.cf`), so the Worker saves those three words and never the IP behind them.
+The visit event also gets a rough location, added by the Worker rather than your browser. Cloudflare already works out a country, region and city from every connection (`request.cf`), so the Worker saves those three words and never the IP behind them. Visits it can't place are left off the list.
 
 ![What one visit sends](/figures/analytics/event "Load the page, then press things")
 
