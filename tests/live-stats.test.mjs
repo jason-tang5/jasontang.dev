@@ -88,3 +88,27 @@ test('the 7, 30, 90 day and 1 year boards only count recent days', async () => {
   assert.deepEqual(data.leaderboardYear.map(r => [r.player, r.score]), [['SPRING', 80], ['SEASON', 70], ['OLDIE', 50], ['NEWBIE', 12]]);
   assert.equal([...ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM daily_scores WHERE id = 'ancient001'")][0].n, 0);
 });
+
+test('unique visitors count each visitor id once a month and start from the old visits', async () => {
+  const { stats, ctx } = setup();
+  const visit = (visitor, time = Date.UTC(2026, 10, 6)) => {
+    const realNow = Date.now;
+    Date.now = () => time;
+    return stats.fetch(new Request('https://stats/', { method: 'POST', body: JSON.stringify({ name: 'visit', visit: 'visitor123', visitor }) })).finally(() => { Date.now = realNow; });
+  };
+  // three visits from before ids, then the object restarts with the new code
+  await visit(undefined); await visit(undefined); await visit(undefined);
+  ctx.storage.sql.exec(`DELETE FROM totals WHERE name = 'uniqueVisitors'`);
+  const restarted = new LiveStats(ctx);
+  assert.equal((await get(restarted)).uniqueVisitors, 3);
+  await visit('aaaaaaaaaaaaaaaa');
+  await visit('aaaaaaaaaaaaaaaa');
+  await visit('bbbbbbbbbbbbbbbb');
+  await visit('not-a-real-id');
+  const data = await get(stats);
+  assert.equal(data.visitors, 7);
+  assert.equal(data.uniqueVisitors, 6);
+  // next month the old ids are dropped
+  await visit('cccccccccccccccc', Date.UTC(2026, 11, 1));
+  assert.deepEqual(ctx.storage.sql.exec('SELECT id FROM visitor_ids').map(r => r.id), ['cccccccccccccccc']);
+});

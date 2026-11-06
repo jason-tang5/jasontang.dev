@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analytics, validateEvent, summarize, summarizePlaces, queries, place } from '../worker/analytics.mjs';
+import { analytics, validateEvent, summarize, summarizePlaces, queries, place, visitorId, visitorsIn } from '../worker/analytics.mjs';
 const event = { visit: 'abcd123456', name: 'snake-score', value: 12 };
 const request = (path, options) => new Request(`https://jasontang.dev${path}`, options);
 test('validates event schema and rejects malformed or personal data', () => {
@@ -105,13 +105,16 @@ test('visits get their location from cloudflare, never from the page', async () 
   const points = [];
   const env = { EVENTS: { writeDataPoint: p => points.push(p) } };
   const post = (body, cf) => {
-    const req = request('/api/event', { method: 'POST', headers: { Origin: 'https://jasontang.dev' }, body: JSON.stringify(body) });
+    const req = request('/api/event', { method: 'POST', headers: { Origin: 'https://jasontang.dev', 'CF-Connecting-IP': '203.0.113.7', 'User-Agent': 'test' }, body: JSON.stringify(body) });
     Object.defineProperty(req, 'cf', { value: cf });
     return req;
   };
-  await analytics(post({ visit: 'abcd123456', name: 'visit', country: 'FR' }, { country: 'CA', region: 'Ontario', city: 'Toronto' }), env);
+  env.VISITOR_SALT = 'salt';
+  await analytics(post({ visit: 'abcd123456', name: 'visit', country: 'FR', visitor: 'forged' }, { country: 'CA', region: 'Ontario', city: 'Toronto' }), env);
   await analytics(post({ visit: 'abcd123456', name: 'open', detail: 'music' }, { country: 'CA', region: 'Ontario', city: 'Toronto' }), env);
-  assert.deepEqual(points[0].blobs.slice(5), ['CA', 'Ontario', 'Toronto']);
+  assert.deepEqual(points[0].blobs.slice(5, 8), ['CA', 'Ontario', 'Toronto']);
+  assert.match(points[0].blobs[8], /^[0-9a-f]{16}$/);
+  assert.ok(!points[0].blobs.join('|').includes('203.0.113.7'));
   assert.equal(points[1].blobs.length, 5);
   assert.deepEqual(place(undefined), ['', '', '']);
   assert.deepEqual(place({ country: 'XX', city: 'x'.repeat(200) }), ['', '', 'x'.repeat(80)]);
@@ -127,4 +130,45 @@ test('places are counted by country, region and city, leaving out visits with no
   assert.deepEqual(result.countries, [{ label: 'Canada', country: 'CA', count: 5 }, { label: 'United Kingdom', country: 'GB', count: 2 }]);
   assert.deepEqual(result.regions[0], { label: 'Ontario, Canada', country: 'CA', count: 5 });
   assert.deepEqual(result.cities.map(c => c.label), ['Toronto, Ontario', 'London, England', 'Waterloo, Ontario', 'London, Ontario']);
+});
+
+test('a visitor id is the same all month for one ip and browser, and changes otherwise', async () => {
+  const req = (ip, ua = 'firefox') => new Request('https://jasontang.dev/api/event', { headers: { 'CF-Connecting-IP': ip, 'User-Agent': ua } });
+  const env = { VISITOR_SALT: 'salt' };
+  const early = new Date('2026-11-01T00:00:00Z'), late = new Date('2026-11-30T23:59:00Z'), next = new Date('2026-12-01T00:00:00Z');
+  const id = await visitorId(req('203.0.113.7'), env, early);
+  assert.equal(await visitorId(req('203.0.113.7'), env, late), id);
+  assert.notEqual(await visitorId(req('203.0.113.7'), env, next), id);
+  assert.notEqual(await visitorId(req('203.0.113.8'), env, early), id);
+  assert.notEqual(await visitorId(req('203.0.113.7', 'chrome'), env, early), id);
+  assert.notEqual(await visitorId(req('203.0.113.7'), { VISITOR_SALT: 'other' }, early), id);
+  assert.equal(await visitorId(req('203.0.113.7'), {}, early), '');
+  assert.equal(await visitorId(new Request('https://jasontang.dev/'), env, early), '');
+});
+test('unique visitors count each id once and each visit from before ids once', () => {
+  assert.equal(visitorsIn({ visits: 9, ids: 3, blankRows: 0, blankVisits: 0 }), 3);
+  // two real ids plus the blank one, and four old visits with no id
+  assert.equal(visitorsIn({ visits: 10, ids: 3, blankRows: 4, blankVisits: 4 }), 6);
+  assert.equal(visitorsIn({ visits: 5 }), 5);
+  const result = summarize([], [], [
+    { country: 'CA', region: 'Ontario', city: 'Toronto', visits: 9, ids: 3, blankRows: 0, blankVisits: 0 },
+    { country: '', region: '', city: '', visits: 200, ids: 1, blankRows: 200, blankVisits: 200 },
+  ]);
+  assert.equal(result.uniqueVisitors, 203);
+  assert.deepEqual(result.countries, [{ label: 'Canada', country: 'CA', count: 3 }]);
+});
+
+test('sources and days count unique visitors, and the page cannot pick its own id', async () => {
+  const result = summarize(
+    [{ name: 'visit', detail: '', device: 'desktop', referrer: 'github.com', count: 9, total: 0, ids: 2, blankRows: 0, blankVisits: 0 }],
+    [{ day: '2026-11-06 00:00:00', visits: 9, ids: 2, blankRows: 0, blankVisits: 0 }],
+  );
+  assert.deepEqual(result.referrers, [{ label: 'github.com', count: 2 }]);
+  assert.deepEqual(result.daily, [{ day: '2026-11-06', visits: 2 }]);
+  const sent = [];
+  const env = { VISITOR_SALT: 'salt', EVENTS: { writeDataPoint() {} }, LIVE_STATS: { idFromName: () => 'site', get: () => ({ fetch: async r => { sent.push(await r.json()); return new Response(null); } }) } };
+  const req = request('/api/event', { method: 'POST', headers: { Origin: 'https://jasontang.dev', 'CF-Connecting-IP': '203.0.113.7' }, body: JSON.stringify({ visit: 'abcd123456', name: 'visit', visitor: 'ffffffffffffffff' }) });
+  await analytics(req, env);
+  assert.match(sent[0].visitor, /^[0-9a-f]{16}$/);
+  assert.notEqual(sent[0].visitor, 'ffffffffffffffff');
 });

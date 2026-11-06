@@ -55,7 +55,9 @@
 		"ACCESS_TEAM_DOMAIN": "quiet-butterfly-8b30.cloudflareaccess.com",
 		"ACCESS_AUD": "f86b7c00ec8b87b8ee86249e4a3a9524dedc9ff6f7c36a5585d61de0d71c904c",
 		// for reading analytics back (worker/analytics.mjs). the token is a secret:
-		// `npx wrangler secret put ANALYTICS_TOKEN`, an api token with account analytics read
+		// `npx wrangler secret put ANALYTICS_TOKEN`, an api token with account analytics read.
+		// unique visitors are hashed with VISITOR_SALT, any long random string:
+		// `npx wrangler secret put VISITOR_SALT`. without it the hash uses ANALYTICS_TOKEN
 		"CLOUDFLARE_ACCOUNT_ID": "99cbd761f7464fae13039711f21bc25f"
 	},
 	// anonymous visit events for the analytics window, see worker/analytics.mjs

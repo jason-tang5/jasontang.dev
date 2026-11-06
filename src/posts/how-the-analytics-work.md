@@ -1,4 +1,4 @@
-The Analytics window on this site is public. It shows visits, which windows people open, how many people beat Breakout, and how badly Clippy is winning at Reversi. I wanted real numbers without cookies, IP addresses or a third-party script.
+The Analytics window on this site is public. It shows visits, which windows people open, how many people beat Breakout, and how badly Clippy is winning at Reversi. I wanted real numbers without cookies, stored IP addresses or a third-party script.
 
 The short version: your browser sends small anonymous events to my Cloudflare Worker. Live totals go into a Durable Object, history into Workers Analytics Engine, which I read back with SQL. Your own events show up right away as "floors": minimums the server's numbers can only raise.
 
@@ -8,7 +8,9 @@ Nothing is sent until your first click, tap or key press. Then the site makes a 
 
 `track(name, detail, value)` records one of 20 events, like `open` or `breakout-win`, with an optional number such as how long the win took. Funnel steps (start Breakout, unlock Mail, send a message) count once per visit with `trackOnce`. A `heartbeat` every 30 seconds and a `leave` feed "online now". Events go out with `navigator.sendBeacon`, which survives the page closing, and only from `jasontang.dev`.
 
-The visit event also gets a rough location, added by the Worker rather than your browser. Cloudflare already works out a country, region and city from every connection (`request.cf`), so the Worker saves those three words and never the IP behind them. Visits it can't place are left off the list.
+The Worker adds two things to the visit event, not your browser. First a rough location: Cloudflare already works out a country, region and city from every connection (`request.cf`), so it saves those three words. Visits it can't place are left off the list.
+
+Then a visitor id, the way [Umami](https://umami.is) does it, so one person coming back counts once. It's a SHA-256 hash of a secret salt, the month, your IP and your browser, cut to 16 characters. Same person, same month, same id; next month it's new. The IP goes into the hash and nowhere else, and you can't get it back out. Every visitor count on the site uses these ids, from the visitors banner to the "Welcome, visitor #" note.
 
 ![What one visit sends](/figures/analytics/event "Load the page, then press things")
 

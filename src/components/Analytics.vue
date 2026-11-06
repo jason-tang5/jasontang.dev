@@ -4,6 +4,7 @@ import RetroIcon from './RetroIcon.vue';
 import PixelPie from './PixelPie.vue';
 import Leaderboard from './Leaderboard.vue';
 import LocationCard from './LocationCard.vue';
+import Insights from './Insights.vue';
 import { boardKeys, useLiveStats } from '../live-stats.js';
 import { read, save, storageRevision } from '../storage.js';
 import { onLocalAnalytics } from '../local-analytics.js';
@@ -33,6 +34,7 @@ const number = value => Number(value || 0).toLocaleString();
 const tabs = [
   { id: 'scoreboard', label: 'Scoreboard' },
   { id: 'behind', label: 'Behind the scenes' },
+  { id: 'insights', label: 'Insights' },
 ];
 const tab = ref(read('analytics-tab', 'scoreboard'));
 const current = computed(() => tabs.some(t => t.id === tab.value) ? tab.value : 'scoreboard');
@@ -78,6 +80,8 @@ const grouped = list => Object.entries(groupTitles)
 // Storage writes in this tab and storage events from other tabs invalidate these
 // immediately. Refresh/tab changes also reread values written outside the wrapper.
 const reread = ref(0);
+// bumped by the refresh button, so the insights tab loads again too
+const insightsReload = ref(0);
 const yourMines = computed(() => {
   storageRevision.value;
   reread.value;
@@ -117,6 +121,8 @@ const daily = computed(() => {
   const first = all.findIndex(row => row.visits);
   return first > 0 ? all.slice(first) : all;
 });
+// unique visitors for the period, or visits from a summary that doesn't have them
+const visitorCount = computed(() => data.value?.uniqueVisitors ?? data.value?.visitors ?? 0);
 const peak = computed(() => Math.max(1, ...daily.value.map(row => row.visits)));
 // the ten biggest sources, the rest added up in a last row
 const top = (rows = [], label = 'others') => rows.length > 10
@@ -128,7 +134,7 @@ const sections = computed(() => {
     // the last number is the section's bar color, --bar-1 to --bar-7 below
     ['Sources', top(data.value.referrers, 'other sources'), 1],
     ['Windows opened', data.value.windows, 3],
-    ['Breakout funnel', data.value.funnel, 7], ['Mail errors', data.value.mail.errors, 2],
+    ['Mail errors', data.value.mail.errors, 2],
   ];
 });
 async function get(url) {
@@ -179,7 +185,7 @@ onBeforeUnmount(() => {
         <span>Last</span>
         <button v-for="value in periods" :key="value" class="raised" :class="{ pressed: days === value }" :aria-pressed="days === value" :disabled="busy" @click="setDays(value)">{{ value }} days</button>
       </div>
-      <button class="raised analytics-refresh" :disabled="busy" @click="refresh(); load()">
+      <button class="raised analytics-refresh" :disabled="busy" @click="refresh(); load(); insightsReload++">
         <!-- the same arrow circle as the restart buttons in contact and reversi -->
         <svg class="spin-icon" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 1h4v1H4zM9 1h1v1H9zM2 2h2v1H2zM8 2h2v1H8zM2 3h1v1H2zM7 3h3v1H7zM1 4h1v4H1zM10 6h1v2h-1zM2 8h1v1H2zM9 8h1v1H9zM2 9h2v1H2zM8 9h2v1H8zM4 10h4v1H4z"/></svg>
         Refresh
@@ -209,7 +215,8 @@ onBeforeUnmount(() => {
             </section>
           </div>
           <div class="visit-banner">
-            <section><RetroIcon name="person"/><div><strong>{{ data ? number(data.visitors) : '—' }}</strong><span>visits in {{ days }} days</span></div></section>
+            <!-- each person once a month, from the worker's visitor hash -->
+            <section><RetroIcon name="person"/><div><strong>{{ data ? number(visitorCount) : '—' }}</strong><span>visitors in {{ days }} days</span></div></section>
             <section><span class="online-dot" aria-hidden="true"/><div><strong>{{ live ? number(live.online) : '—' }}</strong><span>online now</span></div></section>
           </div>
         </template>
@@ -235,10 +242,10 @@ onBeforeUnmount(() => {
         <template v-if="data">
           <section class="visitor-history">
           <h2>Visitors by day</h2>
-          <p class="analytics-note"><strong>{{ number(data.visitors) }}</strong> visits in the last {{ days }} days</p>
-          <p v-if="!data.visitors">No visits recorded yet. The next adventure starts with a click.</p>
-          <div class="analytics-chart" role="img" :aria-label="`Daily visits over the last ${days} days. Peak: ${peak === 1 && !data.visitors ? 0 : peak}.`">
-            <div v-for="row in daily" :key="row.day" class="analytics-column" :title="`${row.day}: ${number(row.visits)} visits`">
+          <p class="analytics-note"><strong>{{ number(visitorCount) }}</strong> visitors in the last {{ days }} days</p>
+          <p v-if="!visitorCount">No visitors recorded yet. The next adventure starts with a click.</p>
+          <div class="analytics-chart" role="img" :aria-label="`Daily visitors over the last ${days} days. Peak: ${peak === 1 && !visitorCount ? 0 : peak}.`">
+            <div v-for="row in daily" :key="row.day" class="analytics-column" :title="`${row.day}: ${number(row.visits)} visitors`">
               <span :style="{ height: `${row.visits / peak * 100}%` }"/>
             </div>
           </div>
@@ -258,6 +265,7 @@ onBeforeUnmount(() => {
           </section>
           </div>
       </template>
+      <Insights v-else-if="current === 'insights'" :days="days" :reload="insightsReload"/>
       <template v-else>
         <h1>Behind the scenes</h1>
         <p v-if="busy" role="status">Loading...</p>

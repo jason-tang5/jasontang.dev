@@ -14,7 +14,7 @@ export default defineConfig({
       },
       // analytics and the snake scoreboard read the live numbers too. /api/event stays
       // local, so playing on localhost doesn't count as real visits and wins
-      '^/api/(?:stats|analytics)(?:\\?|$)': {
+      '^/api/(?:stats|analytics|insights)(?:\\?|$)': {
         target: 'https://jasontang.dev',
         changeOrigin: true,
       },

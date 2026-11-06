@@ -7,12 +7,14 @@ import { liveStats } from './live-stats.mjs';
 // cloudflare email routing (the SEND_EMAIL binding in wrangler.jsonc), and
 // /api/blog/* + /api/admin/* (blog.mjs) let me write blog posts and paste images from the site.
 // videos also come through here so safari gets the range requests it needs (video.mjs),
-// and /api/event + /api/analytics count visits for the analytics window (analytics.mjs)
+// and /api/event + /api/analytics count visits for the analytics window (analytics.mjs),
+// with funnels, journeys and retention for its insights tab at /api/insights (insights.mjs)
 import { EmailMessage } from 'cloudflare:email';
 import { buildEmail, validate } from './contact.mjs';
 import { blog } from './blog.mjs';
 import { video } from './video.mjs';
 import { analytics } from './analytics.mjs';
+import { insights } from './insights.mjs';
 
 const to = 'jasontcanada@gmail.com';
 const from = 'contact@jasontang.dev';
@@ -62,6 +64,7 @@ export default {
     }
     if (pathname === '/api/contact') return contact(request, env);
     if (pathname === '/api/analytics' || pathname === '/api/event') return analytics(request, env);
+    if (pathname === '/api/insights') return insights(request, env);
     if (pathname === '/api/blog' || pathname.startsWith('/api/blog/') || pathname.startsWith('/api/admin/')) return blog(request, env);
     if (pathname.endsWith('.mp4')) return video(request, env);
     return env.ASSETS.fetch(request);

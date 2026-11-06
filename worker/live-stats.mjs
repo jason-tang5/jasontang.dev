@@ -11,13 +11,24 @@ export class LiveStats {
     try { this.sql.exec(`ALTER TABLE scores ADD COLUMN name TEXT`); } catch { /* already added */ }
     // each player's best per day, for the 7 and 30 day boards. kept for 31 days
     this.sql.exec(`CREATE TABLE IF NOT EXISTS daily_scores (id TEXT NOT NULL, day TEXT NOT NULL, score INTEGER NOT NULL, name TEXT, PRIMARY KEY (id, day))`);
+    // unique visitors, all time. the worker's visitor ids (worker/analytics.mjs) are new
+    // each month, so this month's are kept to spot someone coming back and older ones
+    // dropped. the count started from the visits before ids, which each count once
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS visitor_ids (id TEXT PRIMARY KEY, month TEXT NOT NULL)`);
+    this.sql.exec(`INSERT OR IGNORE INTO totals SELECT 'uniqueVisitors', value FROM totals WHERE name = 'visitors'`);
   }
   async fetch(request) {
     const now = Date.now();
     if (request.method === 'POST') {
-      const { visit, name, value, player, playerId } = await request.json();
+      const { visit, name, value, player, playerId, visitor } = await request.json();
       if (name === 'visit') {
         this.sql.exec(`INSERT INTO totals VALUES ('visitors', 1) ON CONFLICT(name) DO UPDATE SET value=value+1`);
+        // a visit with no id (no salt set) counts as a new visitor, like the analytics do
+        const month = dayOf(now).slice(0, 7);
+        const id = typeof visitor === 'string' && /^[0-9a-f]{16}$/.test(visitor) ? visitor : '';
+        const fresh = !id || [...this.sql.exec(`INSERT INTO visitor_ids VALUES (?, ?) ON CONFLICT(id) DO NOTHING RETURNING id`, id, month)].length > 0;
+        if (fresh) this.sql.exec(`INSERT INTO totals VALUES ('uniqueVisitors', 1) ON CONFLICT(name) DO UPDATE SET value=value+1`);
+        this.sql.exec(`DELETE FROM visitor_ids WHERE month < ?`, month);
       }
       if (name === 'visit' || name === 'heartbeat') {
         this.sql.exec(`INSERT INTO sessions VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET seen=excluded.seen`, visit, now);
@@ -48,7 +59,7 @@ export class LiveStats {
     // sqlite hands back the name from the row with the max score
     const since = days => board(this.sql.exec(`SELECT id, MAX(score) AS score, name FROM daily_scores WHERE day > ? GROUP BY id ORDER BY score DESC, id LIMIT 10`, dayOf(now - days * day)));
     const online = [...this.sql.exec('SELECT COUNT(*) AS count FROM sessions')][0].count;
-    return Response.json({ visitors: 0, minesweeperWins: 0, breakoutWins: 0, clippyWins: 0, clippyLosses: 0, twenty48Wins: 0, twenty48HighScore: 0, ...totals, online, snakeHighScore: leaderboard[0]?.score || 0, leaderboard, leaderboardWeek: since(7), leaderboardMonth: since(30), leaderboardQuarter: since(90), leaderboardYear: since(365) }, { headers: { 'Cache-Control': 'no-store' } });
+    return Response.json({ visitors: 0, uniqueVisitors: 0, minesweeperWins: 0, breakoutWins: 0, clippyWins: 0, clippyLosses: 0, twenty48Wins: 0, twenty48HighScore: 0, ...totals, online, snakeHighScore: leaderboard[0]?.score || 0, leaderboard, leaderboardWeek: since(7), leaderboardMonth: since(30), leaderboardQuarter: since(90), leaderboardYear: since(365) }, { headers: { 'Cache-Control': 'no-store' } });
   }
 }
 const day = 86400000;

@@ -933,10 +933,10 @@ function openStarterNote() {
   return id;
 }
 
-// the welcome note says which visitor you are, counting every visit the live stats
-// have seen. the number is kept so it stays the same on later loads. someone coming
-// from google's internmatch is counted among visits from there instead (the last 90
-// days of analytics sources), and gets the welcome note back even if they closed it
+// the welcome note says which visitor you are, counting the unique visitors the live
+// stats have seen (each person once a month, see worker/live-stats.mjs). the number is
+// kept so it stays the same on later loads. someone coming from google's internmatch
+// is counted among visitors from there instead (the last 90 days of analytics sources), and gets the welcome note back even if they closed it
 // before. a link ending in ?ref=internmatch.googleplex.com counts as coming from there
 // too, under the same source name in analytics. a visit isn't counted until its first
 // click, so you're one past the count
@@ -965,7 +965,8 @@ async function countVisitor() {
       internmatchNumber.value = Math.max(0, count - myInternmatchVisits) + 1;
     } else if (tip.value && !visitorNumber.value) {
       const response = await fetch('/api/stats', { cache: 'no-store' });
-      const { visitors } = await response.json();
+      const stats = await response.json();
+      const visitors = stats.uniqueVisitors ?? stats.visitors;
       if (!Number.isFinite(visitors)) return;
       visitorNumber.value = visitors + 1;
       save('visitor-number', String(visitorNumber.value));

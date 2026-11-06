@@ -6,10 +6,12 @@ import { liveStats } from './live-stats.mjs';
 //   GET  /api/analytics          the summary for the analytics window, public
 //
 // a visit is a random id made per page load and kept in memory, so there are no
-// cookies, ips or anything personal. the worker adds where a visit came from, the
-// country, region and city cloudflare works out from the connection (request.cf), so
-// the ip itself is never stored. the summary is built with the analytics engine
-// sql api, which needs CLOUDFLARE_ACCOUNT_ID (a var) and ANALYTICS_TOKEN (a secret,
+// cookies. the worker adds two things to each visit, and never stores the ip itself:
+//   where it came from, the country, region and city cloudflare works out from the
+//   connection (request.cf)
+//   who it was, umami's way: a hash of a secret salt, the month, the ip and the
+//   browser, so one person counts once a month (visitorId below)
+// the summary is built with the analytics engine sql api, which needs CLOUDFLARE_ACCOUNT_ID (a var) and ANALYTICS_TOKEN (a secret,
 // an api token with account analytics read). kept apart from the worker so it can
 // be tested in plain node, and scripts/analytics-report.mjs reuses it for writeups.
 export const dataset = 'jasontang_events';
@@ -84,6 +86,20 @@ export function place(cf = {}) {
   return [/^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '', clean(cf?.region), clean(cf?.city)];
 }
 
+// the same person on the same browser gets the same id all month, and a new one
+// the next. it's a one-way hash, cut short, made with VISITOR_SALT (a secret, falling
+// back to ANALYTICS_TOKEN), so the ip can't be read back out of it. blank when there's
+// no salt or no ip
+export async function visitorId(request, env, now = new Date()) {
+  const salt = env.VISITOR_SALT || env.ANALYTICS_TOKEN;
+  const ip = request.headers.get('CF-Connecting-IP');
+  if (!salt || !ip) return '';
+  const month = now.toISOString().slice(0, 7);
+  const input = [salt, month, ip, request.headers.get('User-Agent') || ''].join('|');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest).slice(0, 8), b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function record(request, env) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   const origin = request.headers.get('Origin');
@@ -100,8 +116,10 @@ async function record(request, env) {
   }
   const point = validateEvent(body);
   if (!point) return json({ error: 'Invalid event.' }, 400);
-  if (body.name === 'visit') point.blobs.push(...place(request.cf));
-  if (env.LIVE_STATS) await liveStats(env).fetch(new Request('https://stats/', { method: 'POST', body: JSON.stringify(body) }));
+  // the visitor id only ever comes from here, whatever the page sent
+  const visitor = body.name === 'visit' ? await visitorId(request, env) : '';
+  if (body.name === 'visit') point.blobs.push(...place(request.cf), visitor);
+  if (env.LIVE_STATS) await liveStats(env).fetch(new Request('https://stats/', { method: 'POST', body: JSON.stringify({ ...body, visitor }) }));
   if (body.name === 'heartbeat' || body.name === 'leave') return new Response(null, { status: 204 });
   if (!env.EVENTS) return json({ error: 'Analytics is not configured.' }, 503);
   env.EVENTS.writeDataPoint(point);
@@ -116,15 +134,18 @@ export const periods = [7, 30, 90];
 export function queries(days) {
   if (!periods.includes(days)) throw new RangeError('Pick 7, 30 or 90 days.');
   const since = `timestamp > NOW() - INTERVAL '${days}' DAY`;
+  // unique visitors in a group: the different visitor ids, plus visits from before ids
+  // were recorded (blob9 blank), which can only count as one visitor each (visitorsIn)
+  const visitors = `count(DISTINCT blob9) AS ids, countIf(blob9 = '') AS blankRows, sumIf(_sample_interval, blob9 = '') AS blankVisits`;
   return {
     events: `SELECT blob1 AS name, blob2 AS detail, blob4 AS device, blob5 AS referrer,
-      SUM(_sample_interval) AS count, SUM(_sample_interval * double1) AS total, MAX(double1) AS maximum
+      SUM(_sample_interval) AS count, SUM(_sample_interval * double1) AS total, MAX(double1) AS maximum, ${visitors}
       FROM ${dataset} WHERE ${since}
       GROUP BY name, detail, device, referrer FORMAT JSON`,
-    daily: `SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, SUM(_sample_interval) AS visits
+    daily: `SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, SUM(_sample_interval) AS visits, ${visitors}
       FROM ${dataset} WHERE ${since} AND blob1 = 'visit'
       GROUP BY day ORDER BY day FORMAT JSON`,
-    places: `SELECT blob6 AS country, blob7 AS region, blob8 AS city, SUM(_sample_interval) AS visits
+    places: `SELECT blob6 AS country, blob7 AS region, blob8 AS city, SUM(_sample_interval) AS visits, ${visitors}
       FROM ${dataset} WHERE ${since} AND blob1 = 'visit'
       GROUP BY country, region, city FORMAT JSON`,
   };
@@ -178,10 +199,18 @@ export function countryName(code) {
   }
 }
 
-// visits by country, by region and by city, each biggest first. a region or city
+// a row's unique visitors. count(DISTINCT) counts a blank id as one more value, so
+// that's taken off and the blank visits added back one each. rows without the id
+// columns fall back to their visits
+export function visitorsIn(row) {
+  if (row.ids === undefined) return Number(row.visits ?? row.count) || 0;
+  return Math.max(0, Number(row.ids) - (Number(row.blankRows) > 0 ? 1 : 0)) + (Number(row.blankVisits) || 0);
+}
+
+// visitors by country, by region and by city, each biggest first. a region or city
 // carries what it's in, so two Londons stay apart. visits from before locations were
 // recorded, or that cloudflare couldn't place, are left out of that list. every row
-// keeps its country code for the flag beside it
+// keeps its country code for the flag beside it. counts are unique visitors
 export function summarizePlaces(places = []) {
   const countries = new Map(), regions = new Map(), cities = new Map();
   const add = (map, label, code, count) => {
@@ -190,7 +219,7 @@ export function summarizePlaces(places = []) {
     map.set(label, row);
   };
   for (const row of places) {
-    const count = Number(row.visits) || 0;
+    const count = visitorsIn(row);
     const code = row.country || '';
     const country = code ? countryName(code) : '';
     if (country) add(countries, country, code, count);
@@ -208,6 +237,11 @@ export function summarize(rows, daily = [], places = []) {
   const by = (name, key) => {
     const map = new Map();
     for (const row of rows) if (row.name === name) map.set(row[key] || '', (map.get(row[key] || '') || 0) + Number(row.count));
+    return map;
+  };
+  const visitorsBy = key => {
+    const map = new Map();
+    for (const row of rows) if (row.name === 'visit') map.set(row[key] || '', (map.get(row[key] || '') || 0) + visitorsIn(row));
     return map;
   };
   for (const row of rows) {
@@ -233,11 +267,14 @@ export function summarize(rows, daily = [], places = []) {
     // reversi-lose is clippy winning, reversi-win is clippy losing
     clippyWins: n('reversi-lose'),
     clippyLosses: n('reversi-win'),
-    daily: daily.map(row => ({ day: String(row.day).slice(0, 10), visits: Math.round(Number(row.visits)) })),
+    // visitors per day and per source are unique visitors, like the banner
+    daily: daily.map(row => ({ day: String(row.day).slice(0, 10), visits: Math.round(visitorsIn(row)) })),
     windows: sortedEntries(foldStickies(opens)),
     blogPosts: sortedEntries(by('blog-post', 'detail')),
     devices: sortedEntries(by('visit', 'device')),
-    referrers: sortedEntries(foldSources(by('visit', 'referrer'))),
+    referrers: sortedEntries(foldSources(visitorsBy('referrer'))),
+    // one person is one place in a month, so adding the places up counts each once
+    uniqueVisitors: Math.round(places.reduce((sum, row) => sum + visitorsIn(row), 0)),
     ...summarizePlaces(places),
     // each step is counted once per visit on the site, so they're visitors
     funnel: [
