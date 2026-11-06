@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analytics, validateEvent, summarize, queries } from '../worker/analytics.mjs';
+import { analytics, validateEvent, summarize, summarizePlaces, queries, place } from '../worker/analytics.mjs';
 const event = { visit: 'abcd123456', name: 'snake-score', value: 12 };
 const request = (path, options) => new Request(`https://jasontang.dev${path}`, options);
 test('validates event schema and rejects malformed or personal data', () => {
@@ -55,10 +55,12 @@ test('the summary route returns everything and rejects invalid periods and metho
   const options = { fetcher: async (_url, init) => {
     calls++;
     assert.equal(init.headers.Authorization, 'Bearer secret');
+    if (init.body.includes('GROUP BY country')) return Response.json({ data: [{ country: 'CA', region: 'Ontario', city: 'Toronto', visits: '5' }] });
     return Response.json({ data: init.body.includes('GROUP BY day') ? [] : rows });
   } };
   const result = await (await analytics(request('/api/analytics'), env, options)).json();
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
+  assert.deepEqual(result.cities, [{ label: 'Toronto, Ontario', count: 5 }]);
   assert.equal(result.visitors, 5);
   assert.equal(result.mail.errors[0].count, 2);
   assert.equal(result.referrers[0].label, 'direct');
@@ -97,4 +99,32 @@ test('sources fold www, link wrappers and t.co into one name each', () => {
     { label: 'direct', count: 5 }, { label: 'instagram.com', count: 4 }, { label: 'google.com', count: 3 },
     { label: 'x.com', count: 1 }, { label: 'resume', count: 1 },
   ]);
+});
+
+test('visits get their location from cloudflare, never from the page', async () => {
+  const points = [];
+  const env = { EVENTS: { writeDataPoint: p => points.push(p) } };
+  const post = (body, cf) => {
+    const req = request('/api/event', { method: 'POST', headers: { Origin: 'https://jasontang.dev' }, body: JSON.stringify(body) });
+    Object.defineProperty(req, 'cf', { value: cf });
+    return req;
+  };
+  await analytics(post({ visit: 'abcd123456', name: 'visit', country: 'FR' }, { country: 'CA', region: 'Ontario', city: 'Toronto' }), env);
+  await analytics(post({ visit: 'abcd123456', name: 'open', detail: 'music' }, { country: 'CA', region: 'Ontario', city: 'Toronto' }), env);
+  assert.deepEqual(points[0].blobs.slice(5), ['CA', 'Ontario', 'Toronto']);
+  assert.equal(points[1].blobs.length, 5);
+  assert.deepEqual(place(undefined), ['', '', '']);
+  assert.deepEqual(place({ country: 'XX', city: 'x'.repeat(200) }), ['', '', 'x'.repeat(80)]);
+});
+test('places are counted by country, region and city, with unknowns kept', () => {
+  const result = summarizePlaces([
+    { country: 'CA', region: 'Ontario', city: 'Toronto', visits: 3 },
+    { country: 'CA', region: 'Ontario', city: 'Waterloo', visits: 1 },
+    { country: 'GB', region: 'England', city: 'London', visits: 2 },
+    { country: 'CA', region: 'Ontario', city: 'London', visits: 1 },
+    { country: '', region: '', city: '', visits: 4 },
+  ]);
+  assert.deepEqual(result.countries, [{ label: 'Canada', count: 5 }, { label: 'Unknown', count: 4 }, { label: 'United Kingdom', count: 2 }]);
+  assert.deepEqual(result.regions[0], { label: 'Ontario, Canada', count: 5 });
+  assert.deepEqual(result.cities.map(c => c.label), ['Unknown', 'Toronto, Ontario', 'London, England', 'Waterloo, Ontario', 'London, Ontario']);
 });

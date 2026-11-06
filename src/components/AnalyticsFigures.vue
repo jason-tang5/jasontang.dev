@@ -53,7 +53,7 @@ const journey = [
   { on: ['worker', 'object'], path: 'worker-object', title: 'Live numbers', text: 'The event goes to the Durable Object first. It bumps the all-time counters, marks the visit as online and keeps the Snake leaderboard. Heartbeats and leaves stop here.' },
   { on: ['worker', 'engine'], path: 'worker-engine', title: 'History', text: 'writeDataPoint stores the event in Analytics Engine: the visit as the index, five text fields and one number. It doesn’t wait for a reply.' },
   { on: ['window', 'api'], path: 'window-api', title: 'Open Analytics', text: 'The window asks for /api/analytics?days=30 for history, and /api/stats for the live numbers. It asks again every 30 seconds while it’s open.' },
-  { on: ['api', 'engine'], path: 'api-engine', title: 'Two SQL queries', text: 'The Worker runs two queries against the Analytics Engine SQL API: every event grouped by name, detail, device and referrer, and visits per day. summarize() turns the rows into the numbers on screen.' },
+  { on: ['api', 'engine'], path: 'api-engine', title: 'Three SQL queries', text: 'The Worker runs three queries against the Analytics Engine SQL API: every event grouped by name, detail, device and referrer, visits per day, and visits by country, region and city. summarize() turns the rows into the numbers on screen.' },
   { on: ['api', 'object'], path: 'api-object', title: 'The scoreboard', text: 'The live numbers come straight from the Durable Object: all-time totals, who’s online now, and the leaderboards.' },
   { on: ['window'], title: 'On screen', text: 'Your own events are shown straight away, before the server knows about them, as floors the server’s numbers can only raise. That’s the last figure.' },
 ];

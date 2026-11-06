@@ -8,6 +8,8 @@ Nothing is sent until your first click, tap or key press. Then the site makes a 
 
 `track(name, detail, value)` records one of 20 events, like `open` or `breakout-win`, with an optional number such as how long the win took. Funnel steps (start Breakout, unlock Mail, send a message) count once per visit with `trackOnce`. A `heartbeat` every 30 seconds and a `leave` feed "online now". Events go out with `navigator.sendBeacon`, which survives the page closing, and only from `jasontang.dev`.
 
+The visit event also gets a rough location, added by the Worker rather than your browser. Cloudflare already works out a country, region and city from every connection (`request.cf`), so the Worker saves those three words and never the IP behind them.
+
 ![What one visit sends](/figures/analytics/event "Load the page, then press things")
 
 # Checking and storing
@@ -18,7 +20,7 @@ Valid events update the Durable Object (more in [One Durable Object as the Whole
 
 # Reading it back
 
-Analytics Engine needs a secret token, so the window asks the Worker instead (`/api/analytics?days=30`, or 7, or 90). It runs two queries, events by name, device and referrer, and visits per day, both counting like this:
+Analytics Engine needs a secret token, so the window asks the Worker instead (`/api/analytics?days=30`, or 7, or 90). It runs three queries, events by name, device and referrer, visits per day, and visits by country, region and city, all counting like this:
 
 ```sql
 SUM(_sample_interval) AS count
@@ -32,7 +34,7 @@ Under heavy traffic, Analytics Engine may keep only a sample, say 1 visit in 4, 
 
 # How it's displayed
 
-**Scoreboard** has the cards, visits per day and the leaderboard. **Behind the scenes** has the funnel, windows opened, posts read and mail form errors. "Your scores" stay in `localStorage`.
+**Scoreboard** has the cards, visits per day and the leaderboard. **Behind the scenes** has where visits come from (sources, countries, regions and cities), the funnel, windows opened, posts read and mail form errors. "Your scores" stay in `localStorage`.
 
 The pie charts are pixel art: a 24 × 24 grid where each pixel takes the colour of the slice its angle falls in.
 

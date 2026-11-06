@@ -6,7 +6,9 @@ import { liveStats } from './live-stats.mjs';
 //   GET  /api/analytics          the summary for the analytics window, public
 //
 // a visit is a random id made per page load and kept in memory, so there are no
-// cookies, ips or anything personal. the summary is built with the analytics engine
+// cookies, ips or anything personal. the worker adds where a visit came from, the
+// country, region and city cloudflare works out from the connection (request.cf), so
+// the ip itself is never stored. the summary is built with the analytics engine
 // sql api, which needs CLOUDFLARE_ACCOUNT_ID (a var) and ANALYTICS_TOKEN (a secret,
 // an api token with account analytics read). kept apart from the worker so it can
 // be tested in plain node, and scripts/analytics-report.mjs reuses it for writeups.
@@ -75,6 +77,13 @@ export function validateEvent(body) {
   };
 }
 
+// a visit's country code, region and city from cloudflare, blank when it doesn't know
+export function place(cf = {}) {
+  const clean = value => (typeof value === 'string' ? value.trim().slice(0, 80) : '');
+  const country = clean(cf?.country).toUpperCase();
+  return [/^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '', clean(cf?.region), clean(cf?.city)];
+}
+
 async function record(request, env) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   const origin = request.headers.get('Origin');
@@ -91,6 +100,7 @@ async function record(request, env) {
   }
   const point = validateEvent(body);
   if (!point) return json({ error: 'Invalid event.' }, 400);
+  if (body.name === 'visit') point.blobs.push(...place(request.cf));
   if (env.LIVE_STATS) await liveStats(env).fetch(new Request('https://stats/', { method: 'POST', body: JSON.stringify(body) }));
   if (body.name === 'heartbeat' || body.name === 'leave') return new Response(null, { status: 204 });
   if (!env.EVENTS) return json({ error: 'Analytics is not configured.' }, 503);
@@ -114,6 +124,9 @@ export function queries(days) {
     daily: `SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, SUM(_sample_interval) AS visits
       FROM ${dataset} WHERE ${since} AND blob1 = 'visit'
       GROUP BY day ORDER BY day FORMAT JSON`,
+    places: `SELECT blob6 AS country, blob7 AS region, blob8 AS city, SUM(_sample_interval) AS visits
+      FROM ${dataset} WHERE ${since} AND blob1 = 'visit'
+      GROUP BY country, region, city FORMAT JSON`,
   };
 }
 
@@ -153,8 +166,37 @@ function foldSources(referrers) {
 
 const sortedEntries = map => [...map].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
 
+// a country code as its name, US is United States
+let regionNames;
+export function countryName(code) {
+  if (!code) return 'Unknown';
+  try {
+    regionNames ??= new Intl.DisplayNames(['en'], { type: 'region' });
+    return regionNames.of(code) || code;
+  } catch {
+    return code;
+  }
+}
+
+// visits by country, by region and by city, each biggest first. a region or city
+// carries what it's in, so two Londons stay apart. visits from before locations were
+// recorded, or that cloudflare couldn't place, are unknown
+export function summarizePlaces(places = []) {
+  const countries = new Map(), regions = new Map(), cities = new Map();
+  const add = (map, key, count) => map.set(key, (map.get(key) || 0) + count);
+  for (const row of places) {
+    const count = Number(row.visits) || 0;
+    const country = row.country ? countryName(row.country) : '';
+    add(countries, country || 'Unknown', count);
+    add(regions, row.region ? [row.region, country].filter(Boolean).join(', ') : 'Unknown', count);
+    add(cities, row.city ? [row.city, row.region || country].filter(Boolean).join(', ') : 'Unknown', count);
+  }
+  const rounded = map => sortedEntries(map).map(row => ({ ...row, count: Math.round(row.count) }));
+  return { countries: rounded(countries), regions: rounded(regions), cities: rounded(cities) };
+}
+
 // turns the raw rows into what the analytics window and the report show
-export function summarize(rows, daily = []) {
+export function summarize(rows, daily = [], places = []) {
   const count = new Map();
   const total = new Map();
   const by = (name, key) => {
@@ -190,6 +232,7 @@ export function summarize(rows, daily = []) {
     blogPosts: sortedEntries(by('blog-post', 'detail')),
     devices: sortedEntries(by('visit', 'device')),
     referrers: sortedEntries(foldSources(by('visit', 'referrer'))),
+    ...summarizePlaces(places),
     // each step is counted once per visit on the site, so they're visitors
     funnel: [
       { label: 'Visited the site', count: visitors },
@@ -224,8 +267,8 @@ async function summary(request, env, fetcher) {
   try {
     const options = { accountId: env.CLOUDFLARE_ACCOUNT_ID, token: env.ANALYTICS_TOKEN, fetcher };
     const q = queries(days);
-    const [rows, daily] = await Promise.all([sql(q.events, options), sql(q.daily, options)]);
-    return json({ days, ...summarize(rows, daily) });
+    const [rows, daily, places] = await Promise.all([sql(q.events, options), sql(q.daily, options), sql(q.places, options)]);
+    return json({ days, ...summarize(rows, daily, places) });
   } catch (error) {
     console.error(error);
     return json({ error: 'Couldn’t load analytics right now.' }, 502);

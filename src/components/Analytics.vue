@@ -117,9 +117,16 @@ const daily = computed(() => {
   return first > 0 ? all.slice(first) : all;
 });
 const peak = computed(() => Math.max(1, ...daily.value.map(row => row.visits)));
+// where visits come from: the ten biggest of each, the rest added up in a last row
+const top = (rows = [], label = 'others') => rows.length > 10
+  ? [...rows.slice(0, 9), { label: `${rows.length - 9} ${label}`, count: rows.slice(9).reduce((sum, row) => sum + row.count, 0) }]
+  : rows;
 const sections = computed(() => data.value ? [
   // the last number is the section's bar color, --bar-1 to --bar-7 below
-  ['Sources', data.value.referrers, 1],
+  ['Sources', top(data.value.referrers, 'other sources'), 1],
+  ['Countries', top(data.value.countries, 'other countries'), 4],
+  ['Regions', top(data.value.regions, 'other regions'), 5],
+  ['Cities', top(data.value.cities, 'other cities'), 6],
   ['Windows opened', data.value.windows, 3],
   ['Breakout funnel', data.value.funnel, 7], ['Mail errors', data.value.mail.errors, 2],
 ] : []);
